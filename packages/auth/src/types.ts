@@ -35,7 +35,8 @@ export interface RegisterSellerInput {
   password: string;
   displayName: string;
   shopName: string;
-  shopSlug: string;
+  /** Optional: generated from the shop name when left out (plan §9). */
+  shopSlug?: string;
   category?: string;
   /** Brand vibe chosen at signup — seeds a unique starting theme. */
   vibe?: string;
@@ -46,7 +47,8 @@ export interface RegisterSellerInput {
 export interface CompleteGoogleShopInput {
   userId: string;
   shopName: string;
-  shopSlug: string;
+  /** Optional: generated from the shop name when left out (plan §9). */
+  shopSlug?: string;
   category?: string;
   /** Brand vibe chosen at signup — seeds a unique starting theme. */
   vibe?: string;

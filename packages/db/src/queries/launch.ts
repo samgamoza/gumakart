@@ -1,3 +1,4 @@
+import { needsOnboarding } from "./onboarding";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { tenants } from "../schema/index";
@@ -181,19 +182,18 @@ export function needsGumaLaunch(tenant: {
   return false;
 }
 
-/** Post-auth / post-login home for sellers. */
+/**
+ * Post-auth / post-login home for sellers. Plan §9: the 4-step onboarding (ending
+ * in a shareable checkout link) comes first; the Launch wizard (online store look)
+ * is optional and no longer forced.
+ */
 export async function resolveSellerHomePath(input: {
   tenantId: string | null | undefined;
   emailVerified?: boolean;
   preferLaunchWhenUnverified?: boolean;
 }): Promise<string> {
   if (!input.tenantId) return "/signup/shop";
-  // New handbook flow: Launch first; email verify can happen in parallel from Launch/onboarding.
-  if (!input.emailVerified && !input.preferLaunchWhenUnverified) {
-    return "/onboarding";
-  }
-  const state = await getLaunchTenantState(input.tenantId);
-  if (needsGumaLaunch(state)) return "/launch";
+  if (await needsOnboarding(input.tenantId)) return "/onboarding";
   return "/";
 }
 

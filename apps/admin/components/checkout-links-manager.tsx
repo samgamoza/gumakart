@@ -39,7 +39,7 @@ interface LinkItem {
   productActive: boolean;
 }
 
-interface CheckoutLink {
+export interface CheckoutLink {
   id: string;
   code: string;
   title: string;
@@ -773,7 +773,7 @@ function CreateLinkPanel({
 
 // ─── Share / QR ──────────────────────────────────────────────────────────────
 
-function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; url: string; onShowQr: () => void }) {
+export function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; url: string; onShowQr: () => void }) {
   const { copied, copy } = useCopy();
   const caption = shareCaption(link, url);
   const tip = CHANNELS.find((c) => c.id === link.shareChannel)?.tip ?? CHANNELS[4]!.tip;
@@ -831,7 +831,7 @@ function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; url: stri
       <div>
         <p className="text-xs text-muted-foreground">Ready-made caption</p>
         <div className="mt-1 flex items-start gap-2 rounded-xl border border-white/10 bg-black/20 p-3">
-          <p className="min-w-0 flex-1 whitespace-pre-line text-sm">{caption}</p>
+          <p className="min-w-0 flex-1 whitespace-pre-line break-all text-sm">{caption}</p>
           <button type="button" className={ghostBtn} onClick={() => void copy("caption", caption)}>
             {copied === "caption" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {copied === "caption" ? "Copied" : "Copy"}
@@ -842,7 +842,7 @@ function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; url: stri
   );
 }
 
-function QrModal({ link, url, onClose }: { link: CheckoutLink; url: string; onClose: () => void }) {
+export function QrModal({ link, url, onClose }: { link: CheckoutLink; url: string; onClose: () => void }) {
   const [svg, setSvg] = useState<string | null>(null);
   useEffect(() => {
     QRCode.toString(url, { type: "svg", margin: 1, width: 240, errorCorrectionLevel: "M" })

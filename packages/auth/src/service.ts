@@ -124,13 +124,39 @@ export async function isSlugAvailable(slug: string): Promise<boolean> {
   return existing.length === 0;
 }
 
+/**
+ * Plan §9: the shop URL is generated from the name, not asked for. Returns the
+ * name's slug, or the first free "-2", "-3"… variant, or a random suffix.
+ */
+export async function findAvailableShopSlug(shopName: string): Promise<string> {
+  let base = slugFromShopName(shopName).replace(/-+$/g, "");
+  if (base.length < 3 || !validateSlug(base).ok) base = `shop-${base}`.replace(/-+$/g, "").slice(0, 24);
+  if (base.length < 3) base = "shop";
+  base = base.slice(0, 26).replace(/-+$/g, "");
+  const db = getDb();
+  const candidates = [base, ...Array.from({ length: 8 }, (_, i) => `${base}-${i + 2}`)];
+  for (const candidate of candidates) {
+    if (!validateSlug(candidate).ok) continue;
+    const [taken] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, candidate)).limit(1);
+    if (!taken) return candidate;
+  }
+  for (let i = 0; i < 5; i++) {
+    const candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    const [taken] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, candidate)).limit(1);
+    if (!taken && validateSlug(candidate).ok) return candidate;
+  }
+  throw new AuthError("Couldn't pick a shop URL. Try a slightly different shop name.", "SLUG_TAKEN");
+}
+
 export async function registerSeller(input: RegisterSellerInput): Promise<{
   user: SessionUser;
   sessionToken: string;
   verificationToken: string;
 }> {
   const email = normalizeEmail(input.email);
-  const shopSlug = normalizeSlug(input.shopSlug || slugFromShopName(input.shopName));
+  const shopSlug = input.shopSlug?.trim()
+    ? normalizeSlug(input.shopSlug)
+    : await findAvailableShopSlug(input.shopName);
   const passwordCheck = validatePasswordStrength(input.password);
   if (!passwordCheck.ok) {
     throw new AuthError(passwordCheck.reason, "WEAK_PASSWORD");
@@ -404,7 +430,9 @@ export async function completeGoogleShopSetup(input: CompleteGoogleShopInput): P
   user: SessionUser;
   sessionToken: string;
 }> {
-  const shopSlug = normalizeSlug(input.shopSlug || slugFromShopName(input.shopName));
+  const shopSlug = input.shopSlug?.trim()
+    ? normalizeSlug(input.shopSlug)
+    : await findAvailableShopSlug(input.shopName);
   const slugCheck = validateSlug(shopSlug);
   if (!slugCheck.ok) {
     throw new AuthError(slugCheck.reason, "SLUG_INVALID");

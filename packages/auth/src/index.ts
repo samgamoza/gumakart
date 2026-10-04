@@ -43,6 +43,7 @@ export {
   isSessionCurrent,
   normalizeSlug,
   slugFromShopName,
+  findAvailableShopSlug,
   validateSlug,
 } from "./service";
 

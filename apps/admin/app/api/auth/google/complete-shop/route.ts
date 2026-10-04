@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, completeGoogleShopSetup, sessionCookieHeader } from "@gumakart/auth";
+import { saveBusinessProfile } from "@gumakart/db";
 import { getSessionFromRequest } from "@/lib/session";
+import { businessProfileFields } from "@/lib/business-profile";
 
 const schema = z.object({
   shopName: z.string().min(2).max(255),
-  shopSlug: z.string().min(3).max(32),
+  shopSlug: z.string().min(3).max(32).optional(),
   category: z.string().optional(),
   vibe: z.string().max(32).optional(),
+  ...businessProfileFields,
 });
 
 export async function POST(request: Request) {
@@ -20,11 +23,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Shop already set up." }, { status: 400 });
     }
 
-    const body = schema.parse(await request.json());
+    const { mobile, sellChannels, chatUrl, ...body } = schema.parse(await request.json());
     const { user, sessionToken } = await completeGoogleShopSetup({
       userId: session.userId,
       ...body,
     });
+    if (user.tenantId) await saveBusinessProfile(user.tenantId, { mobile, sellChannels, chatUrl });
 
     if (user.tenantId && user.tenantSlug) {
       const { ensureEventsWired } = await import("@/lib/events-bootstrap");
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       ok: true,
       user,
-      redirectTo: "/launch",
+      redirectTo: "/onboarding",
     });
     response.headers.set("Set-Cookie", sessionCookieHeader(sessionToken));
     return response;

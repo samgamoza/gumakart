@@ -514,3 +514,18 @@ export {
   type PublicCheckoutLink,
   type UpdateCheckoutLinkInput,
 } from "./queries/checkout-links";
+export {
+  SELL_CHANNELS,
+  OnboardingError,
+  finishOnboarding,
+  getOnboardingState,
+  markOnboardingStep,
+  needsOnboarding,
+  normalizeChatUrl,
+  normalizePhMobile,
+  saveBusinessProfile,
+  saveOnboardingPayments,
+  type OnboardingPaymentsInput,
+  type OnboardingState,
+  type OnboardingStep,
+} from "./queries/onboarding";

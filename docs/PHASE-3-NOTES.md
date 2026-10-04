@@ -88,3 +88,23 @@ still works (regression), tampered quantities ignored, wrong code 404, short add
 
 **Known limits:** the order limit counts cancelled orders too; a product with several variants is
 sold as its default variant (same as the storefront today).
+
+## Onboarding (plan §9, brought forward from Phase 6) — approved 2026-10-04
+
+4 steps to a shareable link; the Launch wizard (store look) is optional and no longer forced.
+1. **Your business** (signup, email or Google): shop name, mobile, category, "Where do you sell now?"
+   (Facebook / Messenger / Instagram / TikTok / Shopee / Lazada / Other), optional page/chat link
+   (stored for 3C "Back to chat"). Shop URL generated from the name (`findAvailableShopSlug`, "-2"…).
+   No vibe/theme question.
+2. **First product** (`/onboarding`): photo, name, price, stock — or pick an existing product.
+3. **How you get paid**: GCash and/or Maya number + name, COD on/off. Writes the published + draft
+   checkout so each method is on only when usable (GCash/Maya need a number). Brand-new shops get
+   no minimum order (old default ₱99 would block a ₱50 link).
+4. **Your link is ready**: creates the checkout link (share channel = first social picked), copy /
+   share / QR, then the dashboard.
+- "I'll finish this later" on every step. Progress in `settings_json.onboarding`
+  (`step`, `completedAt`, `skippedAt`); `needsOnboarding` = not finished/skipped and no checkout link.
+- Home routing: `/` and `resolveSellerHomePath` → `/onboarding` while needed, else `/`. Existing
+  sellers without a link see it once (owner approved).
+- Queries: `packages/db/src/queries/onboarding.ts`. APIs: `/api/onboarding/state|payments|finish`.
+- Not yet: AI product description in step 2, dashboard redesign (§10), Taglish for seller screens.

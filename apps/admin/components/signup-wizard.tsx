@@ -12,28 +12,14 @@ import {
 } from "@/components/auth-layout";
 import { PasswordInput } from "@/components/password-input";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
-import { BusinessCategoryPicker } from "@/components/business-category-picker";
-import { VibePicker } from "@/components/vibe-picker";
-import { shopUrlDisplayPrefix } from "@/lib/utils";
-import { SHOP_BUSINESS_CATEGORIES } from "@gumakart/storefront-themes";
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32);
-}
+import { BusinessFields, EMPTY_BUSINESS, validateBusiness, type BusinessForm } from "@/components/business-step";
 
 export function SignupWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [slugStatus, setSlugStatus] = useState<string | null>(null);
-  const [slugEdited, setSlugEdited] = useState(false);
-  const [categories, setCategories] = useState<string[]>([...SHOP_BUSINESS_CATEGORIES]);
+  const [business, setBusiness] = useState<BusinessForm>(EMPTY_BUSINESS);
   // Email confirmation (step 2)
   const [code, setCode] = useState("");
   const [ticket, setTicket] = useState<string | null>(null);
@@ -44,42 +30,7 @@ export function SignupWizard() {
     displayName: "",
     email: "",
     password: "",
-    shopName: "",
-    shopSlug: "",
-    category: "",
-    vibe: "",
   });
-
-  useEffect(() => {
-    void fetch("/api/onboarding/categories")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.ok && Array.isArray(data.categories) && data.categories.length > 0) {
-          setCategories(data.categories);
-        }
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (slugEdited || !form.shopName) return;
-    setForm((current) => ({ ...current, shopSlug: slugify(current.shopName) }));
-  }, [form.shopName, slugEdited]);
-
-  useEffect(() => {
-    if (form.shopSlug.length < 3) {
-      setSlugStatus(null);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      const res = await fetch(`/api/auth/check-slug?slug=${encodeURIComponent(form.shopSlug)}`);
-      const data = await res.json();
-      setSlugStatus(data.available ? "available" : data.reason ?? "Unavailable");
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [form.shopSlug]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -170,10 +121,9 @@ export function SignupWizard() {
       return;
     }
 
-    if (!form.category.trim()) {
-      setError(
-        "Choose your business category to continue."
-      );
+    const problem = validateBusiness(business);
+    if (problem) {
+      setError(problem);
       return;
     }
 
@@ -182,7 +132,7 @@ export function SignupWizard() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, ticket }),
+        body: JSON.stringify({ ...form, ...business, chatUrl: business.chatUrl || undefined, ticket }),
       });
       const data = await res.json();
 
@@ -195,7 +145,7 @@ export function SignupWizard() {
         return;
       }
 
-      router.push(data.redirectTo ?? "/launch");
+      router.push(data.redirectTo ?? "/onboarding");
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
@@ -206,13 +156,13 @@ export function SignupWizard() {
 
   return (
     <AuthLayout
-      title="Start your shop free"
+      title={step === 3 ? "Your business" : "Start your shop free"}
       subtitle={
         step === 1
-          ? "Step 1 of 3 — Sign up with Google or email"
+          ? "Create your account with Google or email"
           : step === 2
-            ? "Step 2 of 3 — Confirm your email"
-            : "Step 3 of 3 — Tell us about your shop"
+            ? "Confirm your email"
+            : "Step 1 of 4 — Your business"
       }
     >
       {step === 1 && (
@@ -222,14 +172,14 @@ export function SignupWizard() {
         </>
       )}
 
-      <div className="mb-6 flex gap-2">
-        {[1, 2, 3].map((n) => (
-          <div
-            key={n}
-            className={`h-1.5 flex-1 rounded-full ${step >= n ? "bg-emerald-500" : "bg-white/10"}`}
-          />
-        ))}
-      </div>
+      {step === 3 && (
+        // Same 4-step bar as /onboarding: this is step 1 of 4.
+        <div className="mb-6 flex gap-2" aria-hidden>
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className={`h-1.5 flex-1 rounded-full ${n === 1 ? "bg-emerald-500" : "bg-white/10"}`} />
+          ))}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthError message={error} />
@@ -318,50 +268,7 @@ export function SignupWizard() {
           </>
         ) : (
           <>
-            <AuthField label="Shop name" id="shopName">
-              <input
-                id="shopName"
-                required
-                value={form.shopName}
-                onChange={(e) => updateField("shopName", e.target.value)}
-                className={authInputClassName}
-                placeholder="Halo Queen Manila"
-              />
-            </AuthField>
-
-            <AuthField label="Shop URL" id="shopSlug">
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-sm text-muted-foreground">{shopUrlDisplayPrefix()}</span>
-                <input
-                  id="shopSlug"
-                  required
-                  value={form.shopSlug}
-                  onChange={(e) => {
-                    setSlugEdited(true);
-                    updateField("shopSlug", slugify(e.target.value));
-                  }}
-                  className={authInputClassName}
-                  placeholder="halo-queen"
-                />
-              </div>
-              {slugStatus && (
-                <p
-                  className={`mt-1.5 text-xs ${
-                    slugStatus === "available" ? "text-emerald-600" : "text-red-600"
-                  }`}
-                >
-                  {slugStatus === "available" ? "Available" : slugStatus}
-                </p>
-              )}
-            </AuthField>
-
-            <BusinessCategoryPicker
-              value={form.category}
-              onChange={(category) => updateField("category", category)}
-              allowedCategories={categories}
-            />
-
-            <VibePicker value={form.vibe} onChange={(vibe) => updateField("vibe", vibe)} />
+            <BusinessFields value={business} onChange={setBusiness} />
           </>
         )}
 
@@ -377,7 +284,7 @@ export function SignupWizard() {
           )}
           <div className={step === 3 ? "flex-1" : "w-full"}>
             <AuthSubmitButton loading={loading}>
-              {step === 1 ? (ticket ? "Continue" : "Send code") : step === 2 ? "Verify email" : "Create my shop"}
+              {step === 1 ? (ticket ? "Continue" : "Send code") : step === 2 ? "Verify email" : "Continue"}
             </AuthSubmitButton>
           </div>
         </div>

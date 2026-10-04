@@ -74,7 +74,31 @@ export interface TenantOrderRulesSettings {
   unpaidExpiryHours?: number;
 }
 
+/** Where the seller already sells (onboarding step 1). */
+export type TenantSellChannel = "facebook" | "instagram" | "tiktok" | "messenger" | "shopee" | "lazada" | "other";
+
+export interface TenantSocialSettings {
+  sellChannels?: TenantSellChannel[];
+  /** Page / chat link buyers go back to after ordering ("Back to chat"), e.g. https://m.me/yourpage. */
+  chatUrl?: string;
+}
+
+export interface TenantContactSettings {
+  /** Seller's mobile (09XXXXXXXXX) for order alerts. */
+  mobile?: string;
+}
+
+export interface TenantOnboardingSettings {
+  /** Last finished step: 1 business, 2 first product, 3 payments, 4 link. */
+  step?: number;
+  completedAt?: string;
+  skippedAt?: string;
+}
+
 export interface TenantSettingsJson {
+  contact?: TenantContactSettings;
+  social?: TenantSocialSettings;
+  onboarding?: TenantOnboardingSettings;
   /** Order rules (key kept as `checkout` per the Phase 2 spec, D4). */
   checkout?: TenantOrderRulesSettings;
   codEnabled?: boolean;
