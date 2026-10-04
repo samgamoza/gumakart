@@ -251,9 +251,10 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   let step = 0;
 
   return (
-    <div className="mx-auto w-full max-w-md pb-36">
+    <div className="min-h-dvh lg:bg-slate-100">
+    <div className="mx-auto w-full max-w-md pb-36 lg:max-w-5xl lg:px-6 lg:pb-12 lg:pt-6">
       {/* Seller header: the buyer is ordering from the shop they follow */}
-      <header className="flex items-center gap-3 border-b border-[color:var(--kart-line)] bg-white px-4 py-3">
+      <header className="flex items-center gap-3 border-b border-[color:var(--kart-line)] bg-white px-4 py-3 lg:mx-3 lg:mb-2 lg:rounded-2xl lg:border">
         {data.shop.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={data.shop.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
@@ -268,14 +269,19 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
         </div>
       </header>
 
+      {/* Phones: one column (items → form → fees, sticky button).
+          PC: form on the left, order summary + button on the right, staying in view. */}
+      <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-6">
+      <aside className="contents lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1 lg:block">
       {/* Order review */}
-      <section className="k-card m-3 divide-y divide-[color:var(--kart-line)]">
+      <section className="k-card order-1 m-3 divide-y divide-[color:var(--kart-line)] lg:mt-3">
+        <p className="hidden px-4 pb-2 pt-3 text-xs font-bold uppercase tracking-wider text-[color:var(--kart-muted)] lg:block">Ang order mo</p>
         {data.items.map((item) => {
           const qty = quantities[item.productId] ?? item.quantity;
           const soldOut = item.maxQuantity < 1;
           return (
             <div key={item.productId} className="flex items-center gap-3 p-3">
-              <div className="h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-100">
+              <div className="h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-100 lg:h-20 lg:w-20">
                 {item.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="eager" />
@@ -316,7 +322,48 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
           );
         })}
       </section>
+      {/* Fees, always above the button */}
+      <section className="order-3 m-3 mt-6 lg:mt-3">
+        <div className="k-card grid gap-2 p-4 text-sm">
+          <Row label={`Items (${data.items.reduce((n, i) => n + (quantities[i.productId] ?? i.quantity), 0)})`} value={peso(totals.subtotal)} />
+          {totals.discount > 0 && <Row label={totals.discountLabel ?? "Discount"} value={`−${peso(totals.discount)}`} />}
+          {totals.tax > 0 && <Row label="Tax" value={peso(totals.tax)} />}
+          <Row
+            label={fulfillment === "pickup" ? "Pickup" : "Delivery"}
+            value={fulfillment === "pickup" ? "Libre" : deliveryFee == null ? "—" : deliveryFee > 0 ? peso(deliveryFee) : "Libre"}
+            muted={fulfillment === "delivery" && deliveryFee == null}
+          />
+          <div className="my-1 border-t border-dashed border-[color:var(--kart-line)]" />
+          <Row label="Total" value={peso(totals.total)} bold />
+        </div>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={submitting || belowMinimum || data.payments.length === 0}
+          className="k-btn k-btn-primary mt-3 hidden w-full text-[15px] lg:flex"
+        >
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {submitting ? "Pinapadala ang order mo…" : `I-place ang order · ${peso(totals.total)}`}
+        </button>
+        {methodLabel && <p className="mt-2 hidden text-center text-xs text-[color:var(--kart-muted)] lg:block">Bayad: {methodLabel}</p>}
+        {belowMinimum && (
+          <p className="mt-3 rounded-xl bg-[color:var(--kart-orange-soft)] px-4 py-3 text-xs font-medium text-[color:var(--kart-orange-dark)]">
+            {peso(data.minOrderAmount)} ang minimum order ng shop na ito. Magdagdag pa para tumuloy.
+          </p>
+        )}
+        {errors.form && (
+          <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-[color:var(--kart-danger)]" role="alert">
+            {errors.form}
+          </p>
+        )}
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-[color:var(--kart-muted)]">
+          <ShieldCheck className="h-3.5 w-3.5" /> Secure checkout ng Guma Kart
+        </p>
+      </section>
 
+      </aside>
+
+      <div className="order-2 lg:col-start-1 lg:row-start-1">
       {/* Contact */}
       <section className="m-3 mt-5 grid gap-3">
         <SectionTitle n={++step}>Ang iyong detalye</SectionTitle>
@@ -474,37 +521,11 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
         </label>
       </section>
 
-      {/* Fees, always above the button */}
-      <section className="m-3 mt-6">
-        <div className="k-card grid gap-2 p-4 text-sm">
-          <Row label={`Items (${data.items.reduce((n, i) => n + (quantities[i.productId] ?? i.quantity), 0)})`} value={peso(totals.subtotal)} />
-          {totals.discount > 0 && <Row label={totals.discountLabel ?? "Discount"} value={`−${peso(totals.discount)}`} />}
-          {totals.tax > 0 && <Row label="Tax" value={peso(totals.tax)} />}
-          <Row
-            label={fulfillment === "pickup" ? "Pickup" : "Delivery"}
-            value={fulfillment === "pickup" ? "Libre" : deliveryFee == null ? "—" : deliveryFee > 0 ? peso(deliveryFee) : "Libre"}
-            muted={fulfillment === "delivery" && deliveryFee == null}
-          />
-          <div className="my-1 border-t border-dashed border-[color:var(--kart-line)]" />
-          <Row label="Total" value={peso(totals.total)} bold />
-        </div>
-        {belowMinimum && (
-          <p className="mt-3 rounded-xl bg-[color:var(--kart-orange-soft)] px-4 py-3 text-xs font-medium text-[color:var(--kart-orange-dark)]">
-            {peso(data.minOrderAmount)} ang minimum order ng shop na ito. Magdagdag pa para tumuloy.
-          </p>
-        )}
-        {errors.form && (
-          <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-[color:var(--kart-danger)]" role="alert">
-            {errors.form}
-          </p>
-        )}
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-[11px] text-[color:var(--kart-muted)]">
-          <ShieldCheck className="h-3.5 w-3.5" /> Secure checkout ng Guma Kart
-        </p>
-      </section>
+      </div>
+      </div>
 
-      {/* Sticky total + button */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[color:var(--kart-line)] bg-white/95 backdrop-blur safe-bottom">
+      {/* Sticky total + button (phones; PC has the button in the summary) */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[color:var(--kart-line)] bg-white/95 backdrop-blur safe-bottom lg:hidden">
         <div className="mx-auto flex max-w-md items-center gap-3 p-3">
           <div className="min-w-[84px]">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--kart-muted)]">Total</p>
@@ -522,6 +543,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
           </button>
         </div>
       </div>
+    </div>
     </div>
   );
 }
