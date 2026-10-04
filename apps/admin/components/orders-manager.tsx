@@ -51,6 +51,24 @@ interface OrderRow {
   bucket: Bucket;
   acceptedAt: string | null;
   deliveryProvider: string | null;
+  sourceChannel?: string;
+  checkoutLink?: { title: string; shareChannel: string | null } | null;
+}
+
+const SHARE_CHANNEL_LABEL: Record<string, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  messenger: "Messenger",
+  other: "Other",
+};
+
+/** Where the order came from, e.g. "Checkout link · Payday post (Facebook)". */
+function sourceLabel(order: OrderRow): string | null {
+  if (order.sourceChannel !== "checkout_link") return null;
+  if (!order.checkoutLink) return "Checkout link";
+  const where = order.checkoutLink.shareChannel ? SHARE_CHANNEL_LABEL[order.checkoutLink.shareChannel] : null;
+  return `Checkout link · ${order.checkoutLink.title}${where ? ` (${where})` : ""}`;
 }
 
 /** Merchant tabs, in the order work happens (plan §6). */
@@ -464,6 +482,11 @@ export function OrdersManager() {
                       {order.paymentState === "cod_due" ? " (collect on delivery)" : ""}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-muted-foreground">{order.itemsSummary}</p>
+                    {sourceLabel(order) ? (
+                      <p className="mt-1 inline-flex max-w-full items-center truncate rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        {sourceLabel(order)}
+                      </p>
+                    ) : null}
                     {showProof ? (
                       <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
                         {order.paymentReference ? (

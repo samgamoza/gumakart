@@ -325,7 +325,7 @@ export interface CheckoutLinkItemSummary {
   title: string;
   variantTitle: string | null;
   quantity: number;
-  /** Current price of the variant (string decimal), or the product price if the variant is gone. */
+  /** Current price (string decimal): what checkout will charge per unit. */
   price: string;
   imageUrl: string | null;
   stockQty: number | null;
@@ -371,7 +371,6 @@ async function loadItems(linkIds: string[]): Promise<Map<string, CheckoutLinkIte
       basePrice: products.basePrice,
       trackInventory: products.trackInventory,
       variantTitle: productVariants.title,
-      variantPrice: productVariants.price,
       stockQty: productVariants.stockQty,
       variantImage: productVariants.imageUrl,
       firstImage: sql<string | null>`(
@@ -399,7 +398,9 @@ async function loadItems(linkIds: string[]): Promise<Map<string, CheckoutLinkIte
           ? row.variantTitle
           : null,
       quantity: row.quantity,
-      price: row.variantPrice ?? row.basePrice,
+      // Checkout charges products.base_price (kept in sync with the default
+      // variant by products.ts), so show exactly that.
+      price: row.basePrice,
       imageUrl: row.variantImage ?? row.firstImage ?? null,
       stockQty: row.variantId ? (row.stockQty ?? 0) : null,
       trackInventory: row.trackInventory !== false,
@@ -521,4 +522,61 @@ export async function updateCheckoutLink(
     .returning({ id: checkoutLinks.id });
   if (updated.length === 0) return null;
   return getCheckoutLinkForTenant(tenantId, linkId);
+}
+
+// ─── Buyer side (public, by code) ────────────────────────────────────────────
+
+export interface PublicCheckoutLink {
+  id: string;
+  code: string;
+  tenantId: string;
+  tenantSlug: string;
+  tenantStatus: string;
+  shareChannel: CheckoutLinkShareChannel | null;
+  allowQuantityEdit: boolean;
+  deliveryMode: CheckoutLinkDeliveryMode;
+  paymentMethods: CheckoutLinkPaymentMethod[] | null;
+  couponCode: string | null;
+  status: CheckoutLinkStatus;
+  items: CheckoutLinkItemSummary[];
+}
+
+/** Looks a link up by its public code. Returns closed links too (status says why). */
+export async function getCheckoutLinkByCode(rawCode: string): Promise<PublicCheckoutLink | null> {
+  const code = rawCode.trim().toLowerCase();
+  if (!isCheckoutLinkCode(code)) return null;
+  const db = getDb();
+  const [row] = await db
+    .select({ link: checkoutLinks, tenantSlug: tenants.slug, tenantStatus: tenants.status })
+    .from(checkoutLinks)
+    .innerJoin(tenants, eq(tenants.id, checkoutLinks.tenantId))
+    .where(eq(checkoutLinks.code, code))
+    .limit(1);
+  if (!row) return null;
+  const items = (await loadItems([row.link.id])).get(row.link.id) ?? [];
+  return {
+    id: row.link.id,
+    code: row.link.code,
+    tenantId: row.link.tenantId,
+    tenantSlug: row.tenantSlug,
+    tenantStatus: row.tenantStatus,
+    shareChannel: (row.link.shareChannel as CheckoutLinkShareChannel | null) ?? null,
+    allowQuantityEdit: row.link.allowQuantityEdit,
+    deliveryMode: row.link.deliveryMode as CheckoutLinkDeliveryMode,
+    paymentMethods: (row.link.paymentMethods as CheckoutLinkPaymentMethod[] | null) ?? null,
+    couponCode: row.link.couponCode,
+    status: checkoutLinkStatus(row.link),
+    items,
+  };
+}
+
+/** Best-effort counters for the seller's link stats. Never throws. */
+export async function bumpCheckoutLinkCounter(linkId: string, counter: "view" | "start"): Promise<void> {
+  const db = getDb();
+  const column = counter === "view" ? checkoutLinks.viewCount : checkoutLinks.startCount;
+  await db
+    .update(checkoutLinks)
+    .set(counter === "view" ? { viewCount: sql`${column} + 1` } : { startCount: sql`${column} + 1` })
+    .where(eq(checkoutLinks.id, linkId))
+    .catch((error) => console.error("[checkout-links] counter failed:", error));
 }

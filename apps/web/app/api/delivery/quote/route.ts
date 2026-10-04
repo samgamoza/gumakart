@@ -14,6 +14,10 @@ const quoteSchema = z.object({
   address: z.string().trim().min(10).max(500),
   /** Cart subtotal in PHP, used only for the flat-rate fallback. */
   subtotal: z.number().min(0).max(9999999).optional(),
+  /** Structured parts so the fallback fee uses the same zones as checkout. */
+  city: z.string().trim().max(120).optional(),
+  barangay: z.string().trim().max(120).optional(),
+  province: z.string().trim().max(120).optional(),
 });
 
 export async function POST(request: Request) {
@@ -53,10 +57,12 @@ export async function POST(request: Request) {
       });
     }
 
-    const fee = computeDeliveryFee(body.subtotal ?? 0, settings);
+    const parts = { city: body.city, barangay: body.barangay, province: body.province };
+    const fee = computeDeliveryFee(body.subtotal ?? 0, settings, parts);
     const resolved = resolveShippingFee({
       shipping: settings.shipping,
       subtotal: body.subtotal ?? 0,
+      ...parts,
     });
 
     return NextResponse.json({

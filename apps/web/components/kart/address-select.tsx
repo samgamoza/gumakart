@@ -14,15 +14,43 @@ import { Field } from "./ui";
   Strict chained dropdowns: Region → Province → City/Municipality → Barangay (spec §C.2).
   No free-text city, no zip-code gate. Each level resets the ones below it.
 */
+const COPY = {
+  en: {
+    indexError: "Address list unavailable — check your signal and retry.",
+    region: "Select region", regionLoading: "Loading regions…",
+    province: "Select province", provinceFirst: "Choose a region first",
+    city: "Select city or municipality", cityFirst: "Choose a province first",
+    brgy: "Select barangay", brgyFirst: "Choose a city first", brgyLoading: "Loading barangays…",
+    street: "House no. / Street / Building",
+    streetHint: "Unit, block & lot, building name — what the rider needs at the gate.",
+    streetPh: "e.g. Blk 4 Lot 12, Maligaya St.",
+    landmark: "Landmark (optional)", landmarkPh: "e.g. across the barangay hall",
+  },
+  tl: {
+    indexError: "Hindi ma-load ang listahan ng address — i-check ang signal at subukan ulit.",
+    region: "Piliin ang region", regionLoading: "Nilo-load ang regions…",
+    province: "Piliin ang province", provinceFirst: "Pumili muna ng region",
+    city: "Piliin ang city o municipality", cityFirst: "Pumili muna ng province",
+    brgy: "Piliin ang barangay", brgyFirst: "Pumili muna ng city", brgyLoading: "Nilo-load ang barangays…",
+    street: "House no. / Street / Building",
+    streetHint: "Unit, block & lot, pangalan ng building — ang kailangan ng rider sa gate.",
+    streetPh: "hal. Blk 4 Lot 12, Maligaya St.",
+    landmark: "Landmark (optional)", landmarkPh: "hal. tapat ng barangay hall",
+  },
+} as const;
+
 export function AddressSelect({
   value,
   onChange,
   errors,
+  lang = "en",
 }: {
   value: KartAddress;
   onChange: (next: KartAddress) => void;
   errors?: Partial<Record<keyof KartAddress, string>>;
+  lang?: keyof typeof COPY;
 }) {
+  const t = COPY[lang];
   const [index, setIndex] = useState<PhAddressIndex | null>(null);
   const [indexError, setIndexError] = useState<string | null>(null);
   const [brgys, setBrgys] = useState<Record<string, string[]> | null>(null);
@@ -32,7 +60,7 @@ export function AddressSelect({
     let alive = true;
     loadPhIndex()
       .then((i) => alive && setIndex(i))
-      .catch(() => alive && setIndexError("Address list unavailable — check your signal and retry."));
+      .catch(() => alive && setIndexError(t.indexError));
     return () => {
       alive = false;
     };
@@ -79,7 +107,7 @@ export function AddressSelect({
             set({ regionCode: r?.code ?? "", region: r?.name ?? "", provinceCode: "", province: "", cityCode: "", city: "", barangay: "" });
           }}
         >
-          <option value="">{index ? "Select region" : "Loading regions…"}</option>
+          <option value="">{index ? t.region : t.regionLoading}</option>
           {index?.regions.map((r) => (
             <option key={r.code} value={r.code}>
               {r.name}
@@ -99,7 +127,7 @@ export function AddressSelect({
             set({ provinceCode: p?.code ?? "", province: p?.name ?? "", cityCode: "", city: "", barangay: "" });
           }}
         >
-          <option value="">{value.regionCode ? "Select province" : "Choose a region first"}</option>
+          <option value="">{value.regionCode ? t.province : t.provinceFirst}</option>
           {provinces.map((p) => (
             <option key={p.code} value={p.code}>
               {p.name}
@@ -119,7 +147,7 @@ export function AddressSelect({
             set({ cityCode: c?.code ?? "", city: c?.name ?? "", barangay: "" });
           }}
         >
-          <option value="">{value.provinceCode ? "Select city or municipality" : "Choose a province first"}</option>
+          <option value="">{value.provinceCode ? t.city : t.cityFirst}</option>
           {cities.map((c) => (
             <option key={c.code} value={c.code}>
               {c.name}
@@ -138,7 +166,7 @@ export function AddressSelect({
             onChange={(e) => set({ barangay: e.target.value })}
           >
             <option value="">
-              {!value.cityCode ? "Choose a city first" : brgyLoading ? "Loading barangays…" : "Select barangay"}
+              {!value.cityCode ? t.brgyFirst : brgyLoading ? t.brgyLoading : t.brgy}
             </option>
             {barangays.map((b) => (
               <option key={b} value={b}>
@@ -150,22 +178,22 @@ export function AddressSelect({
         </div>
       </Field>
 
-      <Field label="House no. / Street / Building" error={errors?.line1} hint="Unit, block & lot, building name — what the rider needs at the gate.">
+      <Field label={t.street} error={errors?.line1} hint={t.streetHint}>
         <input
           className="k-input"
           value={value.line1}
           aria-invalid={Boolean(errors?.line1)}
-          placeholder="e.g. Blk 4 Lot 12, Maligaya St."
+          placeholder={t.streetPh}
           autoComplete="address-line1"
           onChange={(e) => set({ line1: e.target.value })}
         />
       </Field>
 
-      <Field label="Landmark (optional)">
+      <Field label={t.landmark}>
         <input
           className="k-input"
           value={value.landmark}
-          placeholder="e.g. across the barangay hall"
+          placeholder={t.landmarkPh}
           onChange={(e) => set({ landmark: e.target.value })}
         />
       </Field>

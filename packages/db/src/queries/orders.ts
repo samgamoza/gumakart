@@ -15,6 +15,7 @@ import {
 } from "./order-state";
 import { applyOrderActionInTx, applyWalletEffects, factsOf } from "./order-lifecycle";
 import {
+  checkoutLinks,
   customers,
   deliveries,
   orderItems,
@@ -82,6 +83,14 @@ export interface CreateOrderInput {
   sourceChannel?: string;
   /** Buyer ticked "send me reminders about this order" (marketing SMS consent). */
   smsMarketingConsent?: boolean;
+  /**
+   * Phase 3: the checkout link this order came through. Its order counter is
+   * bumped in the same transaction, and the order is refused if the link was
+   * turned off, ended, or reached its order limit in the meantime.
+   */
+  checkoutLinkId?: string | null;
+  /** utm_source / utm_medium / utm_campaign / utm_content (+ fbclid etc.), already sanitized. */
+  utmJson?: Record<string, string> | null;
 }
 
 export interface CreatedOrder {
@@ -313,6 +322,27 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       customerRecordId = cust?.id ?? null;
     }
 
+    // Claim one order from the checkout link (atomic: the UPDATE row-locks the
+    // link, so its order limit can't be overshot by concurrent checkouts).
+    if (input.checkoutLinkId) {
+      const claimed = await tx
+        .update(checkoutLinks)
+        .set({ orderCount: sql`${checkoutLinks.orderCount} + 1` })
+        .where(
+          and(
+            eq(checkoutLinks.id, input.checkoutLinkId),
+            eq(checkoutLinks.tenantId, tenant.id),
+            eq(checkoutLinks.active, true),
+            sql`(${checkoutLinks.expiresAt} is null or ${checkoutLinks.expiresAt} > now())`,
+            sql`(${checkoutLinks.maxOrders} is null or ${checkoutLinks.orderCount} < ${checkoutLinks.maxOrders})`
+          )
+        )
+        .returning({ id: checkoutLinks.id });
+      if (claimed.length === 0) {
+        throw new OrderError("This link is no longer taking orders.", "LINK_CLOSED");
+      }
+    }
+
     const [order] = await tx
       .insert(orders)
       .values({
@@ -335,6 +365,8 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         deliveryAddressJson: input.deliveryAddress ?? null,
         notes: input.notes,
         sourceChannel: input.sourceChannel ?? "storefront",
+        checkoutLinkId: input.checkoutLinkId ?? null,
+        utmJson: input.utmJson && Object.keys(input.utmJson).length > 0 ? input.utmJson : null,
         orderState: initialFacts.orderState,
         paymentState: initialFacts.paymentState,
         fulfillmentState: initialFacts.fulfillmentState,
@@ -395,6 +427,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         orderNumber: order.orderNumber,
         paymentMethod: input.paymentMethod,
         sourceChannel: input.sourceChannel ?? "storefront",
+        checkoutLinkId: input.checkoutLinkId ?? null,
         total: order.total,
         historyId: history?.id ?? null,
         ...initialFacts,
@@ -649,6 +682,10 @@ export interface TenantOrderListItem {
   acceptedAt: Date | null;
   /** Latest courier booking, if any. */
   deliveryProvider: string | null;
+  /** storefront | checkout_link | … */
+  sourceChannel: string;
+  /** Checkout link the order came from: its seller-side name and where it was shared. */
+  checkoutLink: { title: string; shareChannel: string | null } | null;
 }
 
 export async function listOrdersForTenant(tenantId: string): Promise<TenantOrderListItem[]> {
@@ -736,6 +773,15 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
   const providerByOrder = new Map<string, string>();
   for (const d of deliveryRows) providerByOrder.set(d.orderId, d.provider);
 
+  const linkIds = [...new Set(rows.map((row) => row.checkoutLinkId).filter((id): id is string => Boolean(id)))];
+  const linkRows = linkIds.length
+    ? await db
+        .select({ id: checkoutLinks.id, title: checkoutLinks.title, shareChannel: checkoutLinks.shareChannel })
+        .from(checkoutLinks)
+        .where(and(eq(checkoutLinks.tenantId, tenantId), inArray(checkoutLinks.id, linkIds)))
+    : [];
+  const linkById = new Map(linkRows.map((l) => [l.id, { title: l.title, shareChannel: l.shareChannel }]));
+
   return rows.map((row) => {
     const orderItemsList = itemsByOrder.get(row.id) ?? [];
     const payMeta = paymentMetaByOrder.get(row.id);
@@ -764,6 +810,8 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       bucket: orderBucketOf(facts),
       acceptedAt: row.acceptedAt,
       deliveryProvider: providerByOrder.get(row.id) ?? null,
+      sourceChannel: row.sourceChannel ?? "storefront",
+      checkoutLink: row.checkoutLinkId ? linkById.get(row.checkoutLinkId) ?? null : null,
     };
   });
 }

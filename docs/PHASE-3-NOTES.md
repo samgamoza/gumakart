@@ -6,7 +6,7 @@ Plan: `docs/GUMA-KART-V1-PLAN-REVISED.md` §5. Built in slices; each slice ends 
 | Slice | Scope | Status |
 |---|---|---|
 | 3A | Seller side: table, admin page, create / copy / share / QR / turn off | ✅ approved 2026-10-04 |
-| 3B | Buyer checkout at `kart.guma.one/c/<code>` (from the `/kart` designs), real orders, `source_channel = checkout_link` | next |
+| 3B | Buyer checkout at `kart.guma.one/c/<code>` (from the `/kart` designs), real orders, `source_channel = checkout_link` | ✅ approved 2026-10-04 (Taglish) |
 | 3C | Order page + "Back to chat", abandonment capture, share kit | — |
 
 ## 3A — what shipped
@@ -46,3 +46,45 @@ typecheck clean for db, auth, services, admin, web, platform.
 
 **Deploy:** run the Neon migrate (0024) **before** pushing — the admin page reads the new table.
 The link's **Open** button 404s until 3B ships the buyer page.
+
+## 3B — what shipped
+
+**Buyer page** `apps/web/app/c/[code]` (Taglish, one page, phone-first, seller's name on top)
+- Order review (photo, price, quantity stepper if the link allows it, capped by stock) → your details
+  (name, mobile) → delivery or pickup (PSGC Region → Province → City → Barangay + street/landmark,
+  or the shop's pickup address) → payment cards (only methods the shop accepts **and** the link
+  allows) → unticked SMS-reminder consent → fee breakdown above the button → sticky total + button.
+- Delivery fee is the same as the order will charge: `/api/delivery/quote` now takes city /
+  barangay / province so the fallback uses the same zones as checkout. Totals use
+  `computeCheckoutTotals` (coupon on the link, tax, discounts) on the client and server.
+- Link previews: OG title "Product · Shop", the product photo, `noindex`.
+- Closed links (off / ended / order limit / product unpublished / shop not live) show a friendly page.
+- After ordering → the existing order page (pay instructions + receipt upload). Restyled in 3C.
+
+**Server**
+- `apps/web/lib/place-order.ts`: the storefront checkout pipeline moved here unchanged and is now
+  used by both `/api/checkout` and `/api/c/<code>/order` (one checkout implementation).
+- `/api/c/<code>/order`: the link decides products and quantities (buyer quantities only if allowed,
+  unknown products ignored), payment and delivery options; 10/min/IP.
+- `/api/c/<code>/session`: progress save once a valid mobile is typed; first save = "started checkout".
+- `createOrderForTenant`: `checkoutLinkId` + `utmJson`. Claims one order from the link **inside the
+  order transaction** (`UPDATE … WHERE active AND not expired AND order_count < max_orders`), so the
+  order limit can't be overshot by simultaneous buyers; refused → `LINK_CLOSED`.
+- Views counted server-side, skipping link-preview bots (Messenger, WhatsApp, Viber…).
+- UTM / fbclid / ttclid from the link URL saved on the session and the order.
+- `upsertCheckoutSession` is now race-safe (two saves at once used to hit the unique key).
+- Creating a checkout link activates a pending shop (plan §9).
+
+**Seller**
+- Orders show a tag: "Checkout link · <link name> (<where shared>)".
+- Link stats (views / started / orders / sales) fill in from real activity.
+
+**Tests:** checkout-links suite 12/12 (adds: order records link + UTM and is counted; 4 simultaneous
+buyers on a 2-order link → exactly 2 succeed; turned-off link refuses and leaves no order behind).
+db unit 36/36, integration 38/38, services 50/50, typecheck clean. Manual: storefront cart checkout
+still works (regression), tampered quantities ignored, wrong code 404, short address 400.
+
+**Deploy:** no migration. Push only.
+
+**Known limits:** the order limit counts cancelled orders too; a product with several variants is
+sold as its default variant (same as the storefront today).

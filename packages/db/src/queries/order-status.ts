@@ -41,6 +41,7 @@ export class OrderError extends Error {
       | "COUPON_LIMIT_REACHED"
       | "INVALID_TRANSITION"
       | "ORDER_NOT_FOUND"
+      | "LINK_CLOSED"
   ) {
     super(message);
     this.name = "OrderError";

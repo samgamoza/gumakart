@@ -9,6 +9,7 @@ import {
   createCheckoutLink,
   getCheckoutLinkShopOptions,
   listCheckoutLinksForTenant,
+  tryAutoActivateTenant,
 } from "@gumakart/db";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
 import { storefrontBaseUrl } from "@/lib/utils";
@@ -67,6 +68,10 @@ export async function POST(request: Request) {
       expiresAt,
       maxOrders: body.maxOrders ?? null,
     });
+    // Plan §9: a shop goes live when its first checkout link is created.
+    await tryAutoActivateTenant(session.tenantId).catch((error) =>
+      console.error("[checkout-links POST] auto-activate failed:", error)
+    );
     return NextResponse.json({ ok: true, link }, { status: 201 });
   } catch (error) {
     return errorResponse(error, "[checkout-links POST]");

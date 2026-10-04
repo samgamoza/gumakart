@@ -199,7 +199,10 @@ export async function upsertCheckoutSession(input: UpsertCheckoutSessionInput) {
       status: "active",
       lastActivityAt: now,
     })
+    // Two saves from the same browser can race; the loser updates instead.
+    .onConflictDoNothing({ target: [checkoutSessions.tenantId, checkoutSessions.sessionKey] })
     .returning();
+  if (!created) return upsertCheckoutSession(input);
   return created;
 }
 
@@ -275,4 +278,15 @@ export async function abandonStaleCheckoutSessions(input: {
   }
 
   return abandoned;
+}
+
+/** True when this browser already has a checkout session with the shop. */
+export async function checkoutSessionExists(tenantId: string, sessionKey: string): Promise<boolean> {
+  const db = getDb();
+  const [row] = await db
+    .select({ id: checkoutSessions.id })
+    .from(checkoutSessions)
+    .where(and(eq(checkoutSessions.tenantId, tenantId), eq(checkoutSessions.sessionKey, sessionKey)))
+    .limit(1);
+  return Boolean(row);
 }

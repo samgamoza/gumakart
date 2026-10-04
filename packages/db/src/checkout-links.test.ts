@@ -21,7 +21,21 @@ import {
   resolveCheckoutLinkShopOptions,
   updateCheckoutLink,
 } from "./queries/checkout-links";
-import { checkoutLinks, productVariants, products, tenants } from "./schema/index";
+import { createOrderForTenant, OrderError } from "./queries/orders";
+import {
+  checkoutLinks,
+  customers,
+  domainEvents,
+  locations,
+  orderItems,
+  orderStatusHistory,
+  orders,
+  paymentTransactions,
+  productVariants,
+  products,
+  stockMovements,
+  tenants,
+} from "./schema/index";
 
 const url = process.env.DATABASE_URL ?? "";
 if (/neon\.tech|neon\.database|amazonaws|supabase|render\.com/i.test(url)) {
@@ -50,7 +64,7 @@ async function addProduct(tenantId: string, title: string, status: "active" | "d
 before(async () => {
   const [a] = await db
     .insert(tenants)
-    .values({ slug: shop.slug, name: "Link Shop", settingsJson: { payments: { receiving: { gcashNumber: "09171234567" } } } as never })
+    .values({ slug: shop.slug, name: "Link Shop", status: "active", settingsJson: { payments: { receiving: { gcashNumber: "09171234567" } } } as never })
     .returning();
   const [b] = await db.insert(tenants).values({ slug: other.slug, name: "Other Shop" }).returning();
   shop.id = a!.id;
@@ -64,6 +78,15 @@ before(async () => {
 });
 
 after(async () => {
+  const shopOrders = db.select({ id: orders.id }).from(orders).where(eq(orders.tenantId, shop.id));
+  await db.delete(domainEvents).where(eq(domainEvents.tenantId, shop.id));
+  await db.delete(stockMovements).where(eq(stockMovements.tenantId, shop.id));
+  await db.delete(paymentTransactions).where(eq(paymentTransactions.tenantId, shop.id));
+  await db.delete(orderStatusHistory).where(inArray(orderStatusHistory.orderId, shopOrders));
+  await db.delete(orderItems).where(inArray(orderItems.orderId, shopOrders));
+  await db.delete(orders).where(eq(orders.tenantId, shop.id));
+  await db.delete(customers).where(eq(customers.tenantId, shop.id));
+  await db.delete(locations).where(eq(locations.tenantId, shop.id));
   await db.delete(checkoutLinks).where(inArray(checkoutLinks.tenantId, [shop.id, other.id]));
   const prods = db.select({ id: products.id }).from(products).where(inArray(products.tenantId, [shop.id, other.id]));
   await db.delete(productVariants).where(inArray(productVariants.productId, prods));
@@ -189,5 +212,57 @@ describe("status and updates", () => {
     assert.ok(mine.length >= 4);
     assert.ok(mine.every((l, i) => i === 0 || mine[i - 1]!.createdAt >= l.createdAt));
     assert.deepEqual(await listCheckoutLinksForTenant(other.id), []);
+  });
+});
+
+describe("orders through a link", () => {
+  function order(linkId: string, phone: string) {
+    return createOrderForTenant({
+      tenantSlug: shop.slug,
+      items: [{ productId: ids.mug, quantity: 1 }],
+      customer: { name: "Link Buyer", phone },
+      deliveryType: "pickup",
+      paymentMethod: "cod",
+      deliveryFee: 0,
+      minOrderAmount: 0,
+      sourceChannel: "checkout_link",
+      checkoutLinkId: linkId,
+      utmJson: { utm_source: "facebook" },
+    });
+  }
+
+  it("records the link and UTM on the order and counts it", async () => {
+    const link = await createCheckoutLink(shop.id, null, { items: [{ productId: ids.mug, quantity: 1 }] });
+    const created = await order(link.id, "09170000001");
+    const [row] = await db.select().from(orders).where(eq(orders.id, created.id));
+    assert.equal(row!.checkoutLinkId, link.id);
+    assert.equal(row!.sourceChannel, "checkout_link");
+    assert.deepEqual(row!.utmJson, { utm_source: "facebook" });
+    const after = await getCheckoutLinkForTenant(shop.id, link.id);
+    assert.equal(after!.orderCount, 1);
+    assert.equal(after!.salesTotal, 349);
+  });
+
+  it("never goes over the order limit, even with simultaneous buyers", async () => {
+    const link = await createCheckoutLink(shop.id, null, { items: [{ productId: ids.mug, quantity: 1 }], maxOrders: 2 });
+    const results = await Promise.allSettled([1, 2, 3, 4].map((n) => order(link.id, `0917000010${n}`)));
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    const closed = results.filter(
+      (r) => r.status === "rejected" && r.reason instanceof OrderError && r.reason.code === "LINK_CLOSED"
+    ).length;
+    assert.equal(ok, 2);
+    assert.equal(closed, 2);
+    const after = await getCheckoutLinkForTenant(shop.id, link.id);
+    assert.equal(after!.orderCount, 2);
+    assert.equal(after!.status, "sold_out");
+  });
+
+  it("a link turned off refuses new orders", async () => {
+    const link = await createCheckoutLink(shop.id, null, { items: [{ productId: ids.mug, quantity: 1 }] });
+    await updateCheckoutLink(shop.id, link.id, { active: false });
+    await assert.rejects(order(link.id, "09170000201"), (e: unknown) => e instanceof OrderError && e.code === "LINK_CLOSED");
+    // no order row left behind by the rolled-back attempt
+    const left = await db.select({ id: orders.id }).from(orders).where(eq(orders.checkoutLinkId, link.id));
+    assert.equal(left.length, 0);
   });
 });
