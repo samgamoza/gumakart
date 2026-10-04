@@ -196,6 +196,11 @@ export function OrdersManager() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabId>("all");
+  // Dashboard to-do tiles link here as /orders?tab=to_confirm etc.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    if (TABS.some((t) => t.id === wanted)) setTab(wanted as TabId);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);

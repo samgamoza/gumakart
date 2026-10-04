@@ -108,3 +108,17 @@ sold as its default variant (same as the storefront today).
   sellers without a link see it once (owner approved).
 - Queries: `packages/db/src/queries/onboarding.ts`. APIs: `/api/onboarding/state|payments|finish`.
 - Not yet: AI product description in step 2, dashboard redesign (§10), Taglish for seller screens.
+
+## Dashboard + navigation (plan §10)
+
+- Overview = "What needs you today": tiles for Payments to confirm · To pack · To book delivery ·
+  Delivery problems (each opens `/orders?tab=…`), "N waiting for the buyer to pay", Today (sales,
+  orders, checkout links vs online store, Manila day), Deliveries (booked, out for delivery,
+  delivered today), newest checkout link with copy, setup checklist for the new flow (product,
+  payments, first link, email; online store optional), shortcuts. `getSellerToday` +
+  `/api/dashboard/today`. The old "Change template / Order Now link / PayMongo / categories" card is gone.
+- Menu: Overview · SELL (Checkout links, Orders, Products, Categories, Customers) · FULFILL
+  (Deliveries → Orders "Shipping") · AUTOMATE (Messages) · STORE (Online store) · Marketing & AI
+  (collapsed) · Settings (Business, Payments, Delivery, Notifications, Plan, …). Removed the
+  placeholder pages (Users, Analytics, Integrations, Domains, Workflows, Code, Logs, API, Security);
+  wallet/KYC hidden from the settings menu (payouts are simulated in V1).

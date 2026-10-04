@@ -17,7 +17,6 @@ export default async function DashboardPage() {
   return (
     <PatternAdminShell
       title="Overview"
-      description="Your shop at a glance — sales, setup, and every workspace module."
     >
       <DashboardView displayName={session?.displayName ?? "Seller"} />
     </PatternAdminShell>

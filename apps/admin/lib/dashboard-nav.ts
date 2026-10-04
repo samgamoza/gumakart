@@ -1,23 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3,
   Bot,
-  Code2,
   Database,
-  FileText,
-  Globe,
   LayoutDashboard,
   Link2,
+  MessagesSquare,
   Package,
-  Plug,
-  ScrollText,
   Settings,
-  Shield,
   ShoppingBag,
   Sparkles,
   Store,
+  Truck,
   Users,
-  Workflow,
 } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/plan-access";
 
@@ -39,7 +33,11 @@ export interface DashboardNavGroup {
   defaultOpen?: boolean;
 }
 
-/** Base44-inspired tenant dashboard navigation with plan gates. */
+/**
+ * Seller navigation (plan §10): Sell · Fulfill · Automate · Store, then Settings.
+ * The empty placeholder pages (Users, Analytics, Integrations, Domains, Workflows,
+ * Code, Logs, API, Security) are no longer listed; they come back when they ship.
+ */
 export const DASHBOARD_NAV: DashboardNavGroup[] = [
   {
     id: "home",
@@ -50,13 +48,13 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         label: "Overview",
         href: "/",
         icon: LayoutDashboard,
-        description: "Sales, orders, and setup progress at a glance.",
+        description: "What needs you today: orders to confirm, pack and ship.",
       },
     ],
   },
   {
-    id: "commerce",
-    label: "Commerce",
+    id: "sell",
+    label: "Sell",
     items: [
       {
         id: "checkout-links",
@@ -67,62 +65,71 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         description: "Share a one-page checkout in your posts and chats.",
       },
       {
+        id: "orders",
+        label: "Orders",
+        href: "/orders",
+        icon: ShoppingBag,
+        description: "Confirm payments, pack, and ship orders.",
+      },
+      {
         id: "products",
         label: "Products",
         href: "/products",
         icon: Package,
-        description: "Manage your catalog, photos, and inventory.",
+        description: "Your catalog, photos, prices, and stock.",
       },
       {
         id: "categories",
         label: "Categories",
         href: "/categories",
         icon: Database,
-        description: "Organize products into browsable groups.",
+        description: "Group products for your online store.",
       },
       {
-        id: "orders",
-        label: "Orders",
-        href: "/orders",
-        icon: ShoppingBag,
-        description: "Accept, fulfill, and track customer orders.",
-      },
-      {
-        id: "messages",
-        label: "Messages",
-        href: "/messages",
-        icon: Bot,
-        description: "Buyer storefront chat for payment and product help.",
-      },
-      {
-        id: "launch",
-        label: "Storefront look",
-        href: "/launch",
-        icon: Sparkles,
-        badge: "new",
-        description: "Change template, colors, and publish your shop look.",
+        id: "customers",
+        label: "Customers",
+        href: "/customers",
+        icon: Users,
+        description: "Every buyer by phone number, with their orders.",
       },
     ],
   },
   {
-    id: "customers",
-    label: "Customers & data",
+    id: "fulfill",
+    label: "Fulfill",
     items: [
       {
-        id: "users",
-        label: "Users",
-        href: "/dashboard/users",
-        icon: Users,
-        minPlan: "growth",
-        description: "Customer profiles, repeat buyers, and segments.",
+        id: "deliveries",
+        label: "Deliveries",
+        href: "/orders?tab=shipping",
+        icon: Truck,
+        description: "Orders with a rider booked or on the way.",
       },
+    ],
+  },
+  {
+    id: "automate",
+    label: "Automate",
+    items: [
       {
-        id: "analytics",
-        label: "Analytics",
-        href: "/dashboard/analytics",
-        icon: BarChart3,
-        minPlan: "growth",
-        description: "Traffic, conversion, and revenue trends.",
+        id: "messages",
+        label: "Messages",
+        href: "/messages",
+        icon: MessagesSquare,
+        description: "Buyer chat about products, payment, and delivery.",
+      },
+    ],
+  },
+  {
+    id: "store",
+    label: "Store",
+    items: [
+      {
+        id: "launch",
+        label: "Online store",
+        href: "/launch",
+        icon: Store,
+        description: "Optional: a full shop page with your look and products.",
       },
     ],
   },
@@ -150,19 +157,11 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
       },
       {
         id: "agents",
-        label: "Automations",
+        label: "Posting agents",
         href: "/workspace/automations",
         icon: Bot,
         minPlan: "growth",
-        description: "Posting agents and approval queues.",
-      },
-      {
-        id: "integrations",
-        label: "Integrations",
-        href: "/dashboard/integrations",
-        icon: Plug,
-        minPlan: "growth",
-        description: "Connect Meta, Google, couriers, and more.",
+        description: "Scheduled posts and approval queues.",
       },
       {
         id: "tracking",
@@ -175,78 +174,23 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
     ],
   },
   {
-    id: "platform",
-    label: "Platform",
-    collapsible: true,
-    items: [
-      {
-        id: "domains",
-        label: "Domains",
-        href: "/dashboard/domains",
-        icon: Globe,
-        minPlan: "pro",
-        description: "Custom domain and SSL for your shop.",
-      },
-      {
-        id: "workflows",
-        label: "Workflows",
-        href: "/dashboard/workflows",
-        icon: Workflow,
-        minPlan: "pro",
-        description: "Automate order, payout, and marketing flows.",
-      },
-      {
-        id: "code",
-        label: "Code",
-        href: "/dashboard/code",
-        icon: Code2,
-        minPlan: "pro",
-        description: "Custom CSS, embeds, and head scripts.",
-      },
-      {
-        id: "logs",
-        label: "Logs",
-        href: "/dashboard/logs",
-        icon: ScrollText,
-        minPlan: "pro",
-        description: "Webhook, payment, and agent activity logs.",
-      },
-      {
-        id: "api",
-        label: "API",
-        href: "/dashboard/api",
-        icon: FileText,
-        minPlan: "pro",
-        description: "REST keys and webhooks for your stack.",
-      },
-      {
-        id: "security",
-        label: "Security",
-        href: "/dashboard/security",
-        icon: Shield,
-        minPlan: "growth",
-        description: "Staff access, 2FA, and audit trail.",
-      },
-    ],
-  },
-  {
     id: "settings",
     label: "Settings",
     collapsible: true,
     items: [
       {
         id: "settings-shop",
-        label: "App settings",
+        label: "Business",
         href: "/settings/shop",
         icon: Store,
-        description: "Shop identity, promo banner, and locale.",
+        description: "Shop name, category, and contact details.",
       },
       {
         id: "settings-subscription",
-        label: "Subscription",
+        label: "Plan",
         href: "/settings/subscription",
         icon: Settings,
-        description: "Plans, billing, and upgrades.",
+        description: "Your Guma Kart plan.",
       },
     ],
   },
