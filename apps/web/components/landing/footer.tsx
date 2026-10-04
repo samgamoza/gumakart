@@ -70,7 +70,7 @@ export function LandingFooter() {
         <div className="flex flex-col gap-8 border-b border-border/50 pb-12 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-md">
             <Link href={home} className="group inline-flex items-center gap-2.5">
-              <GumaLogo className="w-56 transition-transform group-hover:scale-[1.02]" />
+              <GumaLogo className="h-12 transition-transform group-hover:scale-[1.02]" />
             </Link>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
               Branded storefronts for Philippine social sellers — guest checkout, seller inbox,

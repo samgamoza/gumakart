@@ -19,7 +19,7 @@ export function AuthLayout({
 
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
         <Link href="/" className="mb-8 flex items-center justify-center">
-          <GumaLogo on="dark" className="w-56" />
+          <GumaLogo on="dark" className="h-14" />
         </Link>
 
         <div className="rounded-2xl glass-strong p-6 shadow-2xl shadow-black/40 sm:p-8">
