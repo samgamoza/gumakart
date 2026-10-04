@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowRight, Menu, X } from "lucide-react";
-import { GumaMark } from "@gumakart/ui";
+import { GumaMark, GumaWordmark } from "@gumakart/ui";
 import { Button } from "@/components/ui/button";
 import { adminUrl } from "@/lib/utils";
 
@@ -52,9 +52,7 @@ export function LandingNav() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href={home} className="group flex items-center gap-2.5">
           <GumaMark className="h-9 w-9 drop-shadow-sm transition-transform group-hover:-rotate-3 group-hover:scale-105" />
-          <span className="font-display text-xl font-bold tracking-tight">
-            Guma<span className="text-gradient">Commerce</span>
-          </span>
+          <GumaWordmark className="h-[18px] sm:h-5" />
         </Link>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">

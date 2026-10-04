@@ -167,7 +167,7 @@ export function AdminShell({
       {/* Sidebar — Guma One */}
       <aside className="relative z-10 flex w-full flex-col border-b border-white/[0.08] glass-strong lg:sticky lg:top-0 lg:h-screen lg:w-[260px] lg:shrink-0 lg:border-b-0 lg:border-r">
         <Link href="/" className="flex items-center gap-2.5 px-5 py-5">
-          <GumaMark className="h-9 w-9 shrink-0" title="Guma One" />
+          <GumaMark className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-white">
               {user?.tenantName ?? tenant?.name ?? "Your shop"}

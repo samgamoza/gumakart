@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GumaMark } from "@gumakart/ui";
+import { GumaLogo } from "@gumakart/ui";
 
 export function AuthLayout({
   title,
@@ -18,11 +18,8 @@ export function AuthLayout({
       <div className="pointer-events-none absolute -bottom-40 right-1/4 h-[420px] w-[420px] rounded-full bg-guma-emerald/10 blur-[120px]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
-        <Link href="/" className="mb-8 flex items-center justify-center gap-2.5">
-          <GumaMark className="h-10 w-10" title="Guma One" />
-          <span className="font-display text-xl font-bold tracking-tight text-white">
-            Guma <span className="gradient-text-purple">One</span>
-          </span>
+        <Link href="/" className="mb-8 flex items-center justify-center">
+          <GumaLogo on="dark" className="w-56" />
         </Link>
 
         <div className="rounded-2xl glass-strong p-6 shadow-2xl shadow-black/40 sm:p-8">

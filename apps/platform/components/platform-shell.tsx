@@ -20,7 +20,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { GumaMark } from "@gumakart/ui";
+import { GumaMark, GumaWordmark } from "@gumakart/ui";
 
 type NavItem = {
   href: string;
@@ -121,9 +121,7 @@ export function PlatformShell({
       <div className="flex items-center gap-2.5 px-5 py-5">
         <GumaMark className="h-9 w-9 shrink-0 drop-shadow" />
         <div className="min-w-0">
-          <p className="font-display text-base font-bold leading-tight text-white">
-            Guma<span className="text-emerald-300">Commerce</span>
-          </p>
+          <GumaWordmark on="dark" className="h-4" title="Guma Kart" />
           <p className="flex items-center gap-1 text-[11px] font-medium text-emerald-300/80">
             <ShieldCheck className="h-3 w-3" />
             Platform Console

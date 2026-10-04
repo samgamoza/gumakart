@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-export { GumaMark } from "./logo";
+export { GumaLogo, GumaMark, GumaWordmark } from "./logo";
 
 // Token-based so each app themes itself from its own CSS variables:
 // admin resolves these to its dark Guma One palette, web/platform to light.

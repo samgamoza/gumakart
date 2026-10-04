@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { GumaMark, GumaWordmark } from "@gumakart/ui";
 import "./kart.css";
 
 /*
@@ -24,10 +25,8 @@ export default function KartLayout({ children }: { children: React.ReactNode }) 
       <header className="sticky top-0 z-30 border-b border-[color:var(--kart-line)] bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/kart" className="flex items-center gap-2 font-extrabold tracking-tight">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg text-sm text-white" style={{ background: "var(--kart-orange)" }}>
-              K
-            </span>
-            Guma <span style={{ color: "var(--kart-orange)" }}>Kart</span>
+            <GumaMark className="h-8 w-8" />
+            <GumaWordmark className="h-4" />
           </Link>
           <nav className="hidden gap-1 text-sm font-semibold sm:flex">
             {[
