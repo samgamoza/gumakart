@@ -120,7 +120,7 @@ export function PlatformShell({
     <div className="flex h-full flex-col text-emerald-50">
       <div className="px-5 py-5">
         <div className="min-w-0">
-          <GumaLogo on="dark" className="h-9 max-w-full" />
+          <GumaLogo on="dark" className="h-11 max-w-full" />
           <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-emerald-300/80">
             <ShieldCheck className="h-3 w-3" />
             Platform Console

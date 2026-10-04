@@ -38,8 +38,8 @@ export function GumaLogo({ className, title = "Guma Kart — Your business. One 
     <img
       src={on === "dark" ? "/brand/gumakart-logo-white.png" : "/brand/gumakart-logo.png"}
       alt={title}
-      width={1200}
-      height={207}
+      width={1000}
+      height={246}
       className={["w-auto object-contain", className].filter(Boolean).join(" ")}
       draggable={false}
     />

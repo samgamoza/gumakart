@@ -51,7 +51,7 @@ export function LandingNav() {
     <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href={home} className="group flex items-center gap-2.5">
-          <GumaLogo className="h-9 transition-transform group-hover:scale-[1.02] sm:h-10" />
+          <GumaLogo className="h-11 transition-transform group-hover:scale-[1.02] sm:h-12" />
         </Link>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">

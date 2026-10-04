@@ -25,7 +25,7 @@ export default function KartLayout({ children }: { children: React.ReactNode }) 
       <header className="sticky top-0 z-30 border-b border-[color:var(--kart-line)] bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/kart" className="flex items-center gap-2 font-extrabold tracking-tight">
-            <GumaLogo className="h-9" />
+            <GumaLogo className="h-11" />
           </Link>
           <nav className="hidden gap-1 text-sm font-semibold sm:flex">
             {[
