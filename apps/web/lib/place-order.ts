@@ -27,7 +27,8 @@ import {
   buildManualEwalletInstructions,
   createLogger,
   createSemaphoreClient,
-  orderConfirmationMessage,
+  isRecipeEnabled,
+  orderCreatedSms,
   formatPhp,
   IntegrationNotConfiguredError,
   isPushConfigured,
@@ -101,12 +102,17 @@ function trackingUrl(tenantSlug: string, orderNumber: string, accessToken: strin
 async function sendOrderConfirmationSms(
   order: { id: string; tenantId: string; orderNumber: string; total: string },
   phone: string,
-  link: string
+  link: string,
+  meta: { shopName: string; paymentMethod: string; deliveryType: string; automations?: Record<string, boolean | undefined> | null }
 ): Promise<void> {
-  const message = orderConfirmationMessage({
+  if (!isRecipeEnabled(meta.automations, "order_created")) return;
+  const message = orderCreatedSms({
+    shopName: meta.shopName,
     orderNumber: order.orderNumber,
-    total: formatPhp(Number(order.total)),
-    trackingUrl: link,
+    total: order.total,
+    paymentMethod: meta.paymentMethod,
+    deliveryType: meta.deliveryType,
+    orderUrl: link,
   });
   const sms = createSemaphoreClient();
   const result = await sendWithLog(
@@ -133,15 +139,18 @@ async function sendOrderConfirmationSms(
 async function pushSellerNewCodOrder(
   tenantId: string,
   orderNumber: string,
-  total: string
+  total: string,
+  ewallet?: "gcash" | "paymaya" | "bank"
 ): Promise<void> {
   if (!isPushConfigured()) return;
   const subscriptions = await listPushSubscriptionsForTenant(tenantId);
   if (subscriptions.length === 0) return;
 
   const { expiredEndpoints } = await sendPushNotifications(subscriptions, {
-    title: "New COD order 🛵",
-    body: `Order ${orderNumber} · ${formatPhp(Number(total))} — cash on delivery. Tap to accept it.`,
+    title: ewallet ? "New order 🛍️" : "New COD order 🛵",
+    body: ewallet
+      ? `Order ${orderNumber} · ${formatPhp(Number(total))} — waiting for the buyer's ${ewallet === "paymaya" ? "Maya" : ewallet === "bank" ? "bank" : "GCash"} payment.`
+      : `Order ${orderNumber} · ${formatPhp(Number(total))} — cash on delivery. Tap to accept it.`,
     url: "/orders",
     tag: `order-${orderNumber}`,
   });
@@ -363,6 +372,13 @@ export async function placeOrder(
       paymentsMode
     );
 
+    const smsMeta = {
+      shopName: tenant.name,
+      paymentMethod: body.paymentMethod,
+      deliveryType: body.fulfillment,
+      automations: (tenant.settingsJson as { automations?: Record<string, boolean | undefined> } | null)?.automations ?? null,
+    };
+
     await emitOrderEvents({
       tenantId: order.tenantId,
       orderId: order.id,
@@ -373,7 +389,7 @@ export async function placeOrder(
     });
 
     if (adapter === "cod") {
-      await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken));
+      await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken), smsMeta);
 
       await pushSellerNewCodOrder(order.tenantId, order.orderNumber, order.total).catch(
         (error) => console.error("[checkout] Seller push failed:", error)
@@ -418,9 +434,9 @@ export async function placeOrder(
         receiving: paymentsSettings.receiving,
       });
 
-      await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken));
+      await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken), smsMeta);
 
-      await pushSellerNewCodOrder(order.tenantId, order.orderNumber, order.total).catch(
+      await pushSellerNewCodOrder(order.tenantId, order.orderNumber, order.total, method).catch(
         (error) => console.error("[checkout] Seller push (manual pay) failed:", error)
       );
 
@@ -468,7 +484,7 @@ export async function placeOrder(
       checkoutSessionId: started.checkoutSessionId,
     });
 
-    await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken));
+    await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken), smsMeta);
 
     return NextResponse.json({
       orderNumber: order.orderNumber,

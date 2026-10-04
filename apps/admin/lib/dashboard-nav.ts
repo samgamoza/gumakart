@@ -6,6 +6,7 @@ import {
   Link2,
   MessagesSquare,
   Package,
+  Send,
   Settings,
   ShoppingBag,
   Sparkles,
@@ -111,6 +112,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
     id: "automate",
     label: "Automate",
     items: [
+      {
+        id: "automations",
+        label: "Auto SMS",
+        href: "/automations",
+        icon: Send,
+        badge: "new",
+        description: "Order updates and reminders texted to buyers for you.",
+      },
       {
         id: "messages",
         label: "Messages",

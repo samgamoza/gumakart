@@ -51,6 +51,7 @@ export interface OutboxRow {
   idempotencyKey: string;
   data: Record<string, unknown>;
   attempts: number;
+  createdAt: Date;
 }
 
 export interface RelayResult {
@@ -96,6 +97,7 @@ export async function relayOutbox(
           idempotencyKey: row.idempotencyKey,
           data: payload.data ?? {},
           attempts: row.attempts,
+          createdAt: row.createdAt,
         });
         await tx
           .update(domainEvents)

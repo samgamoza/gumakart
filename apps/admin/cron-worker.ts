@@ -24,6 +24,8 @@ interface Job {
 export const CRON_JOBS: Job[] = [
   // Order events → Inngest (or the event log). Every tick.
   { path: "/api/cron/outbox", due: () => true },
+  // Timed SMS: unfinished checkout (30 min / 24 h) + unpaid reminder (6 h). Every tick.
+  { path: "/api/cron/automations", due: () => true },
   // Unpaid orders past each shop's window (1–72 h) → cancelled + restocked. Hourly.
   { path: "/api/cron/expire-orders", due: (t) => t.getUTCMinutes() === 20 },
   // Wallet: release cleared earnings / payouts (no-op while WALLET_PAYOUTS_ENABLED=false). Hourly.

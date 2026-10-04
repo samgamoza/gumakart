@@ -42,6 +42,7 @@ export {
   verifyOptOutToken,
   withOptOutFooter,
 } from "./messaging/opt-out-link";
+export * from "./messaging/recipes";
 export {
   COURIER_NOTES,
   grabFulfillment,

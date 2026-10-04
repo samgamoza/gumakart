@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { outboxBacklog, relayOutbox } from "@gumakart/db";
 import { inngest, isInngestConfigured } from "@gumakart/events";
+import { handleOrderEvent } from "@/lib/automations";
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -14,16 +15,21 @@ function isAuthorized(request: Request): boolean {
  * id = idempotency key, so a row sent twice is still delivered once.
  * Failures back off 1m → 5m → 30m → 2h and stop after 10 attempts.
  *
- * Without Inngest configured there is no consumer yet (SMS recipes arrive in
- * Phase 4), so rows are marked published and kept as the order event log.
+ * Phase 4: every event also runs the built-in SMS recipes (`handleOrderEvent`)
+ * before it is marked published. A throw there leaves the row for a retry;
+ * message_log keys make the retry safe. Without Inngest the rows stay as the
+ * order event log.
  */
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   const live = isInngestConfigured();
+  const sms: Array<{ recipe: string; status: string }> = [];
   const result = await relayOutbox(
     async (row) => {
+      const outcome = await handleOrderEvent(row);
+      if (outcome) sms.push(outcome);
       if (!live) return;
       await inngest.send({
         id: row.idempotencyKey,
@@ -37,5 +43,5 @@ export async function GET(request: Request) {
   if (backlog.stuck > 0) {
     console.error("[outbox] events gave up after max attempts", backlog);
   }
-  return NextResponse.json({ ok: true, inngest: live, ...result, backlog });
+  return NextResponse.json({ ok: true, inngest: live, ...result, backlog, sms });
 }

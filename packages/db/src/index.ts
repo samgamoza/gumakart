@@ -530,3 +530,19 @@ export {
   type OnboardingStep,
 } from "./queries/onboarding";
 export { getSellerToday, manilaStartOfDay, type SellerToday } from "./queries/seller-today";
+export {
+  claimRecoveryStep,
+  describeRecoveryCart,
+  getAutomationSummary,
+  getOrderMessagingContext,
+  listRecoveryCandidates,
+  listTenantMessages,
+  listUnpaidReminderCandidates,
+  RECOVERY_STEP_DELAYS_MINUTES,
+  UNPAID_REMINDER_AFTER_HOURS,
+  type AutomationSummary,
+  type OrderMessagingContext,
+  type RecoveryCandidate,
+  type TenantMessageItem,
+} from "./queries/automations";
+export type { AutomationRecipeId, TenantAutomationSettings } from "./types/tenant-settings";
