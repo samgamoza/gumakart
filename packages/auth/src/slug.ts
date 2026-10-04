@@ -8,6 +8,7 @@ const RESERVED_SLUGS = new Set([
   "preview",
   "uploads",
   "stop",
+  "c", // checkout links: /c/<code> (also below the 3-char minimum)
   "icon",
   "robots",
   "sitemap",

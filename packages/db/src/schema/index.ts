@@ -636,7 +636,7 @@ export const orders = pgTable(
     // replayed transition can never restock twice.
     stockRestoredAt: timestamp("stock_restored_at", { withTimezone: true }),
     // Phase 2 statuses. `status` / `payment_status` above are legacy, written
-    // from these by legacyStatusOf() until migration 0024 drops them.
+    // from these by legacyStatusOf() until a later migration drops them.
     orderState: orderStateEnum("order_state"),
     paymentState: orderPaymentStateEnum("payment_state"),
     fulfillmentState: fulfillmentStateEnum("fulfillment_state"),
@@ -644,6 +644,10 @@ export const orders = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelReason: varchar("cancel_reason", { length: 200 }),
     locationId: uuid("location_id").references(() => locations.id),
+    // Phase 3: the checkout link the order came through (source_channel = checkout_link).
+    checkoutLinkId: uuid("checkout_link_id").references((): AnyPgColumn => checkoutLinks.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -741,6 +745,63 @@ export const stockMovements = pgTable(
     index("stock_movements_variant_idx").on(table.variantId, table.createdAt),
     index("stock_movements_tenant_idx").on(table.tenantId, table.createdAt),
     index("stock_movements_order_idx").on(table.orderId),
+  ]
+);
+
+// ─── Checkout links (Phase 3) ─────────────────────────────────────────────────
+// A shareable one-page checkout for chosen products: kart.guma.one/c/<code>.
+// Prices are always read from the variant at order time; the link only says what and how many.
+
+export const checkoutLinks = pgTable(
+  "checkout_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    code: varchar("code", { length: 16 }).notNull(),
+    title: varchar("title", { length: 120 }).notNull(),
+    /** Where the seller said they'll share it: facebook, instagram, tiktok, messenger, other. */
+    shareChannel: varchar("share_channel", { length: 20 }),
+    allowQuantityEdit: boolean("allow_quantity_edit").default(true).notNull(),
+    /** both | delivery | pickup (limited further by what the shop has enabled). */
+    deliveryMode: varchar("delivery_mode", { length: 12 }).default("both").notNull(),
+    /** Allowed methods (subset of the shop's); null = every method the shop accepts. */
+    paymentMethods: jsonb("payment_methods").$type<string[] | null>(),
+    couponCode: varchar("coupon_code", { length: 64 }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    maxOrders: integer("max_orders"),
+    active: boolean("active").default(true).notNull(),
+    viewCount: integer("view_count").default(0).notNull(),
+    startCount: integer("start_count").default(0).notNull(),
+    orderCount: integer("order_count").default(0).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("checkout_links_code_idx").on(table.code),
+    index("checkout_links_tenant_idx").on(table.tenantId, table.createdAt),
+  ]
+);
+
+export const checkoutLinkItems = pgTable(
+  "checkout_link_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    linkId: uuid("link_id")
+      .references(() => checkoutLinks.id, { onDelete: "cascade" })
+      .notNull(),
+    productId: uuid("product_id")
+      .references(() => products.id, { onDelete: "cascade" })
+      .notNull(),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+    quantity: integer("quantity").default(1).notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+  },
+  (table) => [
+    index("checkout_link_items_link_idx").on(table.linkId, table.sortOrder),
+    index("checkout_link_items_product_idx").on(table.productId),
   ]
 );
 

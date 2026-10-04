@@ -7,6 +7,7 @@ import {
   Bot,
   ExternalLink,
   LayoutDashboard,
+  Link2,
   LogOut,
   Package,
   Settings,
@@ -22,6 +23,7 @@ import { SupportAccessBanner } from "@/components/support-access-banner";
 
 const SWEET_TABS = [
   { id: "overview", label: "Overview", href: "/", icon: LayoutDashboard },
+  { id: "checkout-links", label: "Checkout links", href: "/checkout-links", icon: Link2 },
   { id: "products", label: "Products", href: "/products", icon: Package },
   { id: "orders", label: "Orders", href: "/orders", icon: ShoppingBag },
   { id: "customers", label: "Customers", href: "/customers", icon: Users },

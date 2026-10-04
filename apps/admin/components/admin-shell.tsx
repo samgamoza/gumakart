@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
+  Menu,
   ExternalLink,
   Gem,
   LogOut,
@@ -54,6 +55,9 @@ export function AdminShell({
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/settings"));
+  // Phones: the sidebar is a slide-in drawer opened from the top bar.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [pathname]);
   const [gateTarget, setGateTarget] = useState<GateTarget | null>(null);
   const { plan, planLabel, credits, tenant, loading: planLoading } = useTenantPlan();
 
@@ -145,7 +149,7 @@ export function AdminShell({
           tenantSlug={slug}
         />
       )}
-      <div className="relative flex min-h-screen lg:flex">
+      <div className="relative min-h-screen lg:flex">
       {/* Soft ambient — keep noise low so content stays readable */}
       <div className="pointer-events-none fixed inset-0 grid-bg grid-bg-fade opacity-25" />
       <div className="pointer-events-none fixed -top-48 left-0 h-[360px] w-[360px] rounded-full bg-guma-purple/[0.06] blur-[100px]" />
@@ -164,8 +168,21 @@ export function AdminShell({
         refSource={gateTarget ? `nav-${gateTarget.item.id}` : undefined}
       />
 
-      {/* Sidebar — Guma One */}
-      <aside className="relative z-10 flex w-full flex-col border-b border-white/[0.08] glass-strong lg:sticky lg:top-0 lg:h-screen lg:w-[260px] lg:shrink-0 lg:border-b-0 lg:border-r">
+      {menuOpen ? (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setMenuOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+        />
+      ) : null}
+
+      {/* Sidebar — Guma One (drawer on phones, fixed column on desktop) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border-r border-white/[0.08] bg-guma-navy transition-transform duration-200 glass-strong lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:w-[260px] lg:max-w-none lg:shrink-0 lg:translate-x-0 ${
+          menuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <Link href="/" className="flex items-center gap-2.5 px-5 py-5">
           <GumaMark className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -357,8 +374,16 @@ export function AdminShell({
       {/* Main */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.08] bg-guma-navy/90 px-4 py-2.5 backdrop-blur-md lg:px-6">
-          <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-0.5 text-xs font-medium">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-white/[0.08] bg-guma-navy/90 px-3 py-2.5 backdrop-blur-md sm:gap-4 sm:px-4 lg:px-6">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-medium text-slate-200 lg:hidden"
+          >
+            <Menu className="h-4 w-4" /> Menu
+          </button>
+          <div className="hidden items-center gap-1 rounded-lg sm:flex border border-white/[0.08] bg-white/[0.02] p-0.5 text-xs font-medium">
             {slug ? (
               <a
                 href="/api/storefront-preview"

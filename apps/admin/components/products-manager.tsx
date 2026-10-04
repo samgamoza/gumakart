@@ -1092,13 +1092,23 @@ export function ProductsManager() {
                             {pricingKind !== "service" ? ` · Stock: ${main.stockQty}` : ""}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => startEdit(main)}
-                          className="shrink-0 rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                          {main.status === "active" && (
+                            <a
+                              href={`/checkout-links?product=${main.id}`}
+                              className="rounded-xl border border-primary/40 px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
+                            >
+                              Checkout link
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => startEdit(main)}
+                            className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                          >
+                            Edit
+                          </button>
+                        </div>
                       </div>
                     </Card>
                   ) : (
@@ -1163,6 +1173,14 @@ export function ProductsManager() {
                             </p>
                           </div>
                           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                            {product.status === "active" && (
+                              <a
+                                href={`/checkout-links?product=${product.id}`}
+                                className="rounded-xl border border-primary/40 px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
+                              >
+                                Checkout link
+                              </a>
+                            )}
                             <button
                               type="button"
                               onClick={() => void setAsMainProduct(product)}

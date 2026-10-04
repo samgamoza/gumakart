@@ -21,7 +21,7 @@
     "seed:ph-locations": "tsx src/seed-ph-locations.ts",
     "seed:simply-sweet": "tsx src/seed-simply-sweet.ts",
     "test": "tsx --test src/order-state.test.ts src/types/tenant-seo.test.ts src/types/tenant-checkout.test.ts src/types/tenant-shipping.test.ts src/tenant-access.test.ts src/migration-journal.test.ts",
-    "test:integration": "tsx --test src/orders-concurrency.test.ts src/order-lifecycle.test.ts src/phase2.test.ts"
+    "test:integration": "tsx --test src/orders-concurrency.test.ts src/order-lifecycle.test.ts src/phase2.test.ts src/checkout-links.test.ts"
   },
   "dependencies": {
     "@gumakart/plans": "workspace:*",

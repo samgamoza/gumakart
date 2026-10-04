@@ -59,6 +59,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
     label: "Commerce",
     items: [
       {
+        id: "checkout-links",
+        label: "Checkout links",
+        href: "/checkout-links",
+        icon: Link2,
+        badge: "new",
+        description: "Share a one-page checkout in your posts and chats.",
+      },
+      {
         id: "products",
         label: "Products",
         href: "/products",
