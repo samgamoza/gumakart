@@ -36,6 +36,12 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+const VERIFY_PATHS = ["/verify-email", "/api/auth/verify-email", "/api/auth/logout", "/api/auth/session"];
+
+function isVerifyPath(pathname: string): boolean {
+  return VERIFY_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 function isShopSetupPath(pathname: string): boolean {
   return SHOP_SETUP_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
@@ -46,7 +52,8 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.endsWith(".ico")
+    pathname.startsWith("/brand/") ||
+    /\.(ico|png|jpe?g|gif|webp|avif|svg|txt|xml|webmanifest)$/.test(pathname)
   ) {
     return NextResponse.next();
   }
@@ -75,6 +82,17 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
     return NextResponse.redirect(new URL("/signup/shop", request.url));
+  }
+
+  // Signed in but email not confirmed yet (older accounts): confirm before anything else.
+  if (session && !session.emailVerified && !session.supportAccess && !isPublic && !isVerifyPath(pathname)) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { ok: false, error: "Confirm your email first.", code: "EMAIL_UNVERIFIED" },
+        { status: 403 }
+      );
+    }
+    return NextResponse.redirect(new URL("/verify-email", request.url));
   }
 
   if (isPublic) {

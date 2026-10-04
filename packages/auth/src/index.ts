@@ -35,6 +35,8 @@ export {
   getUserSessionById,
   isSlugAvailable,
   sendVerificationEmail,
+  isEmailRegistered,
+  markUserEmailVerified,
   authenticateGoogleUser,
   completeGoogleShopSetup,
   revokeAllSessions,
@@ -53,3 +55,15 @@ export {
 } from "./google";
 
 export { hashPassword, verifyPassword, validatePasswordStrength } from "./password";
+
+export {
+  issueEmailCode,
+  verifyEmailCode,
+  createSignupTicket,
+  readSignupTicket,
+  verificationCodeEmail,
+  normalizeCodeEmail,
+  EMAIL_CODE_TTL_SECONDS,
+  EMAIL_CODE_RESEND_SECONDS,
+  type EmailCodePurpose,
+} from "./email-code";

@@ -892,6 +892,24 @@ export const walletLedgerEntries = pgTable(
   ]
 );
 
+// ─── Email one-time codes ─────────────────────────────────────────────────────
+// Signup verification and re-verification. code_hash = HMAC(AUTH_SECRET, email|purpose|code).
+
+export const emailVerificationCodes = pgTable(
+  "email_verification_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: varchar("email", { length: 255 }).notNull(),
+    purpose: varchar("purpose", { length: 24 }).notNull(),
+    codeHash: varchar("code_hash", { length: 128 }).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("email_codes_lookup_idx").on(table.email, table.purpose, table.createdAt)]
+);
+
 // ─── KYC verification ────────────────────────────────────────────────────────
 
 export const kycVerificationSessions = pgTable(

@@ -197,6 +197,7 @@ export async function registerSeller(input: RegisterSellerInput): Promise<{
         role: "seller_owner",
         tenantId: tenant.id,
         profileJson: { displayName: input.displayName.trim() },
+        emailVerifiedAt: input.emailVerified ? new Date() : null,
       })
       .returning();
 
@@ -258,6 +259,29 @@ export async function loginUser(input: LoginInput): Promise<{
   const sessionToken = await createSessionToken(sessionUser);
 
   return { user: sessionUser, sessionToken };
+}
+
+/** True when an account already uses this email (any role). */
+export async function isEmailRegistered(rawEmail: string): Promise<boolean> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, normalizeEmail(rawEmail)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/** Marks the user's current email as verified (after a correct emailed code). */
+export async function markUserEmailVerified(userId: string): Promise<SessionUser | null> {
+  const db = getDb();
+  const [updated] = await db
+    .update(users)
+    .set({ emailVerifiedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning();
+  if (!updated) return null;
+  return getUserSessionById(updated.id);
 }
 
 export async function verifyUserEmail(token: string): Promise<SessionUser | null> {

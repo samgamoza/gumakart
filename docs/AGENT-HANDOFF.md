@@ -57,6 +57,14 @@ Also committed in **veyron-pos-saas** (`999833a`, branch `feature/ci-locations-p
 - Phase 4 SMS recipes (consume outbox events via Inngest; every reminder must use `withOptOutFooter`, enforced by `sendWithLog`), Phase 5 POS Lite, Phase 6 nav/onboarding.
 - Parallel: PayMongo go-live when registration is done.
 
+### Auth hardening (2026-10-04)
+- **Signup is now 3 steps:** account → 6-digit email code → shop. `POST /api/auth/signup/start` (validates, rejects taken emails, emails a code, creates nothing) → `POST /api/auth/signup/verify` (returns a 30-min signed signup ticket) → `POST /api/auth/signup` (requires the ticket; account is created already verified). Codes: HMAC-hashed in `email_verification_codes` (migration **0023_email_codes**), 10-min expiry, 5 tries, 60 s resend cooldown, single use. Code: `packages/auth/src/email-code.ts`.
+- **Unverified older accounts** are sent to `/verify-email` by the admin middleware (API calls get 403 `EMAIL_UNVERIFIED`) until they enter a code (`POST /api/auth/verify-email/code`). Old `?token=` links still work.
+- Password rule: 8+ chars with a letter and a number, common passwords rejected.
+- **Needs:** run `migrate` against Neon production (0023), and a working sender: `RESEND_API_KEY` + `EMAIL_FROM` on a Resend-verified domain (e.g. `Guma Kart <no-reply@guma.one>`). Without them production refuses to send codes (no silent success); local dev shows the code on screen.
+- The deferred Phase 2 constraint SQL (`drizzle-pending/0023_phase2_constrain.sql`) must now go into the journal as **idx 24 / 0024_…**, not 0023.
+- Static files (`/brand/*`, images) now bypass the admin/ops auth middleware (the logo was being redirected to /login).
+
 ### Pitfalls learned this session
 - **drizzle 0.38** renders `.for("update", { noWait: true })` as invalid `for update no wait` — use raw `FOR UPDATE NOWAIT` (see `refundOrder`).
 - All order changes go through `applyOrderAction` / `refundOrder`. Never write `orders.status` directly — it's a dual-written legacy column.

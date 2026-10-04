@@ -22,7 +22,8 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.endsWith(".ico")
+    pathname.startsWith("/brand/") ||
+    /\.(ico|png|jpe?g|gif|webp|avif|svg|txt|xml|webmanifest)$/.test(pathname)
   ) {
     return NextResponse.next();
   }

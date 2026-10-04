@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AuthError, registerSeller, sendVerificationEmail, sessionCookieHeader } from "@gumakart/auth";
+import { AuthError, normalizeCodeEmail, readSignupTicket, registerSeller, sessionCookieHeader } from "@gumakart/auth";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
 
 const signupSchema = z.object({
@@ -11,6 +11,8 @@ const signupSchema = z.object({
   shopSlug: z.string().min(3).max(32),
   category: z.string().optional(),
   vibe: z.string().max(32).optional(),
+  /** From /api/auth/signup/verify — proof this email passed the emailed code. */
+  ticket: z.string({ required_error: "Confirm your email first." }).min(20, "Confirm your email first."),
 });
 
 export async function POST(request: Request) {
@@ -26,10 +28,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = signupSchema.parse(await request.json());
-    const { user, sessionToken, verificationToken } = await registerSeller(body);
-
-    await sendVerificationEmail(user.email, verificationToken);
+    const { ticket, ...body } = signupSchema.parse(await request.json());
+    const ticketEmail = await readSignupTicket(ticket);
+    if (!ticketEmail || ticketEmail !== normalizeCodeEmail(body.email)) {
+      return NextResponse.json(
+        { ok: false, error: "Your email confirmation expired. Go back and enter a new code.", code: "TICKET_INVALID" },
+        { status: 400 }
+      );
+    }
+    const { user, sessionToken } = await registerSeller({ ...body, emailVerified: true });
 
     if (user.tenantId && user.tenantSlug) {
       const { ensureEventsWired } = await import("@/lib/events-bootstrap");

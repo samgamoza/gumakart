@@ -39,6 +39,8 @@ export interface RegisterSellerInput {
   category?: string;
   /** Brand vibe chosen at signup — seeds a unique starting theme. */
   vibe?: string;
+  /** Set when the email was already proven (signup code); stamps email_verified_at. */
+  emailVerified?: boolean;
 }
 
 export interface CompleteGoogleShopInput {
@@ -78,6 +80,10 @@ export class AuthError extends Error {
       | "USE_GOOGLE"
       | "SHOP_ALREADY_SETUP"
       | "ACCOUNT_SUSPENDED"
+      | "CODE_COOLDOWN"
+      | "CODE_EXPIRED"
+      | "CODE_INVALID"
+      | "CODE_LOCKED"
   ) {
     super(message);
     this.name = "AuthError";
