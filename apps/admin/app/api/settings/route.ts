@@ -148,6 +148,14 @@ const patchSchema = z.object({
             .optional(),
         })
         .optional(),
+      pos: z
+        .object({
+          vatRegistered: z.boolean().optional(),
+          vatInclusive: z.boolean().optional(),
+          vatRate: z.number().min(0).max(0.3).optional(),
+        })
+        .strict()
+        .optional(),
       automations: z
         .object({
           order_created: z.boolean().optional(),

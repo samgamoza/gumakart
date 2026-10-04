@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Bot,
+  Calculator,
   Database,
   LayoutDashboard,
   Link2,
@@ -64,6 +65,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         icon: Link2,
         badge: "new",
         description: "Share a one-page checkout in your posts and chats.",
+      },
+      {
+        id: "pos",
+        label: "POS",
+        href: "/pos",
+        icon: Calculator,
+        badge: "new",
+        description: "Sell in-store: cash, GCash, Maya, card; Senior/PWD; shifts.",
       },
       {
         id: "orders",
@@ -193,6 +202,13 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         href: "/settings/shop",
         icon: Store,
         description: "Shop name, category, and contact details.",
+      },
+      {
+        id: "settings-pos",
+        label: "POS & staff",
+        href: "/settings/pos",
+        icon: Users,
+        description: "Cashier PINs, VAT, and shift history.",
       },
       {
         id: "settings-subscription",

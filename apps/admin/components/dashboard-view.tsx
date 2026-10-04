@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BadgeCheck,
+  Calculator,
   Check,
   CheckCircle2,
   Circle,
@@ -175,7 +176,7 @@ export function DashboardView({ displayName }: { displayName: string }) {
               <p className="text-xs text-slate-400">orders</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <div className="rounded-xl border border-white/10 p-3">
               <p className="flex items-center gap-1.5 text-xs text-slate-400">
                 <Link2 className="h-3.5 w-3.5" /> From checkout links
@@ -192,6 +193,14 @@ export function DashboardView({ displayName }: { displayName: string }) {
                 {today.today.byChannel.store.orders} · {formatPrice(today.today.byChannel.store.sales)}
               </p>
             </div>
+            <Link href="/pos" className="rounded-xl border border-white/10 p-3 transition hover:border-white/25">
+              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Calculator className="h-3.5 w-3.5" /> In-store (POS)
+              </p>
+              <p className="mt-1 font-semibold text-white">
+                {today.today.byChannel.pos?.orders ?? 0} · {formatPrice(today.today.byChannel.pos?.sales ?? 0)}
+              </p>
+            </Link>
           </div>
         </Card>
 

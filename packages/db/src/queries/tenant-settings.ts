@@ -45,6 +45,7 @@ function mergeSettings(
     contact: patch.contact ? { ...current?.contact, ...patch.contact } : current?.contact,
     social: patch.social ? { ...current?.social, ...patch.social } : current?.social,
     automations: patch.automations ? { ...current?.automations, ...patch.automations } : current?.automations,
+    pos: patch.pos ? { ...current?.pos, ...patch.pos } : current?.pos,
     payments: patch.payments
       ? {
           ...current?.payments,

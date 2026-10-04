@@ -31,6 +31,7 @@ WHERE order_state = 'completed' AND NOT (payment_state = 'paid' AND fulfillment_
 -- V4: orders with more than one live charge row
 SELECT order_id, count(*) FROM payment_transactions
 WHERE status IN ('pending', 'processing', 'paid')
+  AND coalesce(gateway_intent_id, '') NOT LIKE 'pos\_%'  -- POS split tender: up to 2 rows (Phase 5)
 GROUP BY order_id HAVING count(*) > 1;
 
 -- V5: stock ledger vs counter (tracked variants with an opening balance)

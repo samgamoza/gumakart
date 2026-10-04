@@ -7,6 +7,7 @@ export const SETTINGS_SECTIONS = [
   { href: "/settings/shop", label: "Business", icon: "🏪", description: "Name, category, contact, and locale" },
   { href: "/settings/payments", label: "Payments", icon: "💸", description: "GCash / Maya numbers and cash on delivery" },
   { href: "/settings/delivery-shipping", label: "Delivery", icon: "🚚", description: "Pickup, fees, and couriers" },
+  { href: "/settings/pos", label: "POS & staff", icon: "🧾", description: "Cashier PINs, VAT, and shift history" },
   { href: "/settings/notifications", label: "Notifications", icon: "🔔", description: "Email and SMS alerts" },
   { href: "/settings/subscription", label: "Plan", icon: "💳", description: "Your Guma Kart plan" },
   { href: "/settings/account", label: "Password & security", icon: "🔐", description: "Login, password, and account access" },

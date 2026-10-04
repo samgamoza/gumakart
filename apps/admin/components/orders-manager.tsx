@@ -65,6 +65,7 @@ const SHARE_CHANNEL_LABEL: Record<string, string> = {
 
 /** Where the order came from, e.g. "Checkout link · Payday post (Facebook)". */
 function sourceLabel(order: OrderRow): string | null {
+  if (order.sourceChannel === "pos") return "In-store (POS)";
   if (order.sourceChannel !== "checkout_link") return null;
   if (!order.checkoutLink) return "Checkout link";
   const where = order.checkoutLink.shareChannel ? SHARE_CHANNEL_LABEL[order.checkoutLink.shareChannel] : null;

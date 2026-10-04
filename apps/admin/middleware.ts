@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { AUTH_COOKIE_NAME, readSessionCookie, verifySessionToken } from "@gumakart/auth/session";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/kyc/mobile"];
+// "/pos" is reachable by cashiers who only have a POS PIN cookie (no seller
+// session); every /api/pos route checks the owner session or that cookie itself.
+const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/kyc/mobile", "/pos"];
 
 const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
@@ -25,6 +27,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/cron/",
   // Inngest cloud / Dev Server — signed with INNGEST_SIGNING_KEY.
   "/api/inngest",
+  // POS Lite: owner session OR cashier PIN cookie, checked in each route (lib/pos-auth).
+  "/api/pos/",
 ];
 
 const SHOP_SETUP_PATHS = ["/signup/shop", "/api/auth/google/complete-shop", "/api/auth/logout"];

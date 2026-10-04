@@ -107,7 +107,15 @@ export type AutomationRecipeId =
 
 export type TenantAutomationSettings = Partial<Record<AutomationRecipeId, boolean>>;
 
+/** POS Lite tax setup (plan §12). Defaults: not VAT-registered, VAT-inclusive prices, 12%. */
+export interface TenantPosSettings {
+  vatRegistered?: boolean;
+  vatInclusive?: boolean;
+  vatRate?: number;
+}
+
 export interface TenantSettingsJson {
+  pos?: TenantPosSettings;
   automations?: TenantAutomationSettings;
   contact?: TenantContactSettings;
   social?: TenantSocialSettings;

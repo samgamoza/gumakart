@@ -88,3 +88,21 @@ test("recipes default on", () => {
   assert.equal(isRecipeEnabled(undefined, "delivered"), true);
   assert.equal(isRecipeEnabled({ delivered: false }, "delivered"), false);
 });
+
+test("POS receipt text", async () => {
+  const { posReceiptSms } = await import("./recipes");
+  const t = posReceiptSms({
+    shopName: "Tindahan ni Aling Nena",
+    orderNumber: "TIN-0042",
+    createdAt: "2026-10-04T03:15:00Z",
+    items: [
+      { title: "Sabon", quantity: 2, lineTotal: 90 },
+      { title: "Kape 3-in-1", quantity: 1, lineTotal: 12 },
+    ],
+    totals: { total: 102, discountAmount: 0 },
+    change: 98,
+  });
+  assert.match(t, /^Tindahan ni Aling Nena receipt #TIN-0042/);
+  assert.match(t, /2x Sabon P90; 1x Kape 3-in-1 P12\. Total P102\. Sukli P98\. Salamat!$/);
+  assert.ok(/^[\x20-\x7E]*$/.test(t));
+});

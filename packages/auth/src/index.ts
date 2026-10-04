@@ -67,3 +67,4 @@ export {
   EMAIL_CODE_RESEND_SECONDS,
   type EmailCodePurpose,
 } from "./email-code";
+export * from "./pos-token";

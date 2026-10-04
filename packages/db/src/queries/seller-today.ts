@@ -18,7 +18,11 @@ export interface SellerToday {
   today: {
     sales: number;
     orders: number;
-    byChannel: { checkoutLinks: { orders: number; sales: number }; store: { orders: number; sales: number } };
+    byChannel: {
+      checkoutLinks: { orders: number; sales: number };
+      store: { orders: number; sales: number };
+      pos: { orders: number; sales: number };
+    };
   };
   deliveries: { booked: number; outForDelivery: number; deliveredToday: number };
   latestLink: { code: string; title: string; orderCount: number; viewCount: number } | null;
@@ -71,7 +75,7 @@ export async function getSellerToday(
       .limit(2000),
     db
       .select({
-        channel: sql<string>`case when ${orders.sourceChannel} = 'checkout_link' then 'link' else 'store' end`,
+        channel: sql<string>`case when ${orders.sourceChannel} = 'checkout_link' then 'link' when ${orders.sourceChannel} = 'pos' then 'pos' else 'store' end`,
         n: count(),
         total: sql<string>`coalesce(sum(${orders.total}), 0)`,
       })
@@ -122,9 +126,9 @@ export async function getSellerToday(
     if (facts.fulfillmentState === "out_for_delivery") deliveries.outForDelivery += 1;
   }
 
-  const byChannel = { checkoutLinks: { orders: 0, sales: 0 }, store: { orders: 0, sales: 0 } };
+  const byChannel = { checkoutLinks: { orders: 0, sales: 0 }, store: { orders: 0, sales: 0 }, pos: { orders: 0, sales: 0 } };
   for (const row of todayRows) {
-    const target = row.channel === "link" ? byChannel.checkoutLinks : byChannel.store;
+    const target = row.channel === "link" ? byChannel.checkoutLinks : row.channel === "pos" ? byChannel.pos : byChannel.store;
     target.orders += Number(row.n);
     target.sales += Number(row.total);
   }
@@ -162,8 +166,8 @@ export async function getSellerToday(
     shop: { name: tenant.name, slug: tenant.slug, status: tenant.status },
     todo,
     today: {
-      sales: byChannel.checkoutLinks.sales + byChannel.store.sales,
-      orders: byChannel.checkoutLinks.orders + byChannel.store.orders,
+      sales: byChannel.checkoutLinks.sales + byChannel.store.sales + byChannel.pos.sales,
+      orders: byChannel.checkoutLinks.orders + byChannel.store.orders + byChannel.pos.orders,
       byChannel,
     },
     deliveries,

@@ -648,6 +648,15 @@ export const orders = pgTable(
     checkoutLinkId: uuid("checkout_link_id").references((): AnyPgColumn => checkoutLinks.id, {
       onDelete: "set null",
     }),
+    // Phase 5 (POS Lite): the shift and cashier that rang up a POS sale (source_channel = pos).
+    registerSessionId: uuid("register_session_id").references((): AnyPgColumn => registerSessions.id, {
+      onDelete: "set null",
+    }),
+    posStaffId: uuid("pos_staff_id").references((): AnyPgColumn => posStaff.id, { onDelete: "set null" }),
+    /** Client-made key per "Charge" tap; unique per tenant so a retry never makes a second sale. */
+    posIdempotencyKey: varchar("pos_idempotency_key", { length: 64 }),
+    /** Tenders, change, VAT breakdown, senior/PWD details, cashier name — what the receipt shows. */
+    posMetaJson: jsonb("pos_meta_json"),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -1567,3 +1576,57 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   payments: many(paymentTransactions),
   delivery: one(deliveries),
 }));
+
+// ─── POS Lite (Phase 5) ──────────────────────────────────────────────────────
+
+export const posStaff = pgTable("pos_staff", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  name: varchar("name", { length: 60 }).notNull(),
+  role: varchar("role", { length: 16 }).$type<"cashier" | "manager">().default("cashier").notNull(),
+  pinHash: varchar("pin_hash", { length: 255 }).notNull(),
+  /** Bumped on PIN reset / deactivation so open cashier sessions stop working. */
+  pinVersion: integer("pin_version").default(1).notNull(),
+  active: boolean("active").default(true).notNull(),
+  failedAttempts: integer("failed_attempts").default(0).notNull(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const registers = pgTable("registers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  locationId: uuid("location_id")
+    .references(() => locations.id, { onDelete: "cascade" })
+    .notNull(),
+  name: varchar("name", { length: 60 }).default("Register 1").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const registerSessions = pgTable("register_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  registerId: uuid("register_id")
+    .references(() => registers.id, { onDelete: "cascade" })
+    .notNull(),
+  status: varchar("status", { length: 12 }).$type<"open" | "closed">().default("open").notNull(),
+  openingCash: decimal("opening_cash", { precision: 12, scale: 2 }).default("0").notNull(),
+  openedByStaffId: uuid("opened_by_staff_id").references(() => posStaff.id, { onDelete: "set null" }),
+  openedByUserId: uuid("opened_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  openedAt: timestamp("opened_at", { withTimezone: true }).defaultNow().notNull(),
+  closedByStaffId: uuid("closed_by_staff_id").references(() => posStaff.id, { onDelete: "set null" }),
+  closedByUserId: uuid("closed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  expectedJson: jsonb("expected_json"),
+  countedJson: jsonb("counted_json"),
+  varianceJson: jsonb("variance_json"),
+  closeNote: text("close_note"),
+});

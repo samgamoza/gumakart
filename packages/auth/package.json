@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/google.test.ts"
+    "test": "tsx --test src/google.test.ts src/pos-token.test.ts"
   },
   "dependencies": {
     "@gumakart/db": "workspace:*",

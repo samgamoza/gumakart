@@ -196,3 +196,28 @@ export function isRecipeEnabled(
 ): boolean {
   return automations?.[recipe] !== false;
 }
+
+// ─── POS receipt ─────────────────────────────────────────────────────────────
+
+export function posReceiptSms(r: {
+  shopName: string;
+  orderNumber: string;
+  createdAt: Date | string;
+  items: Array<{ title: string; quantity: number; lineTotal: number }>;
+  totals: { total: number; discountAmount: number };
+  change: number;
+}): string {
+  const shop = smsShopName(r.shopName);
+  const when = new Date(r.createdAt).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const lines = r.items.slice(0, 4).map((i) => `${i.quantity}x ${asciiText(i.title, 22)} ${smsPeso(i.lineTotal)}`);
+  if (r.items.length > 4) lines.push(`+${r.items.length - 4} more`);
+  const discount = r.totals.discountAmount > 0 ? ` Disc -${smsPeso(r.totals.discountAmount)}.` : "";
+  const change = r.change > 0 ? ` Sukli ${smsPeso(r.change)}.` : "";
+  return `${shop} receipt #${r.orderNumber} ${asciiText(when, 20)}: ${lines.join("; ")}.${discount} Total ${smsPeso(r.totals.total)}.${change} Salamat!`;
+}
