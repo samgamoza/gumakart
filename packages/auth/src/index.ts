@@ -47,7 +47,6 @@ export {
 } from "./service";
 
 export {
-  createGoogleOAuthClient,
   getGoogleAuthUrl,
   getGoogleProfileFromCode,
   getGoogleRedirectUri,

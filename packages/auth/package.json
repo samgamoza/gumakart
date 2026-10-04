@@ -8,20 +8,21 @@
     "./session": "./src/session.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "tsx --test src/google.test.ts"
   },
   "dependencies": {
     "@gumakart/db": "workspace:*",
     "@gumakart/storefront-themes": "workspace:*",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.38.3",
-    "google-auth-library": "^9.15.1",
     "jose": "^5.9.6",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }
