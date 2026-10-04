@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Card, formatPrice } from "@gumakart/ui";
 import { productImageSrc } from "@/lib/product-image";
+import { SharePostImageButton } from "@/components/share-post-image";
 
 // ─── Types (mirror the API) ──────────────────────────────────────────────────
 
@@ -826,7 +827,11 @@ export function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; ur
         <button type="button" className={ghostBtn} onClick={onShowQr}>
           <QrCode className="h-4 w-4" /> QR code
         </button>
+        <SharePostImageButton code={link.code} items={link.items} url={url} className={ghostBtn} />
       </div>
+      <p className="text-xs text-muted-foreground">
+        Post image: a square photo with the price, link and QR — ready for your Facebook or IG post.
+      </p>
 
       <div>
         <p className="text-xs text-muted-foreground">Ready-made caption</p>

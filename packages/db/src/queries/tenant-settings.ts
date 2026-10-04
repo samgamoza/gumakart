@@ -42,6 +42,9 @@ function mergeSettings(
     agents: patch.agents ? { ...current?.agents, ...patch.agents } : current?.agents,
     wallet: patch.wallet ? { ...current?.wallet, ...patch.wallet } : current?.wallet,
     checkout: patch.checkout ? { ...current?.checkout, ...patch.checkout } : current?.checkout,
+    contact: patch.contact ? { ...current?.contact, ...patch.contact } : current?.contact,
+    social: patch.social ? { ...current?.social, ...patch.social } : current?.social,
+    automations: patch.automations ? { ...current?.automations, ...patch.automations } : current?.automations,
     payments: patch.payments
       ? {
           ...current?.payments,

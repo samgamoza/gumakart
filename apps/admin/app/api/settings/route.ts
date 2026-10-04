@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   getPlatformSetting,
+  normalizeChatUrl,
+  normalizePhMobile,
   getTenantSettings,
   PAYMENTS_MODE_KEY,
   resolveTenantPaymentsSettings,
@@ -105,6 +107,58 @@ const patchSchema = z.object({
             })
             .optional(),
         })
+        .optional(),
+      contact: z
+        .object({
+          // "" clears it; anything else must be a PH mobile (09XXXXXXXXX / +639XXXXXXXXX).
+          mobile: z
+            .string()
+            .max(20)
+            .transform((v, ctx) => {
+              if (!v.trim()) return "";
+              const n = normalizePhMobile(v);
+              if (!n) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a PH mobile like 0917 123 4567." });
+                return z.NEVER;
+              }
+              return n;
+            })
+            .optional(),
+        })
+        .optional(),
+      social: z
+        .object({
+          sellChannels: z
+            .array(z.enum(["facebook", "instagram", "tiktok", "messenger", "shopee", "lazada", "other"]))
+            .max(7)
+            .transform((list) => Array.from(new Set(list)))
+            .optional(),
+          chatUrl: z
+            .string()
+            .max(300)
+            .transform((v, ctx) => {
+              if (!v.trim()) return "";
+              const n = normalizeChatUrl(v);
+              if (!n) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a link like m.me/yourpage." });
+                return z.NEVER;
+              }
+              return n;
+            })
+            .optional(),
+        })
+        .optional(),
+      automations: z
+        .object({
+          order_created: z.boolean().optional(),
+          payment_confirmed: z.boolean().optional(),
+          shipped: z.boolean().optional(),
+          out_for_delivery: z.boolean().optional(),
+          delivered: z.boolean().optional(),
+          abandoned_checkout: z.boolean().optional(),
+          unpaid_reminder: z.boolean().optional(),
+        })
+        .strict()
         .optional(),
       shopAssistant: z
         .object({

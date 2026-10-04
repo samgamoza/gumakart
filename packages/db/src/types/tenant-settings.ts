@@ -95,7 +95,20 @@ export interface TenantOnboardingSettings {
   skippedAt?: string;
 }
 
+/** Automatic buyer SMS recipes (plan Phase 4). Missing key = on (default). */
+export type AutomationRecipeId =
+  | "order_created"
+  | "payment_confirmed"
+  | "shipped"
+  | "out_for_delivery"
+  | "delivered"
+  | "abandoned_checkout"
+  | "unpaid_reminder";
+
+export type TenantAutomationSettings = Partial<Record<AutomationRecipeId, boolean>>;
+
 export interface TenantSettingsJson {
+  automations?: TenantAutomationSettings;
   contact?: TenantContactSettings;
   social?: TenantSocialSettings;
   onboarding?: TenantOnboardingSettings;

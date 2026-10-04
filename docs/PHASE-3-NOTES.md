@@ -7,7 +7,7 @@ Plan: `docs/GUMA-KART-V1-PLAN-REVISED.md` §5. Built in slices; each slice ends 
 |---|---|---|
 | 3A | Seller side: table, admin page, create / copy / share / QR / turn off | ✅ approved 2026-10-04 |
 | 3B | Buyer checkout at `kart.guma.one/c/<code>` (from the `/kart` designs), real orders, `source_channel = checkout_link` | ✅ approved 2026-10-04 (Taglish) |
-| 3C | Order page + "Back to chat", abandonment capture, share kit | — |
+| 3C | "Back to chat", share kit post image, Business settings (abandonment → Phase 4) | ✅ built 2026-10-04, in owner review |
 
 ## 3A — what shipped
 
@@ -122,3 +122,23 @@ sold as its default variant (same as the storefront today).
   (collapsed) · Settings (Business, Payments, Delivery, Notifications, Plan, …). Removed the
   placeholder pages (Users, Analytics, Integrations, Domains, Workflows, Code, Logs, API, Security);
   wallet/KYC hidden from the settings menu (payouts are simulated in V1).
+
+## 3C — what shipped
+
+- **Back to chat** on the buyer order page (`apps/web/lib/back-to-chat.ts`): uses the shop's
+  `settings.social.chatUrl`, labelled by app (m.me → "Bumalik sa Messenger", facebook.com, instagram,
+  wa.me, tiktok, viber, t.me; else "Bumalik sa chat ng shop"). Falls back to the shop's WhatsApp
+  number when that is on. Big dark button under the status card; while the order is waiting for
+  payment it moves under everything so paying stays first. Link orders no longer show
+  "Continue Shopping" (the buyer came from chat, not the store). Pickup + COD now reads
+  "Cash on pickup · Pay when you pick up".
+- **Share kit → Post image**: "Post image" in every share panel (links page, onboarding step 4)
+  draws a 1080×1080 PNG in the browser — product photo (or a branded card when the photo can't be
+  used), shop name, product, total price, QR, and the link. Phones open the share sheet with the
+  image; desktops download it. Nothing is uploaded.
+- **Settings → Business**: shop name, **your mobile** (order alerts), category, legal name,
+  **where you sell** (chips), **page or chat link**, then the optional online-store fields.
+  `/api/settings` PATCH accepts `contact.mobile` (PH mobile, "" clears), `social.sellChannels`,
+  `social.chatUrl` (normalised; "" clears) and `automations.*` (Phase 4); `mergeSettings`
+  merges these keys instead of replacing them.
+- Abandoned-checkout capture is handled in Phase 4 (recipe 6) together with the SMS.

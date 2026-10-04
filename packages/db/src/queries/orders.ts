@@ -875,6 +875,8 @@ export interface OrderTrackingDelivery {
 }
 
 export interface OrderTrackingData {
+  /** "checkout_link" for orders from a shared checkout link, else storefront/null. */
+  sourceChannel: string | null;
   orderId: string;
   orderNumber: string;
   tenantSlug: string;
@@ -982,6 +984,7 @@ export async function getOrderForTracking(
       factsOf(row.order).paymentState === "unpaid"
         ? safeCheckoutUrl(payment.checkoutUrl ?? (payment.raw as { checkoutUrl?: unknown } | null)?.checkoutUrl)
         : null,
+    sourceChannel: row.order.sourceChannel ?? null,
     orderNumber: row.order.orderNumber,
     tenantSlug: row.tenant.slug,
     tenantName: row.tenant.name,

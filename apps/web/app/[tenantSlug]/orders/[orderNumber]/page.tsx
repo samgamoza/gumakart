@@ -11,6 +11,7 @@ import { OrderAutoRefresh } from "@/components/order-auto-refresh";
 import { ManualPaymentPanel } from "@/components/manual-payment-panel";
 import { MessageSellerButton } from "@/components/storefront/message-seller-button";
 import { resolveStorefrontSettings } from "@/lib/storefront-settings";
+import { resolveBackToChat } from "@/lib/back-to-chat";
 
 export const dynamic = "force-dynamic";
 
@@ -171,6 +172,19 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
     facts.orderState === "open" &&
     (facts.fulfillmentState === "failed_delivery" || facts.fulfillmentState === "returned");
   const inMotion = facts.orderState === "open" && !demoTenant;
+  const tenantSettings = (tenant?.settingsJson ?? {}) as {
+    social?: { chatUrl?: string };
+    whatsapp?: { enabled?: boolean; phone?: string };
+  };
+  const backToChat = order
+    ? resolveBackToChat({
+        chatUrl: tenantSettings.social?.chatUrl,
+        whatsappPhone: tenantSettings.whatsapp?.phone,
+        whatsappEnabled: tenantSettings.whatsapp?.enabled,
+        orderNumber: order.orderNumber,
+      })
+    : null;
+  const fromLink = order?.sourceChannel === "checkout_link";
   const delivery = order?.delivery ?? null;
   const driverMapUrl =
     delivery?.driverLat && delivery.driverLng
@@ -228,6 +242,17 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
               start the order. This page updates once payment is confirmed.
             </p>
           )}
+          {backToChat && !awaitingPayment ? (
+            <a
+              href={backToChat.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex w-full items-center justify-center rounded-xl bg-neutral-900 py-3 text-sm font-semibold text-white"
+              data-testid="back-to-chat"
+            >
+              {backToChat.label}
+            </a>
+          ) : null}
           {awaitingPayment && order?.resumePaymentUrl ? (
             <a href={order.resumePaymentUrl} className="mt-4 inline-block">
               <Button>Continue to payment</Button>
@@ -344,13 +369,18 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
                 <span className="text-emerald-700">{formatPrice(order.total)}</span>
               </div>
               <p className="pt-1 text-xs text-gray-400">
-                {PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod} ·{" "}
+                {order.paymentMethod === "cod" && order.deliveryType === "pickup"
+                  ? "Cash on pickup"
+                  : (PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod)}{" "}
+                ·{" "}
                 {order.paymentState === "paid"
                   ? "Paid"
                   : order.paymentState === "refunded"
                     ? "Refunded"
                     : order.paymentState === "cod_due"
-                      ? "Pay on delivery"
+                      ? order.deliveryType === "pickup"
+                        ? "Pay when you pick up"
+                        : "Pay on delivery"
                       : order.paymentState === "pending_verification"
                         ? "Being checked by the shop"
                         : "Payment pending"}
@@ -414,11 +444,25 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
           </Card>
         ) : null}
 
-        <Link href={`/${tenantSlug}`}>
-          <Button variant="secondary" className="w-full">
-            Continue Shopping
-          </Button>
-        </Link>
+        {backToChat && awaitingPayment ? (
+          <a
+            href={backToChat.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center justify-center rounded-xl border border-neutral-300 bg-white py-3 text-sm font-semibold"
+            data-testid="back-to-chat"
+          >
+            {backToChat.label}
+          </a>
+        ) : null}
+
+        {!fromLink && (
+          <Link href={`/${tenantSlug}`}>
+            <Button variant="secondary" className="w-full">
+              Continue Shopping
+            </Button>
+          </Link>
+        )}
       </div>
     </div>
   );
