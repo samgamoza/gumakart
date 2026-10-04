@@ -63,6 +63,10 @@ jobs:
       NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
       NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY }}
       NEXT_PUBLIC_SUPPORT_EMAIL: ${{ vars.NEXT_PUBLIC_SUPPORT_EMAIL }}
+      # wrangler/OpenNext start a local emulator during deploy and insist on a local
+      # Postgres URL for every Hyperdrive binding. It's never connected to; the real
+      # Hyperdrive (gumakart-db -> Neon) is used once deployed.
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://ci:ci@127.0.0.1:5432/ci
     steps:
       - name: Skip if another app was picked
         id: pick
