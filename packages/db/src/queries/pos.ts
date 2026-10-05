@@ -422,14 +422,28 @@ export async function listRecentShifts(tenantId: string, limit = 10): Promise<Po
 
 // ─── Catalog ─────────────────────────────────────────────────────────────────
 
+export interface PosVariant {
+  id: string;
+  title: string;
+  price: number;
+  sku: string | null;
+  barcode: string | null;
+  stockQty: number;
+  imageUrl: string | null;
+}
+
 export interface PosProduct {
   id: string;
   title: string;
+  /** Default (first active) variant's values — the tile shows these. */
   price: number;
   sku: string | null;
   stockQty: number | null;
   trackInventory: boolean;
   imageUrl: string | null;
+  /** Phase 9: more than one entry = the cashier picks a size/option. */
+  variants: PosVariant[];
+  hasOptions: boolean;
 }
 
 export async function listPosProducts(tenantId: string, query?: string): Promise<PosProduct[]> {
@@ -441,12 +455,8 @@ export async function listPosProducts(tenantId: string, query?: string): Promise
       title: products.title,
       basePrice: products.basePrice,
       trackInventory: products.trackInventory,
-      sku: sql<string | null>`(select ${productVariants.sku} from ${productVariants} where ${productVariants.productId} = ${products.id} order by ${productVariants.id} asc limit 1)`,
-      stockQty: sql<number | null>`(select ${productVariants.stockQty} from ${productVariants} where ${productVariants.productId} = ${products.id} order by ${productVariants.id} asc limit 1)`,
-      imageUrl: sql<string | null>`coalesce(
-        (select ${productVariants.imageUrl} from ${productVariants} where ${productVariants.productId} = ${products.id} order by ${productVariants.id} asc limit 1),
-        (select ${productImages.url} from ${productImages} where ${productImages.productId} = ${products.id} order by ${productImages.sortOrder} asc nulls last limit 1)
-      )`,
+      hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
+      firstImage: sql<string | null>`(select ${productImages.url} from ${productImages} where ${productImages.productId} = ${products.id} order by ${productImages.sortOrder} asc nulls last limit 1)`,
     })
     .from(products)
     .where(
@@ -456,22 +466,54 @@ export async function listPosProducts(tenantId: string, query?: string): Promise
         q
           ? or(
               ilike(products.title, `%${q.replace(/[%_\\]/g, "\\$&")}%`),
-              sql`exists (select 1 from ${productVariants} v where v.product_id = ${products.id} and v.sku = ${q})`
+              sql`exists (select 1 from ${productVariants} v where v.product_id = ${products.id} and v.active and (lower(v.sku) = lower(${q}) or v.barcode = ${q}))`
             )
           : undefined
       )
     )
     .orderBy(asc(products.title))
     .limit(200);
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    price: Number(r.basePrice),
-    sku: r.sku,
-    stockQty: r.stockQty === null ? null : Number(r.stockQty),
-    trackInventory: Boolean(r.trackInventory),
-    imageUrl: r.imageUrl,
-  }));
+  const ids = rows.map((r) => r.id);
+  const variantRows = ids.length
+    ? await db
+        .select()
+        .from(productVariants)
+        .where(and(inArray(productVariants.productId, ids), eq(productVariants.active, true)))
+        .orderBy(asc(productVariants.position), asc(productVariants.id))
+    : [];
+  const byProduct = new Map<string, PosVariant[]>();
+  for (const v of variantRows) {
+    byProduct.set(v.productId, [
+      ...(byProduct.get(v.productId) ?? []),
+      {
+        id: v.id,
+        title: v.title,
+        price: Number(v.price),
+        sku: v.sku,
+        barcode: v.barcode,
+        stockQty: v.stockQty ?? 0,
+        imageUrl: v.imageUrl,
+      },
+    ]);
+  }
+  return rows
+    .map((r) => {
+      const variants = byProduct.get(r.id) ?? [];
+      const first = variants[0];
+      return {
+        id: r.id,
+        title: r.title,
+        // Single-variant products charge the product price (see createPosSale).
+        price: r.hasOptions && first ? first.price : Number(r.basePrice),
+        sku: first?.sku ?? null,
+        stockQty: first ? (r.hasOptions ? variants.reduce((n, v) => n + v.stockQty, 0) : first.stockQty) : null,
+        trackInventory: Boolean(r.trackInventory),
+        imageUrl: first?.imageUrl ?? r.firstImage,
+        hasOptions: Boolean(r.hasOptions) && variants.length > 1,
+        variants: r.hasOptions ? variants : variants.slice(0, 1).map((v) => ({ ...v, price: Number(r.basePrice) })),
+      };
+    })
+    .filter((p) => p.variants.length > 0);
 }
 
 // ─── Sale ────────────────────────────────────────────────────────────────────
@@ -483,7 +525,7 @@ export interface PosSaleInput {
   userId: string | null;
   cashierName: string;
   idempotencyKey: string;
-  items: Array<{ productId: string; quantity: number }>;
+  items: Array<{ productId: string; quantity: number; variantId?: string | null }>;
   discountType: PosDiscountType;
   /** Senior/PWD: name and ID number on the card (kept for the seller's records). */
   discountHolder?: { name?: string | null; idNumber?: string | null } | null;
@@ -584,12 +626,14 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
     if (receipt) return { ...receipt, duplicate: true };
   }
 
-  const quantities = new Map<string, number>();
+  const quantities = new Map<string, { productId: string; variantId: string | null; quantity: number }>();
   for (const item of input.items) {
     if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 999) {
       throw new OrderError("Invalid item quantity.", "PRODUCT_UNAVAILABLE");
     }
-    quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+    const key = `${item.productId}:${item.variantId ?? ""}`;
+    const prev = quantities.get(key);
+    quantities.set(key, { productId: item.productId, variantId: item.variantId ?? null, quantity: (prev?.quantity ?? 0) + item.quantity });
   }
   if (quantities.size === 0) throw new PosError("Add an item first.", "EMPTY");
   if (quantities.size > 100) throw new PosError("Too many different items in one sale.", "EMPTY");
@@ -621,23 +665,46 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           trackInventory: products.trackInventory,
           variantId: productVariants.id,
           variantTitle: productVariants.title,
+          variantPrice: productVariants.price,
           stockQty: productVariants.stockQty,
+          hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
         })
         .from(products)
-        .leftJoin(productVariants, eq(productVariants.productId, products.id))
-        .where(and(eq(products.tenantId, input.tenantId), inArray(products.id, [...quantities.keys()])))
-        .orderBy(asc(products.id), asc(productVariants.id));
-      const byProduct = new Map<string, (typeof catalog)[number]>();
-      for (const row of catalog) if (!byProduct.has(row.id)) byProduct.set(row.id, row);
+        .leftJoin(productVariants, and(eq(productVariants.productId, products.id), eq(productVariants.active, true)))
+        .where(
+          and(
+            eq(products.tenantId, input.tenantId),
+            inArray(products.id, [...new Set([...quantities.values()].map((q) => q.productId))])
+          )
+        )
+        .orderBy(asc(products.id), asc(productVariants.position), asc(productVariants.id));
+      const variantsByProduct = new Map<string, (typeof catalog)[number][]>();
+      for (const row of catalog) variantsByProduct.set(row.id, [...(variantsByProduct.get(row.id) ?? []), row]);
 
       let subtotalCentavos = 0;
       const lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; quantity: number; unit: number; track: boolean }> = [];
-      for (const [productId, quantity] of quantities) {
-        const row = byProduct.get(productId);
+      for (const { productId, variantId, quantity } of quantities.values()) {
+        const rows = variantsByProduct.get(productId) ?? [];
+        let row = rows[0];
         if (!row || row.status !== "active") throw new OrderError("An item in this sale is no longer for sale.", "PRODUCT_UNAVAILABLE");
-        const unit = toCentavos(row.basePrice);
+        if (variantId) {
+          const match = rows.find((r) => r.variantId === variantId);
+          if (!match) throw new OrderError(`That option of "${row.title}" is no longer for sale.`, "PRODUCT_UNAVAILABLE");
+          row = match;
+        } else if (row.hasOptions && rows.length > 1) {
+          throw new PosError(`Pick a size or option for "${row.title}".`, "EMPTY");
+        }
+        const unit = toCentavos(row.hasOptions && row.variantPrice != null ? row.variantPrice : row.basePrice);
         subtotalCentavos += unit * quantity;
-        lines.push({ productId, variantId: row.variantId, title: row.title, variantTitle: row.variantTitle, quantity, unit, track: Boolean(row.trackInventory) });
+        lines.push({
+          productId,
+          variantId: row.variantId,
+          title: row.hasOptions ? `${row.title} (${row.variantTitle})` : row.title,
+          variantTitle: row.hasOptions ? row.variantTitle : null,
+          quantity,
+          unit,
+          track: Boolean(row.trackInventory),
+        });
       }
 
       const settings = (tenant.settingsJson ?? {}) as { pos?: { vatRate?: unknown; vatInclusive?: unknown; vatRegistered?: unknown } };

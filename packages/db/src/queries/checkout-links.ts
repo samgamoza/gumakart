@@ -175,7 +175,8 @@ export function checkoutLinkStatus(
 
 export interface CreateCheckoutLinkInput {
   title?: string;
-  items: Array<{ productId: string; quantity: number }>;
+  /** variantId picks a size/option; required for products with options (Phase 9). */
+  items: Array<{ productId: string; quantity: number; variantId?: string | null }>;
   shareChannel?: CheckoutLinkShareChannel | null;
   allowQuantityEdit?: boolean;
   deliveryMode?: CheckoutLinkDeliveryMode;
@@ -192,36 +193,47 @@ export async function createCheckoutLink(
 ): Promise<CheckoutLinkSummary> {
   const db = getDb();
 
-  // Merge duplicate products; keep the order the seller picked them in.
-  const merged = new Map<string, number>();
+  // Merge duplicate product+variant lines; keep the order the seller picked them in.
+  const merged = new Map<string, { productId: string; variantId: string | null; quantity: number }>();
   for (const item of input.items) {
-    merged.set(item.productId, Math.min(99, (merged.get(item.productId) ?? 0) + item.quantity));
+    const key = `${item.productId}:${item.variantId ?? ""}`;
+    const prev = merged.get(key);
+    merged.set(key, {
+      productId: item.productId,
+      variantId: item.variantId ?? null,
+      quantity: Math.min(99, (prev?.quantity ?? 0) + item.quantity),
+    });
   }
-  const productIds = [...merged.keys()];
-  if (productIds.length === 0 || productIds.length > CHECKOUT_LINK_MAX_ITEMS) {
+  const lines = [...merged.values()];
+  const productIds = [...new Set(lines.map((l) => l.productId))];
+  if (lines.length === 0 || lines.length > CHECKOUT_LINK_MAX_ITEMS) {
     throw new CheckoutLinkError(
       `Pick between 1 and ${CHECKOUT_LINK_MAX_ITEMS} products.`,
       "INVALID_PRODUCTS"
     );
   }
 
-  // Products must belong to this shop and be active. Use the same variant
-  // checkout charges today (lowest id).
+  // Products must belong to this shop and be active. Without a picked variant, use
+  // the default variant (first active by position) — the one checkout charges.
   const rows = await db
     .select({
       id: products.id,
       title: products.title,
       status: products.status,
       variantId: productVariants.id,
+      variantTitle: productVariants.title,
+      hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
     })
     .from(products)
-    .leftJoin(productVariants, eq(productVariants.productId, products.id))
+    .leftJoin(productVariants, and(eq(productVariants.productId, products.id), eq(productVariants.active, true)))
     .where(and(eq(products.tenantId, tenantId), inArray(products.id, productIds)))
-    .orderBy(asc(productVariants.id));
+    .orderBy(asc(productVariants.position), asc(productVariants.id));
 
-  const found = new Map<string, { title: string; status: string; variantId: string | null }>();
+  const found = new Map<string, { title: string; status: string; variantId: string | null; hasOptions: boolean; variants: Array<{ id: string; title: string }> }>();
   for (const row of rows) {
-    if (!found.has(row.id)) found.set(row.id, { title: row.title, status: row.status, variantId: row.variantId });
+    const entry = found.get(row.id) ?? { title: row.title, status: row.status, variantId: row.variantId, hasOptions: Boolean(row.hasOptions), variants: [] };
+    if (row.variantId) entry.variants.push({ id: row.variantId, title: row.variantTitle ?? "" });
+    found.set(row.id, entry);
   }
   const missing = productIds.filter((id) => !found.has(id));
   if (missing.length > 0) {
@@ -232,6 +244,18 @@ export async function createCheckoutLink(
     const names = inactive.map((id) => found.get(id)!.title).join(", ");
     throw new CheckoutLinkError(`Publish these products first: ${names}.`, "INVALID_PRODUCTS");
   }
+  const resolvedLines = lines.map((line) => {
+    const product = found.get(line.productId)!;
+    if (line.variantId) {
+      const variant = product.variants.find((v) => v.id === line.variantId);
+      if (!variant) throw new CheckoutLinkError(`That option of "${product.title}" is no longer for sale.`, "INVALID_PRODUCTS");
+      return { ...line, label: product.hasOptions ? `${product.title} (${variant.title})` : product.title };
+    }
+    if (product.hasOptions && product.variants.length > 1) {
+      throw new CheckoutLinkError(`Pick a size or option for "${product.title}".`, "INVALID_PRODUCTS");
+    }
+    return { ...line, variantId: product.variantId, label: product.title };
+  });
 
   // Delivery and payment must be things the shop actually offers.
   const options = await getCheckoutLinkShopOptions(tenantId);
@@ -264,10 +288,10 @@ export async function createCheckoutLink(
     );
   }
 
-  const firstTitle = found.get(productIds[0]!)!.title;
+  const firstTitle = resolvedLines[0]!.label;
   const title =
     input.title?.trim() ||
-    (productIds.length === 1 ? firstTitle : `${firstTitle} + ${productIds.length - 1} more`);
+    (resolvedLines.length === 1 ? firstTitle : `${firstTitle} + ${resolvedLines.length - 1} more`);
 
   let linkId: string | null = null;
   for (let attempt = 0; attempt < 5 && !linkId; attempt++) {
@@ -289,11 +313,11 @@ export async function createCheckoutLink(
           })
           .returning({ id: checkoutLinks.id });
         await tx.insert(checkoutLinkItems).values(
-          productIds.map((productId, index) => ({
+          resolvedLines.map((line, index) => ({
             linkId: link!.id,
-            productId,
-            variantId: found.get(productId)!.variantId,
-            quantity: merged.get(productId)!,
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: line.quantity,
             sortOrder: index,
           }))
         );
@@ -369,6 +393,9 @@ async function loadItems(linkIds: string[]): Promise<Map<string, CheckoutLinkIte
       title: products.title,
       productStatus: products.status,
       basePrice: products.basePrice,
+      hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
+      variantPrice: productVariants.price,
+      variantActive: productVariants.active,
       trackInventory: products.trackInventory,
       variantTitle: productVariants.title,
       stockQty: productVariants.stockQty,
@@ -398,13 +425,13 @@ async function loadItems(linkIds: string[]): Promise<Map<string, CheckoutLinkIte
           ? row.variantTitle
           : null,
       quantity: row.quantity,
-      // Checkout charges products.base_price (kept in sync with the default
-      // variant by products.ts), so show exactly that.
-      price: row.basePrice,
+      // Mirrors createOrderForTenant: products with options charge the
+      // variant's price; simple products charge products.base_price.
+      price: row.hasOptions && row.variantPrice ? row.variantPrice : row.basePrice,
       imageUrl: row.variantImage ?? row.firstImage ?? null,
       stockQty: row.variantId ? (row.stockQty ?? 0) : null,
       trackInventory: row.trackInventory !== false,
-      productActive: row.productStatus === "active",
+      productActive: row.productStatus === "active" && row.variantActive !== false,
     });
     byLink.set(row.linkId, list);
   }

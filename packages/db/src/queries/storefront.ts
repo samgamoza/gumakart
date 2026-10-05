@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../client";
 import { categories, productImages, productVariants, products, tenants } from "../schema/index";
 
@@ -41,12 +41,27 @@ export interface StorefrontTenantRecord {
       unitCustom?: string;
       servicePriceStyle?: "base_minimum" | "value_range";
     } | null;
+    /** Phase 9: product options (Size, Color…). Empty for simple products. */
+    options: Array<{ name: string; values: string[] }>;
+    /** Active variants in display order. Only filled when the product has options. */
+    variants: StorefrontVariant[];
   }>;
   shopCategories: Array<{
     id: string;
     name: string;
     slug: string;
   }>;
+}
+
+export interface StorefrontVariant {
+  id: string;
+  title: string;
+  options: Record<string, string>;
+  price: string;
+  compareAtPrice: string | null;
+  imageUrl: string | null;
+  /** In stock (or the product doesn't track inventory). */
+  available: boolean;
 }
 
 export interface PendingTenantRecord {
@@ -148,23 +163,62 @@ async function mapStorefrontTenant(
       status: products.status,
       isMain: products.isMain,
       metadataJson: products.metadataJson,
+      optionsJson: products.optionsJson,
+      trackInventory: products.trackInventory,
       imageUrl: productVariants.imageUrl,
       categoryName: categories.name,
       categorySlug: categories.slug,
     })
     .from(products)
-    .leftJoin(productVariants, eq(productVariants.productId, products.id))
+    .leftJoin(
+      productVariants,
+      and(eq(productVariants.productId, products.id), eq(productVariants.active, true))
+    )
     .leftJoin(categories, eq(products.categoryId, categories.id))
     .where(eq(products.tenantId, tenant.id))
-    .orderBy(desc(products.isMain), desc(products.createdAt));
+    .orderBy(desc(products.isMain), desc(products.createdAt), asc(productVariants.position), asc(productVariants.id));
 
-  // Variant join can duplicate rows — keep first (main-sorted) per product.
+  // Variant join can duplicate rows — keep the first (default) variant per product.
   const seen = new Set<string>();
   const catalog = catalogRows.filter((row) => {
     if (seen.has(row.id)) return false;
     seen.add(row.id);
     return true;
   });
+
+  // Phase 9: variants for products that have options (one query for the shop).
+  const withOptions = catalog.filter((p) => (p.optionsJson?.length ?? 0) > 0);
+  const variantsByProduct = new Map<string, StorefrontVariant[]>();
+  if (withOptions.length > 0) {
+    const tracks = new Map(withOptions.map((p) => [p.id, p.trackInventory !== false]));
+    const rows = await db
+      .select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        title: productVariants.title,
+        options: productVariants.optionsJson,
+        price: productVariants.price,
+        compareAtPrice: productVariants.compareAtPrice,
+        imageUrl: productVariants.imageUrl,
+        stockQty: productVariants.stockQty,
+      })
+      .from(productVariants)
+      .where(and(inArray(productVariants.productId, withOptions.map((p) => p.id)), eq(productVariants.active, true)))
+      .orderBy(asc(productVariants.position), asc(productVariants.id));
+    for (const row of rows) {
+      const list = variantsByProduct.get(row.productId) ?? [];
+      list.push({
+        id: row.id,
+        title: row.title,
+        options: row.options ?? {},
+        price: row.price,
+        compareAtPrice: row.compareAtPrice,
+        imageUrl: row.imageUrl,
+        available: !tracks.get(row.productId) || (row.stockQty ?? 0) > 0,
+      });
+      variantsByProduct.set(row.productId, list);
+    }
+  }
 
   const shopCategories = await db
     .select({
@@ -196,10 +250,12 @@ async function mapStorefrontTenant(
     seoPublishedJson: tenant.seoPublishedJson ?? null,
     checkoutPublishedJson: tenant.checkoutPublishedJson ?? null,
     shippingPublishedJson: tenant.shippingPublishedJson ?? null,
-    products: catalog.map((p) => ({
+    products: catalog.map(({ optionsJson, trackInventory: _track, ...p }) => ({
       ...p,
       isMain: Boolean(p.isMain),
       metadataJson: p.metadataJson ?? null,
+      options: optionsJson ?? [],
+      variants: variantsByProduct.get(p.id) ?? [],
     })),
     shopCategories,
   };

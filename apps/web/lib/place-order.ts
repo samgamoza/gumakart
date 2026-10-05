@@ -77,6 +77,8 @@ export const checkoutSchema = z.object({
     .array(
       z.object({
         productId: z.string().min(1).max(64),
+        /** Size/colour pick for products with options (Phase 9). */
+        variantId: z.string().uuid().nullish(),
         qty: z.number().int().min(1).max(99),
       })
     )
@@ -287,8 +289,10 @@ export async function placeOrder(
     }
 
     const priceById = new Map(tenant.products.map((p) => [p.id, Number(p.basePrice)]));
+    const variantPriceById = new Map(tenant.products.flatMap((p) => p.variants.map((v) => [v.id, Number(v.price)] as const)));
     const estimatedSubtotal = body.items.reduce(
-      (sum, item) => sum + (priceById.get(item.productId) ?? 0) * item.qty,
+      (sum, item) =>
+        sum + ((item.variantId ? variantPriceById.get(item.variantId) : undefined) ?? priceById.get(item.productId) ?? 0) * item.qty,
       0
     );
 
@@ -309,7 +313,7 @@ export async function placeOrder(
 
     const order = await createOrderForTenant({
       tenantSlug: body.tenantSlug,
-      items: body.items.map((item) => ({ productId: item.productId, quantity: item.qty })),
+      items: body.items.map((item) => ({ productId: item.productId, variantId: item.variantId ?? null, quantity: item.qty })),
       customer: {
         name: body.customer.name,
         phone: body.customer.phone,

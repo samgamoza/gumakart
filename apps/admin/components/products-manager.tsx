@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, formatPrice } from "@gumakart/ui";
+import { ProductVariantsEditor } from "@/components/product-variants-editor";
 import {
   formatProductPriceLine,
   productPricingKindForCategory,
@@ -39,6 +40,10 @@ interface ProductRow {
   imageUrl: string | null;
   isMain?: boolean;
   metadataJson?: ProductPricingMeta | null;
+  /** Phase 9: sizes/colours. stockQty is the total across variants. */
+  hasOptions?: boolean;
+  variantCount?: number;
+  lowestVariantStock?: number;
 }
 
 interface ProductDraft {
@@ -139,6 +144,7 @@ export function ProductsManager() {
   const [pricingNote, setPricingNote] = useState<string | null>(null);
   const [suggestingPrice, setSuggestingPrice] = useState(false);
   const [descriptionNote, setDescriptionNote] = useState<string | null>(null);
+  const [variantsFor, setVariantsFor] = useState<ProductRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -190,6 +196,15 @@ export function ProductsManager() {
       meta: product.metadataJson ?? null,
       formatMoney: (n) => formatPrice(n),
     });
+  }
+
+  function stockLine(product: ProductRow): string {
+    if (pricingKind === "service") return "";
+    if (product.hasOptions) {
+      const low = (product.lowestVariantStock ?? 0) === 0 ? " · some sold out" : "";
+      return ` · ${product.variantCount ?? 0} variants · Stock: ${product.stockQty}${low}`;
+    }
+    return ` · Stock: ${product.stockQty}`;
   }
 
   function openCreateForm() {
@@ -587,8 +602,22 @@ export function ProductsManager() {
     await load();
   }
 
+  const editingHasOptions = Boolean(editingId && products.find((p) => p.id === editingId)?.hasOptions);
+
   return (
     <div>
+      {variantsFor ? (
+        <ProductVariantsEditor
+          productId={variantsFor.id}
+          productTitle={variantsFor.title}
+          onClose={() => setVariantsFor(null)}
+          onSaved={(message) => {
+            setVariantsFor(null);
+            setNotice(message);
+            void load();
+          }}
+        />
+      ) : null}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -892,6 +921,8 @@ export function ProductsManager() {
                   required
                   type="number"
                   min="1"
+                  disabled={editingHasOptions}
+                  title={editingHasOptions ? "Set per size/colour in Sizes & colours" : undefined}
                   value={draft.basePrice}
                   onChange={(e) =>
                     setDraft((d) => (d ? { ...d, basePrice: e.target.value } : d))
@@ -941,6 +972,8 @@ export function ProductsManager() {
                   <input
                     type="number"
                     min="0"
+                    disabled={editingHasOptions}
+                    title={editingHasOptions ? "Set per size/colour in Sizes & colours" : undefined}
                     value={draft.stockQty}
                     onChange={(e) =>
                       setDraft((d) => (d ? { ...d, stockQty: e.target.value } : d))
@@ -951,7 +984,23 @@ export function ProductsManager() {
               )}
             </div>
 
-            {pricingKind !== "service" && (
+            {editingHasOptions && (
+              <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                This product has sizes or colours — price and stock are set per variant.{" "}
+                <button
+                  type="button"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  onClick={() => {
+                    const product = products.find((p) => p.id === editingId);
+                    if (product) setVariantsFor(product);
+                  }}
+                >
+                  Edit sizes &amp; colours
+                </button>
+              </p>
+            )}
+
+            {pricingKind !== "service" && !editingHasOptions && (
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
@@ -1088,8 +1137,9 @@ export function ProductsManager() {
                             </Badge>
                           </div>
                           <p className="mt-1 text-sm text-slate-400">
+                            {main.hasOptions ? "From " : ""}
                             {priceLineForProduct(main)}
-                            {pricingKind !== "service" ? ` · Stock: ${main.stockQty}` : ""}
+                            {stockLine(main)}
                           </p>
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -1100,6 +1150,15 @@ export function ProductsManager() {
                             >
                               Checkout link
                             </a>
+                          )}
+                          {pricingKind !== "service" && (
+                            <button
+                              type="button"
+                              onClick={() => setVariantsFor(main)}
+                              className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                            >
+                              {main.hasOptions ? "Sizes & colours" : "Add sizes"}
+                            </button>
                           )}
                           <button
                             type="button"
@@ -1167,8 +1226,9 @@ export function ProductsManager() {
                               </Badge>
                             </div>
                             <p className="mt-1 text-sm text-slate-500">
+                              {product.hasOptions ? "From " : ""}
                               {priceLineForProduct(product)}
-                              {pricingKind !== "service" ? ` · Stock: ${product.stockQty}` : ""} · /
+                              {stockLine(product)} · /
                               {product.slug}
                             </p>
                           </div>
@@ -1188,6 +1248,15 @@ export function ProductsManager() {
                             >
                               Set as main
                             </button>
+                            {pricingKind !== "service" && (
+                              <button
+                                type="button"
+                                onClick={() => setVariantsFor(product)}
+                                className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                              >
+                                {product.hasOptions ? "Sizes & colours" : "Add sizes"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => startEdit(product)}

@@ -114,8 +114,14 @@ export interface TenantPosSettings {
   vatRate?: number;
 }
 
+/** Phase 9: stock alerts. A variant at or below the threshold counts as low. */
+export interface TenantInventorySettings {
+  lowStockThreshold?: number;
+}
+
 export interface TenantSettingsJson {
   pos?: TenantPosSettings;
+  inventory?: TenantInventorySettings;
   automations?: TenantAutomationSettings;
   contact?: TenantContactSettings;
   social?: TenantSocialSettings;

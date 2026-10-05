@@ -21,6 +21,17 @@ export interface DemoProduct {
     unitCustom?: string;
     servicePriceStyle?: "base_minimum" | "value_range";
   };
+  /** Phase 9: sizes/colours. Only set for products with options. */
+  options?: Array<{ name: string; values: string[] }>;
+  variants?: Array<{
+    id: string;
+    title: string;
+    options: Record<string, string>;
+    price: number;
+    compareAtPrice?: number;
+    image?: string;
+    available: boolean;
+  }>;
 }
 
 export interface DemoTenant {

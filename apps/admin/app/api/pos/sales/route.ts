@@ -6,7 +6,10 @@ import { posErrorResponse, requirePosActor } from "@/lib/pos-auth";
 
 const bodySchema = z.object({
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
-  items: z.array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(999) })).min(1).max(100),
+  items: z
+    .array(z.object({ productId: z.string().uuid(), variantId: z.string().uuid().nullish(), quantity: z.number().int().min(1).max(999) }))
+    .min(1)
+    .max(100),
   discountType: z.enum(["none", "senior", "pwd"]).default("none"),
   discountHolder: z.object({ name: z.string().max(120).optional(), idNumber: z.string().max(40).optional() }).optional(),
   tenders: z

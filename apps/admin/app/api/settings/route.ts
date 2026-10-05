@@ -156,6 +156,10 @@ const patchSchema = z.object({
         })
         .strict()
         .optional(),
+      inventory: z
+        .object({ lowStockThreshold: z.number().int().min(0).max(1000).optional() })
+        .strict()
+        .optional(),
       automations: z
         .object({
           order_created: z.boolean().optional(),

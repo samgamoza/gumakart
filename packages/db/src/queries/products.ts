@@ -25,6 +25,10 @@ export interface ProductListItem {
   isMain: boolean;
   metadataJson: ProductMetadataJson | null;
   createdAt: Date;
+  /** Phase 9: options like Size × Color; stockQty is then the total across variants. */
+  hasOptions: boolean;
+  variantCount: number;
+  lowestVariantStock: number;
 }
 
 export interface CreateProductInput {
@@ -89,20 +93,30 @@ export async function listProductsForTenant(tenantId: string): Promise<ProductLi
       createdAt: products.createdAt,
       stockQty: productVariants.stockQty,
       imageUrl: productVariants.imageUrl,
+      optionsJson: products.optionsJson,
     })
     .from(products)
-    .leftJoin(productVariants, eq(productVariants.productId, products.id))
+    .leftJoin(
+      productVariants,
+      and(eq(productVariants.productId, products.id), eq(productVariants.active, true))
+    )
     .where(eq(products.tenantId, tenantId))
-    .orderBy(desc(products.isMain), desc(products.createdAt), asc(productVariants.id));
+    .orderBy(desc(products.isMain), desc(products.createdAt), asc(productVariants.position), asc(productVariants.id));
 
-  // The variant left join can produce one row per variant; keep the first
-  // (lowest variant id — the same one checkout charges and decrements).
-  const seen = new Set<string>();
+  // One row per active variant; the first (position, id) is the default variant —
+  // the one checkout charges for products without options.
+  const seen = new Map<string, ProductListItem>();
   const items: ProductListItem[] = [];
   for (const row of rows) {
-    if (seen.has(row.id)) continue;
-    seen.add(row.id);
-    items.push({
+    const existing = seen.get(row.id);
+    if (existing) {
+      existing.variantCount += 1;
+      existing.stockQty += row.stockQty ?? 0;
+      existing.lowestVariantStock = Math.min(existing.lowestVariantStock, row.stockQty ?? 0);
+      continue;
+    }
+    const hasOptions = Array.isArray(row.optionsJson) && row.optionsJson.length > 0;
+    const item: ProductListItem = {
       id: row.id,
       title: row.title,
       slug: row.slug,
@@ -116,7 +130,12 @@ export async function listProductsForTenant(tenantId: string): Promise<ProductLi
       isMain: Boolean(row.isMain),
       metadataJson: (row.metadataJson as ProductMetadataJson | null) ?? null,
       createdAt: row.createdAt,
-    });
+      hasOptions,
+      variantCount: 1,
+      lowestVariantStock: row.stockQty ?? 0,
+    };
+    seen.set(row.id, item);
+    items.push(item);
   }
   return items;
 }
@@ -233,6 +252,9 @@ export async function createProductForTenant(
     isMain: Boolean(product.isMain),
     metadataJson: (product.metadataJson as ProductMetadataJson | null) ?? null,
     createdAt: product.createdAt,
+    hasOptions: false,
+    variantCount: 1,
+    lowestVariantStock: stockQty,
   };
 }
 
@@ -258,11 +280,14 @@ export async function updateProductForTenant(
   return db
     .transaction(async (tx) => {
       const [product] = await tx
-        .select({ id: products.id })
+        .select({ id: products.id, optionsJson: products.optionsJson })
         .from(products)
         .where(and(eq(products.id, productId), eq(products.tenantId, tenantId)))
         .limit(1);
       if (!product) return false;
+      // Products with options take price and stock per variant (saveProductVariants);
+      // base_price there follows the cheapest variant, so ignore a stray edit.
+      const productHasOptions = (product.optionsJson?.length ?? 0) > 0;
 
       if (input.isMain === true) {
         await clearOtherMainProducts(tx, tenantId, productId);
@@ -275,7 +300,7 @@ export async function updateProductForTenant(
           ...(input.descriptionHtml !== undefined
             ? { descriptionHtml: input.descriptionHtml }
             : {}),
-          ...(input.basePrice !== undefined ? { basePrice: input.basePrice } : {}),
+          ...(input.basePrice !== undefined && !productHasOptions ? { basePrice: input.basePrice } : {}),
           ...(input.compareAtPrice !== undefined
             ? { compareAtPrice: input.compareAtPrice }
             : {}),
@@ -286,18 +311,24 @@ export async function updateProductForTenant(
         })
         .where(eq(products.id, productId));
 
-      // Keep the default (first) variant in sync for price/stock/image.
+      // Keep the default (first active) variant in sync for price/stock/image —
+      // only for products without options (those are edited per variant).
       // Locked so a checkout can't sell between reading the old count and
       // writing the new one (the ledger delta would be wrong).
       const [variant] = await tx
-        .select({ id: productVariants.id, stockQty: productVariants.stockQty })
+        .select({ id: productVariants.id, stockQty: productVariants.stockQty, hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0` })
         .from(productVariants)
-        .where(eq(productVariants.productId, productId))
-        .orderBy(asc(productVariants.id))
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(and(eq(productVariants.productId, productId), eq(productVariants.active, true)))
+        .orderBy(asc(productVariants.position), asc(productVariants.id))
         .limit(1)
-        .for("update");
+        .for("update", { of: productVariants });
 
-      if (variant) {
+      if (variant && variant.hasOptions && input.imageUrl !== undefined) {
+        // The product photo still lives on the first variant.
+        await tx.update(productVariants).set({ imageUrl: input.imageUrl }).where(eq(productVariants.id, variant.id));
+      }
+      if (variant && !variant.hasOptions) {
         await tx
           .update(productVariants)
           .set({

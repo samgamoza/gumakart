@@ -34,6 +34,16 @@ import { productImageSrc } from "@/lib/product-image";
 
 // ─── Types (API shapes) ──────────────────────────────────────────────────────
 
+interface Variant {
+  id: string;
+  title: string;
+  price: number;
+  sku: string | null;
+  barcode: string | null;
+  stockQty: number;
+  imageUrl: string | null;
+}
+
 interface Product {
   id: string;
   title: string;
@@ -42,6 +52,39 @@ interface Product {
   stockQty: number | null;
   trackInventory: boolean;
   imageUrl: string | null;
+  /** Phase 9: sizes/colours. More than one = the cashier picks. */
+  variants?: Variant[];
+  hasOptions?: boolean;
+}
+
+/** What goes on a cart line: a simple product or one variant of it. `id` is the line key. */
+interface Sellable {
+  id: string;
+  productId: string;
+  variantId: string | null;
+  title: string;
+  price: number;
+  sku: string | null;
+  stockQty: number | null;
+  trackInventory: boolean;
+  imageUrl: string | null;
+}
+
+const needsPick = (p: Product) => Boolean(p.hasOptions && (p.variants?.length ?? 0) > 1);
+
+function sellableOf(p: Product, v?: Variant | null): Sellable {
+  const variant = v ?? (p.hasOptions ? p.variants?.[0] : undefined) ?? null;
+  return {
+    id: variant && p.hasOptions ? variant.id : p.id,
+    productId: p.id,
+    variantId: variant && p.hasOptions ? variant.id : null,
+    title: variant && p.hasOptions ? `${p.title} (${variant.title})` : p.title,
+    price: variant && p.hasOptions ? variant.price : p.price,
+    sku: variant?.sku ?? p.sku,
+    stockQty: p.trackInventory ? (variant && p.hasOptions ? variant.stockQty : p.stockQty) : null,
+    trackInventory: p.trackInventory,
+    imageUrl: variant?.imageUrl ?? p.imageUrl,
+  };
 }
 
 type Tenders = Record<PosTenderMethod, number>;
@@ -264,7 +307,8 @@ export function PosRegister() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [query, setQuery] = useState("");
-  const [cart, setCart] = useState<Array<{ product: Product; qty: number }>>([]);
+  const [cart, setCart] = useState<Array<{ product: Sellable; qty: number }>>([]);
+  const [picking, setPicking] = useState<Product | null>(null);
   const [discountType, setDiscountType] = useState<PosDiscountType>("none");
   const [holder, setHolder] = useState({ name: "", idNumber: "" });
   const [notice, setNotice] = useState<string | null>(null);
@@ -299,7 +343,12 @@ export function PosRegister() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return products;
-    return products.filter((p) => p.title.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase() === q);
+    return products.filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        (p.sku ?? "").toLowerCase() === q ||
+        (p.variants ?? []).some((v) => (v.sku ?? "").toLowerCase() === q || (v.barcode ?? "").toLowerCase() === q)
+    );
   }, [products, query]);
 
   const subtotal = cart.reduce((s, l) => s + l.product.price * l.qty, 0);
@@ -319,7 +368,20 @@ export function PosRegister() {
     return cart.find((l) => l.product.id === id)?.qty ?? 0;
   }
 
-  function add(p: Product) {
+  /** All lines of a product (any variant) — for the tile's "left" count. */
+  function inCartProduct(productId: string) {
+    return cart.filter((l) => l.product.productId === productId).reduce((n, l) => n + l.qty, 0);
+  }
+
+  function tap(p: Product) {
+    if (needsPick(p)) {
+      setPicking(p);
+      return;
+    }
+    add(sellableOf(p));
+  }
+
+  function add(p: Sellable) {
     if (p.trackInventory && p.stockQty !== null && inCart(p.id) >= p.stockQty) {
       setNotice(`Only ${p.stockQty} "${p.title}" in stock.`);
       return;
@@ -342,9 +404,18 @@ export function PosRegister() {
     if (e.key !== "Enter") return;
     const q = query.trim().toLowerCase();
     if (!q) return;
+    // A variant's own SKU/barcode adds that exact size/colour.
+    for (const p of products) {
+      const v = (p.variants ?? []).find((x) => (x.barcode ?? "").toLowerCase() === q || (x.sku ?? "").toLowerCase() === q);
+      if (v && p.hasOptions) {
+        add(sellableOf(p, v));
+        setQuery("");
+        return;
+      }
+    }
     const exact = products.find((p) => (p.sku ?? "").toLowerCase() === q) ?? (filtered.length === 1 ? filtered[0] : undefined);
     if (exact) {
-      add(exact);
+      tap(exact);
       setQuery("");
     } else {
       setNotice(`No product with code "${query.trim()}".`);
@@ -489,13 +560,15 @@ export function PosRegister() {
             ) : (
               <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                 {filtered.map((p) => {
-                  const left = p.trackInventory && p.stockQty !== null ? p.stockQty - inCart(p.id) : null;
+                  const left = p.trackInventory && p.stockQty !== null ? p.stockQty - inCartProduct(p.id) : null;
+                  const pick = needsPick(p);
+                  const fromPrice = pick ? Math.min(...(p.variants ?? []).map((v) => v.price)) : p.price;
                   const out = left !== null && left <= 0;
                   return (
                     <li key={p.id}>
                       <button
                         type="button"
-                        onClick={() => add(p)}
+                        onClick={() => tap(p)}
                         disabled={out}
                         className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:border-violet-400/60 active:scale-[0.98] disabled:opacity-40"
                         data-testid="pos-product"
@@ -511,7 +584,10 @@ export function PosRegister() {
                         <div className="flex flex-1 flex-col p-2">
                           <span className="line-clamp-2 text-sm font-medium">{p.title}</span>
                           <span className="mt-auto flex items-center justify-between pt-1">
-                            <span className="font-bold text-violet-200">{peso(p.price)}</span>
+                            <span className="font-bold text-violet-200">
+                              {pick ? <span className="text-[11px] font-medium text-slate-400">from </span> : null}
+                              {peso(fromPrice)}
+                            </span>
                             {left !== null && <span className={`text-[11px] ${left <= 3 ? "text-amber-300" : "text-slate-500"}`}>{out ? "Out" : `${left} left`}</span>}
                           </span>
                         </div>
@@ -579,6 +655,36 @@ export function PosRegister() {
         </Modal>
       )}
 
+      {picking && (
+        <Modal title={`Pick for ${picking.title}`} onClose={() => setPicking(null)}>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="pos-variant-picker">
+            {(picking.variants ?? []).map((v) => {
+              const left = picking.trackInventory ? v.stockQty - inCart(v.id) : null;
+              const out = left !== null && left <= 0;
+              return (
+                <li key={v.id}>
+                  <button
+                    type="button"
+                    disabled={out}
+                    onClick={() => {
+                      add(sellableOf(picking, v));
+                      setPicking(null);
+                    }}
+                    className="flex w-full flex-col rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:border-violet-400/60 disabled:opacity-40"
+                  >
+                    <span className="text-sm font-semibold">{v.title}</span>
+                    <span className="mt-1 flex items-center justify-between text-xs">
+                      <span className="font-bold text-violet-200">{peso(v.price)}</span>
+                      {left !== null && <span className={left <= 3 ? "text-amber-300" : "text-slate-500"}>{out ? "Out" : `${left} left`}</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Modal>
+      )}
+
       {modal === "pay" && state.shift && (
         <PayModal
           total={totals.total}
@@ -589,7 +695,7 @@ export function PosRegister() {
               method: "POST",
               body: JSON.stringify({
                 idempotencyKey: key,
-                items: cart.map((l) => ({ productId: l.product.id, quantity: l.qty })),
+                items: cart.map((l) => ({ productId: l.product.productId, variantId: l.product.variantId, quantity: l.qty })),
                 discountType,
                 discountHolder: discountType !== "none" ? holder : undefined,
                 tenders,
@@ -683,7 +789,7 @@ function OpenShift({ onOpened, actorName }: { onOpened: () => void; actorName: s
 }
 
 function CartPanel(props: {
-  cart: Array<{ product: Product; qty: number }>;
+  cart: Array<{ product: Sellable; qty: number }>;
   setQty: (id: string, qty: number) => void;
   totals: SaleTotals;
   vat: VatConfig;

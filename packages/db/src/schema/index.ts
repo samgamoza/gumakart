@@ -490,6 +490,8 @@ export const products = pgTable(
       servicePriceStyle?: "base_minimum" | "value_range";
     }>(),
     aiGenerated: boolean("ai_generated").default(false),
+    /** Phase 9: up to 3 options, e.g. [{ name: "Size", values: ["S","M"] }]. null = no options. */
+    optionsJson: jsonb("options_json").$type<Array<{ name: string; values: string[] }>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -513,6 +515,11 @@ export const productVariants = pgTable(
     stockQty: integer("stock_qty").default(0),
     optionsJson: jsonb("options_json").$type<Record<string, string>>(),
     imageUrl: text("image_url"),
+    /** Phase 9: display order, on/off (kept for past orders), per-variant compare price and barcode. */
+    position: integer("position").default(0).notNull(),
+    active: boolean("active").default(true).notNull(),
+    compareAtPrice: decimal("compare_at_price", { precision: 12, scale: 2 }),
+    barcode: varchar("barcode", { length: 64 }),
   },
   (table) => [index("product_variants_product_idx").on(table.productId)]
 );

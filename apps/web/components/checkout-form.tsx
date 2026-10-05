@@ -19,7 +19,7 @@ import {
   User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useCart } from "@/lib/cart";
+import { cartLineKey, useCart } from "@/lib/cart";
 import type { StorefrontStoreSettings } from "@/lib/storefront-settings";
 import {
   computeDeliveryFee,
@@ -284,7 +284,7 @@ export function CheckoutForm({
           barangay: fulfillment === "delivery" ? barangay.trim() || undefined : undefined,
           province: fulfillment === "delivery" ? province.trim() || undefined : undefined,
           notes: notes.trim() || undefined,
-          items: cart.items.map((item) => ({ productId: item.productId, qty: item.qty })),
+          items: cart.items.map((item) => ({ productId: item.productId, variantId: item.variantId ?? null, qty: item.qty })),
         }),
       });
       const data = await res.json();
@@ -456,7 +456,7 @@ export function CheckoutForm({
             </div>
             <ul className="divide-y divide-stone-100">
               {cart.items.map((item) => (
-                <li key={item.productId} className="flex items-center gap-3 px-4 py-3">
+                <li key={cartLineKey(item)} className="flex items-center gap-3 px-4 py-3">
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-stone-100 bg-stone-50">
                     {item.image ? (
                       <Image
@@ -474,6 +474,7 @@ export function CheckoutForm({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-medium text-stone-900">{item.title}</p>
+                    {item.variantTitle ? <p className="text-xs text-stone-500">{item.variantTitle}</p> : null}
                     <p className="mt-0.5 text-sm font-bold text-[#ee4d2d]">
                       {formatPrice(item.price, storeSettings.currency)}
                     </p>
@@ -482,7 +483,7 @@ export function CheckoutForm({
                     <button
                       type="button"
                       aria-label={`Decrease ${item.title} quantity`}
-                      onClick={() => cart.setQty(item.productId, item.qty - 1)}
+                      onClick={() => cart.setQty(cartLineKey(item), item.qty - 1)}
                       className="flex h-8 w-8 items-center justify-center text-stone-600 hover:bg-stone-100"
                     >
                       {item.qty === 1 ? (
@@ -497,7 +498,7 @@ export function CheckoutForm({
                     <button
                       type="button"
                       aria-label={`Increase ${item.title} quantity`}
-                      onClick={() => cart.setQty(item.productId, item.qty + 1)}
+                      onClick={() => cart.setQty(cartLineKey(item), item.qty + 1)}
                       className="flex h-8 w-8 items-center justify-center text-stone-600 hover:bg-stone-100"
                     >
                       <Plus className="h-3.5 w-3.5" />

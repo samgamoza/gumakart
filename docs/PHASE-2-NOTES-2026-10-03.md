@@ -20,8 +20,8 @@ until `NEXT_PUBLIC_PLAN_BILLING_ENABLED=true`.
    - `/api/cron/expire-orders` — hourly if possible (daily in `vercel.json`).
 5. Smoke test on production: one COD order, one manual GCash order (send proof → confirm), book/assign a rider,
    deliver, cancel one unpaid order.
-6. Run `phase2-verify.sql` daily for a week. When clean, move `drizzle-pending/0026_phase2_constrain.sql` into
-   `drizzle/` (journal idx 26) and migrate. Dropping the old columns comes in a later release.
+6. Run `phase2-verify.sql` daily for a week. When clean, move `drizzle-pending/0027_phase2_constrain.sql` into
+   `drizzle/` (journal idx 27) and migrate. Dropping the old columns comes in a later release.
 
 Env: `NEXT_PUBLIC_PLAN_BILLING_ENABLED=false` (new). Without `INNGEST_EVENT_KEY` the relay marks events published
 and keeps them as the order event log — nothing consumes them until Phase 4.

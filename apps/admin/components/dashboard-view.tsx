@@ -21,7 +21,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Card, formatPrice } from "@gumakart/ui";
-import type { SellerToday } from "@gumakart/db";
+import type { LowStockSummary, SellerToday } from "@gumakart/db";
 
 /**
  * Plan §10 — "What needs me today?"
@@ -33,6 +33,7 @@ interface TodayResponse {
   ok: boolean;
   today?: SellerToday;
   urls?: { linkBase: string; storefront: string };
+  lowStock?: LowStockSummary | null;
   error?: string;
 }
 
@@ -158,6 +159,25 @@ export function DashboardView({ displayName }: { displayName: string }) {
         {today.todo.to_pay > 0 && (
           <Link href="/orders?tab=to_pay" className="mt-2 inline-block text-xs text-slate-400 hover:text-white">
             {today.todo.to_pay} order{today.todo.to_pay === 1 ? "" : "s"} waiting for the buyer to pay →
+          </Link>
+        )}
+        {data.lowStock && data.lowStock.lowCount > 0 && (
+          <Link
+            href="/inventory?filter=low"
+            className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3 transition hover:bg-amber-400/10"
+            data-testid="low-stock-alert"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-300" />
+            <span className="min-w-0 text-sm">
+              <span className="font-semibold text-amber-100">
+                {data.lowStock.lowCount} item{data.lowStock.lowCount === 1 ? "" : "s"} running low
+                {data.lowStock.soldOutCount > 0 ? ` · ${data.lowStock.soldOutCount} sold out` : ""}
+              </span>
+              <span className="block truncate text-xs text-slate-400">
+                {data.lowStock.items.map((i) => `${i.title} (${i.stockQty})`).join(" · ")}
+              </span>
+            </span>
+            <span className="ml-auto flex-none text-xs text-amber-200">Restock →</span>
           </Link>
         )}
       </section>

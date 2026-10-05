@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { Product } from "@/lib/store-data";
-import { useCart as useTenantCart } from "@/lib/cart";
+import { cartLineKey, useCart as useTenantCart } from "@/lib/cart";
 
 export type V0CartItem = Product & { qty: number };
 
@@ -35,8 +35,8 @@ export function TenantCartProvider({
   const items = useMemo<V0CartItem[]>(
     () =>
       cart.items.map((item) => ({
-        id: item.productId,
-        name: item.title,
+        id: cartLineKey(item),
+        name: item.variantTitle ? `${item.title} (${item.variantTitle})` : item.title,
         price: item.price,
         image: item.image,
         category: "",

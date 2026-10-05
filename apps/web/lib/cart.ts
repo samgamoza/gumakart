@@ -9,6 +9,29 @@ export interface CartItem {
   price: number;
   image: string;
   qty: number;
+  /** Phase 9: the size/colour picked. Lines are keyed by variantId ?? productId. */
+  variantId?: string | null;
+  variantTitle?: string | null;
+}
+
+/** One cart line per product (simple) or per variant (sizes/colours). */
+export function cartLineKey(item: Pick<CartItem, "productId" | "variantId">): string {
+  return item.variantId ?? item.productId;
+}
+
+/**
+ * Products that need a size/colour pick, per shop (productId → product slug).
+ * Template "quick add" buttons only know the product, so addItem sends the buyer
+ * to the product page to choose instead of adding an unpriceable line.
+ */
+const variantProducts = new Map<string, Map<string, string>>();
+
+export function registerVariantProducts(tenantSlug: string, entries: Array<{ id: string; slug: string }>): void {
+  variantProducts.set(tenantSlug, new Map(entries.map((e) => [e.id, e.slug])));
+}
+
+export function variantProductSlug(tenantSlug: string, productId: string): string | null {
+  return variantProducts.get(tenantSlug)?.get(productId) ?? null;
 }
 
 const CART_EVENT = "guma-cart-change";
@@ -28,8 +51,11 @@ function normalizeItem(raw: unknown): CartItem | null {
   const qty = Number(item.qty);
   if (!productId || !Number.isFinite(price) || price < 0) return null;
   if (!Number.isFinite(qty) || qty < 1) return null;
+  const variantId = typeof item.variantId === "string" && item.variantId ? item.variantId : null;
   return {
     productId,
+    variantId,
+    variantTitle: variantId && typeof item.variantTitle === "string" ? item.variantTitle : null,
     slug,
     title,
     image,
@@ -91,6 +117,14 @@ export function useCart(tenantSlug: string) {
       const price = Number(item.price);
       if (!item.productId || !Number.isFinite(price)) return;
 
+      if (!item.variantId) {
+        const slug = variantProductSlug(tenantSlug, item.productId);
+        if (slug) {
+          window.location.assign(`/${tenantSlug}/products/${encodeURIComponent(slug)}?pick=1`);
+          return;
+        }
+      }
+
       const normalized = {
         ...item,
         price,
@@ -100,10 +134,11 @@ export function useCart(tenantSlug: string) {
       };
 
       const current = readCart(tenantSlug);
-      const existing = current.find((entry) => entry.productId === normalized.productId);
+      const key = cartLineKey(normalized);
+      const existing = current.find((entry) => cartLineKey(entry) === key);
       const next = existing
         ? current.map((entry) =>
-            entry.productId === normalized.productId
+            cartLineKey(entry) === key
               ? { ...entry, qty: Math.min(entry.qty + qty, 99) }
               : entry
           )
@@ -117,14 +152,18 @@ export function useCart(tenantSlug: string) {
   );
 
   const setQty = useCallback(
-    (productId: string, qty: number) => {
+    (lineKey: string, qty: number) => {
       const current = readCart(tenantSlug);
+      // Callers pass cartLineKey(item); older callers pass a productId — then the
+      // first line of that product is meant.
+      const target =
+        current.find((entry) => cartLineKey(entry) === lineKey) ??
+        current.find((entry) => entry.productId === lineKey);
+      if (!target) return;
       const next =
         qty <= 0
-          ? current.filter((entry) => entry.productId !== productId)
-          : current.map((entry) =>
-              entry.productId === productId ? { ...entry, qty: Math.min(qty, 99) } : entry
-            );
+          ? current.filter((entry) => entry !== target)
+          : current.map((entry) => (entry === target ? { ...entry, qty: Math.min(qty, 99) } : entry));
       setItems(next);
       writeCart(tenantSlug, next);
     },
@@ -132,7 +171,7 @@ export function useCart(tenantSlug: string) {
   );
 
   const removeItem = useCallback(
-    (productId: string) => setQty(productId, 0),
+    (lineKey: string) => setQty(lineKey, 0),
     [setQty]
   );
 

@@ -55,6 +55,8 @@ function orderNumberPrefix(slug: string): string {
 export interface CreateOrderItemInput {
   productId: string;
   quantity: number;
+  /** Phase 9: required when the product has more than one active variant. */
+  variantId?: string | null;
 }
 
 export interface CreateOrderInput {
@@ -139,14 +141,21 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
     throw new OrderError("Your cart is empty.", "EMPTY_CART");
   }
 
-  const quantities = new Map<string, number>();
+  // One line per product + variant (a variant-less line means "the product's only variant").
+  const quantities = new Map<string, { productId: string; variantId: string | null; quantity: number }>();
   for (const item of input.items) {
     if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 99) {
       throw new OrderError("Invalid item quantity.", "PRODUCT_UNAVAILABLE");
     }
-    quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+    const key = `${item.productId}:${item.variantId ?? ""}`;
+    const prev = quantities.get(key);
+    quantities.set(key, {
+      productId: item.productId,
+      variantId: item.variantId ?? null,
+      quantity: (prev?.quantity ?? 0) + item.quantity,
+    });
   }
-  const productIds = [...quantities.keys()];
+  const productIds = [...new Set([...quantities.values()].map((q) => q.productId))];
 
   return db.transaction(async (tx) => {
     const catalog = await tx
@@ -158,19 +167,25 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         trackInventory: products.trackInventory,
         variantId: productVariants.id,
         variantTitle: productVariants.title,
+        variantPrice: productVariants.price,
         stockQty: productVariants.stockQty,
+        hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
       })
       .from(products)
-      .leftJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(
+        productVariants,
+        and(eq(productVariants.productId, products.id), eq(productVariants.active, true))
+      )
       .where(and(eq(products.tenantId, tenant.id), inArray(products.id, productIds)))
-      // Deterministic "first variant" — must match products.ts, which keeps the
-      // same variant's price/stock in sync with the product.
-      .orderBy(asc(products.id), asc(productVariants.id));
+      // Deterministic "first variant" (position, id) — matches products.ts / variants.ts.
+      .orderBy(asc(products.id), asc(productVariants.position), asc(productVariants.id));
 
-    // one row per product (first/default variant wins)
-    const byProduct = new Map<string, (typeof catalog)[number]>();
+    // Active variants per product, display order (first = default).
+    const variantsByProduct = new Map<string, (typeof catalog)[number][]>();
     for (const row of catalog) {
-      if (!byProduct.has(row.id)) byProduct.set(row.id, row);
+      const list = variantsByProduct.get(row.id) ?? [];
+      list.push(row);
+      variantsByProduct.set(row.id, list);
     }
 
     let subtotalCentavos = 0;
@@ -183,27 +198,45 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       unitPriceCentavos: number;
     }> = [];
 
-    for (const [productId, quantity] of quantities) {
-      const row = byProduct.get(productId);
-      if (!row || row.status !== "active") {
+    const byProduct = new Map<string, (typeof catalog)[number]>();
+    for (const { productId, variantId, quantity } of quantities.values()) {
+      const rows = variantsByProduct.get(productId) ?? [];
+      const first = rows[0];
+      if (!first || first.status !== "active") {
         throw new OrderError(
           "One of the items in your cart is no longer available.",
           "PRODUCT_UNAVAILABLE"
         );
       }
+      let row = first;
+      if (variantId) {
+        const match = rows.find((r) => r.variantId === variantId);
+        if (!match) {
+          throw new OrderError(
+            `The option you picked for "${first.title}" is no longer available.`,
+            "PRODUCT_UNAVAILABLE"
+          );
+        }
+        row = match;
+      } else if (first.hasOptions && rows.length > 1) {
+        throw new OrderError(`Pick a size or option for "${first.title}".`, "PRODUCT_UNAVAILABLE");
+      }
+      byProduct.set(row.variantId ?? productId, row);
       if (row.trackInventory && row.variantId !== null && (row.stockQty ?? 0) < quantity) {
         throw new OrderError(
-          `Not enough stock for "${row.title}" (only ${row.stockQty ?? 0} left).`,
+          `Not enough stock for "${row.title}${row.hasOptions ? ` (${row.variantTitle})` : ""}" (only ${row.stockQty ?? 0} left).`,
           "OUT_OF_STOCK"
         );
       }
-      const unitPriceCentavos = toCentavos(row.basePrice);
+      // Products with options are priced per variant; single-variant products keep
+      // charging the product price (the default variant mirrors it).
+      const unitPriceCentavos = toCentavos(row.hasOptions && row.variantPrice != null ? row.variantPrice : row.basePrice);
       subtotalCentavos += unitPriceCentavos * quantity;
       lines.push({
         productId,
         variantId: row.variantId,
-        title: row.title,
-        variantTitle: row.variantTitle,
+        title: row.hasOptions && row.variantTitle ? `${row.title} (${row.variantTitle})` : row.title,
+        variantTitle: row.hasOptions ? row.variantTitle : null,
         quantity,
         unitPriceCentavos,
       });
@@ -450,7 +483,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
     // silently absorbs an oversell — both buyers succeed, stock clamps to 0, and
     // nothing surfaces the shortfall until someone goes to pack the order.
     for (const line of lines) {
-      const row = byProduct.get(line.productId);
+      const row = byProduct.get(line.variantId ?? line.productId);
       if (row?.trackInventory && line.variantId) {
         const decremented = await tx
           .update(productVariants)

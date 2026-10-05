@@ -46,6 +46,7 @@ function mergeSettings(
     social: patch.social ? { ...current?.social, ...patch.social } : current?.social,
     automations: patch.automations ? { ...current?.automations, ...patch.automations } : current?.automations,
     pos: patch.pos ? { ...current?.pos, ...patch.pos } : current?.pos,
+    inventory: patch.inventory ? { ...current?.inventory, ...patch.inventory } : current?.inventory,
     payments: patch.payments
       ? {
           ...current?.payments,

@@ -39,6 +39,20 @@ function mapDbTenantToDemo(
             servicePriceStyle: product.metadataJson.servicePriceStyle,
           }
         : undefined,
+      ...(product.options.length > 0 && product.variants.length > 0
+        ? {
+            options: product.options,
+            variants: product.variants.map((v) => ({
+              id: v.id,
+              title: v.title,
+              options: v.options,
+              price: Number(v.price),
+              compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+              image: v.imageUrl ?? undefined,
+              available: v.available,
+            })),
+          }
+        : {}),
     }))
     .sort((a, b) => Number(Boolean(b.isMain)) - Number(Boolean(a.isMain)));
 

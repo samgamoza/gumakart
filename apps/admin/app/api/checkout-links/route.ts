@@ -35,7 +35,13 @@ export async function GET() {
 const createSchema = z.object({
   title: z.string().max(120).optional(),
   items: z
-    .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().min(1).max(99) }))
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        variantId: z.string().uuid().nullish(),
+        quantity: z.number().int().min(1).max(99),
+      })
+    )
     .min(1)
     .max(CHECKOUT_LINK_MAX_ITEMS),
   shareChannel: z.enum(CHECKOUT_LINK_SHARE_CHANNELS).nullable().optional(),

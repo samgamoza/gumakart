@@ -96,7 +96,10 @@ export function ShopifyProductStage({
             </h1>
 
             <div className="mt-4 flex flex-wrap items-baseline gap-3">
-              <span className="text-2xl font-semibold md:text-3xl">{pricing.priceLine}</span>
+              <span className="text-2xl font-semibold md:text-3xl">
+                {product.variants && new Set(product.variants.map((v) => v.price)).size > 1 ? "From " : ""}
+                {pricing.priceLine}
+              </span>
               {pricing.compareAtLine && (
                 <span className="text-lg text-neutral-400 line-through">{pricing.compareAtLine}</span>
               )}

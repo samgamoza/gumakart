@@ -3,6 +3,7 @@ import { Inter, Space_Grotesk } from "next/font/google";
 import { getStorefrontTenant } from "@/lib/get-storefront-tenant";
 import { StorefrontTracking } from "@/components/storefront/storefront-tracking";
 import { StorefrontJsonLd } from "@/components/storefront/storefront-json-ld";
+import { VariantProductRegistry } from "@/components/storefront/variant-product-registry";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -28,6 +29,12 @@ export default async function TenantStorefrontLayout({ children, params }: Layou
   return (
     <div className={`${spaceGrotesk.variable} ${inter.variable}`}>
       {tenant && <StorefrontTracking tracking={tenant.storeSettings.tracking} />}
+      {tenant && (
+        <VariantProductRegistry
+          tenantSlug={tenant.slug}
+          products={tenant.products.filter((p) => p.variants?.length).map((p) => ({ id: p.id, slug: p.slug }))}
+        />
+      )}
       {tenant?.seo?.jsonLd &&
         Array.isArray(tenant.seo.jsonLd) &&
         tenant.seo.jsonLd.length > 0 && (

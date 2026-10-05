@@ -73,6 +73,14 @@ interface ProductRow {
   status: string;
   stockQty: number;
   imageUrl: string | null;
+  hasOptions?: boolean;
+}
+
+interface VariantChoice {
+  id: string;
+  title: string;
+  price: string;
+  stockQty: number;
 }
 
 // ─── Copy ────────────────────────────────────────────────────────────────────
@@ -104,7 +112,7 @@ function channelLabel(id: ShareChannel | null): string | null {
 
 /** Buyer-facing text: product names, never the seller's private link name. */
 function shareCaption(link: CheckoutLink, url: string): string {
-  const what = link.items.map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ""}${i.title}`).join(" + ");
+  const what = link.items.map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ""}${i.title}${i.variantTitle ? ` (${i.variantTitle})` : ""}`).join(" + ");
   return `${what}\nOrder here, no app or account needed: ${url}`;
 }
 
@@ -140,9 +148,9 @@ function Thumbs({ items }: { items: LinkItem[] }) {
   const shown = items.slice(0, 3);
   return (
     <div className="flex flex-none -space-x-3">
-      {shown.map((item) => (
+      {shown.map((item, i) => (
         <div
-          key={item.productId}
+          key={`${item.productId}:${i}`}
           className="h-12 w-12 overflow-hidden rounded-xl border-2 border-card bg-white/5"
         >
           {item.imageUrl ? (
@@ -333,7 +341,7 @@ export function CheckoutLinksManager() {
                     </div>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {link.items
-                        .map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ""}${i.title}`)
+                        .map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ""}${i.title}${i.variantTitle ? ` (${i.variantTitle})` : ""}`)
                         .join(" · ")}
                     </p>
                     <button
@@ -420,6 +428,9 @@ function CreateLinkPanel({
     () => new Map(preselectProduct ? [[preselectProduct, 1]] : [])
   );
   const [search, setSearch] = useState("");
+  // Phase 9: products with sizes/colours need one variant picked per line.
+  const [variantPick, setVariantPick] = useState<Map<string, string>>(() => new Map());
+  const [variantLists, setVariantLists] = useState<Map<string, VariantChoice[]>>(() => new Map());
   const [channel, setChannel] = useState<ShareChannel | null>(null);
   const [delivery, setDelivery] = useState<DeliveryMode>(options.pickupEnabled ? "both" : "delivery");
   const [payments, setPayments] = useState<Set<PaymentMethod>>(
@@ -451,10 +462,34 @@ function CreateLinkPanel({
     let sum = 0;
     for (const [id, qty] of selected) {
       const p = products?.find((x) => x.id === id);
-      if (p) sum += Number(p.basePrice) * qty;
+      const variant = variantLists.get(id)?.find((v) => v.id === variantPick.get(id));
+      if (variant) sum += Number(variant.price) * qty;
+      else if (p) sum += Number(p.basePrice) * qty;
     }
     return sum;
-  }, [selected, products]);
+  }, [selected, products, variantLists, variantPick]);
+
+  async function loadVariants(id: string) {
+    if (variantLists.has(id)) return;
+    try {
+      const res = await fetch(`/api/products/${id}/variants`, { cache: "no-store" });
+      const data = (await res.json()) as { ok: boolean; variants?: VariantChoice[] };
+      const list = data.ok ? (data.variants ?? []) : [];
+      setVariantLists((prev) => new Map(prev).set(id, list));
+      const first = list.find((v) => v.stockQty > 0) ?? list[0];
+      if (first) setVariantPick((prev) => (prev.has(id) ? prev : new Map(prev).set(id, first.id)));
+    } catch {
+      setVariantLists((prev) => new Map(prev).set(id, []));
+    }
+  }
+
+  // A product preselected from the Products page may have options.
+  useEffect(() => {
+    for (const id of selected.keys()) {
+      if (products?.find((p) => p.id === id)?.hasOptions) void loadVariants(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
 
   function toggleProduct(id: string) {
     setSelected((prev) => {
@@ -463,6 +498,7 @@ function CreateLinkPanel({
       else next.set(id, 1);
       return next;
     });
+    if (!selected.has(id) && products?.find((p) => p.id === id)?.hasOptions) void loadVariants(id);
   }
 
   function setQty(id: string, qty: number) {
@@ -481,6 +517,12 @@ function CreateLinkPanel({
   async function submit() {
     setError(null);
     if (selected.size === 0) return setError("Pick at least one product.");
+    const missingPick = [...selected.keys()].find(
+      (id) => products?.find((p) => p.id === id)?.hasOptions && !variantPick.get(id)
+    );
+    if (missingPick) {
+      return setError(`Pick a size or option for ${products?.find((p) => p.id === missingPick)?.title ?? "the product"}.`);
+    }
     if (payments.size === 0) return setError("Choose at least one way to pay.");
     setSaving(true);
     try {
@@ -490,7 +532,11 @@ function CreateLinkPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           title: title.trim() || undefined,
-          items: [...selected].map(([productId, quantity]) => ({ productId, quantity })),
+          items: [...selected].map(([productId, quantity]) => ({
+            productId,
+            quantity,
+            variantId: variantPick.get(productId) ?? null,
+          })),
           shareChannel: channel,
           allowQuantityEdit: allowQty,
           deliveryMode: delivery,
@@ -574,10 +620,27 @@ function CreateLinkPanel({
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium">{p.title}</span>
                         <span className="block text-xs text-muted-foreground">
+                          {p.hasOptions ? "From " : ""}
                           {formatPrice(Number(p.basePrice))} · {isActive ? `${p.stockQty} in stock` : "Draft, publish it first"}
                         </span>
                       </span>
                     </button>
+                    {on && p.hasOptions && (
+                      <select
+                        value={variantPick.get(p.id) ?? ""}
+                        onChange={(e) => setVariantPick((prev) => new Map(prev).set(p.id, e.target.value))}
+                        aria-label={`Size or option for ${p.title}`}
+                        className="h-9 max-w-[10rem] flex-none rounded-lg border border-white/10 bg-card px-2 text-sm"
+                      >
+                        {!variantLists.has(p.id) ? <option value="">Loading…</option> : null}
+                        {(variantLists.get(p.id) ?? []).map((v) => (
+                          <option key={v.id} value={v.id} disabled={v.stockQty <= 0}>
+                            {v.title} · {formatPrice(Number(v.price))}
+                            {v.stockQty <= 0 ? " · sold out" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {on && (
                       <div className="flex flex-none items-center gap-1 rounded-xl border border-white/10 p-0.5">
                         <button type="button" onClick={() => setQty(p.id, qty - 1)} className="rounded-lg p-1.5 hover:bg-white/10" aria-label="Less">

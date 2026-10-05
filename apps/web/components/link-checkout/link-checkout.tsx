@@ -21,6 +21,8 @@ export interface LinkCheckoutData {
   code: string;
   shop: { name: string; slug: string; logoUrl: string | null };
   items: Array<{
+    /** Line key: variantId, else productId. Quantities are keyed by this. */
+    key: string;
     productId: string;
     title: string;
     variantTitle: string | null;
@@ -75,7 +77,7 @@ type Errors = Partial<Record<"name" | "phone" | "email" | "method" | "form" | ke
 
 export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
-    Object.fromEntries(data.items.map((i) => [i.productId, Math.min(i.quantity, Math.max(1, i.maxQuantity))]))
+    Object.fromEntries(data.items.map((i) => [i.key, Math.min(i.quantity, Math.max(1, i.maxQuantity))]))
   );
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -95,7 +97,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   }, [data.code]);
 
   const subtotal = useMemo(
-    () => data.items.reduce((sum, i) => sum + i.price * (quantities[i.productId] ?? i.quantity), 0),
+    () => data.items.reduce((sum, i) => sum + i.price * (quantities[i.key] ?? i.quantity), 0),
     [data.items, quantities]
   );
 
@@ -174,8 +176,8 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
     return () => window.clearTimeout(timer);
   }, [phone, name, smsConsent, addressText, quantities, data.code, data.utm]);
 
-  function setQty(productId: string, next: number, max: number) {
-    setQuantities((q) => ({ ...q, [productId]: Math.max(1, Math.min(max, next)) }));
+  function setQty(key: string, next: number, max: number) {
+    setQuantities((q) => ({ ...q, [key]: Math.max(1, Math.min(max, next)) }));
   }
 
   function validate(): Errors {
@@ -277,10 +279,10 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       <section className="k-card order-1 m-3 divide-y divide-[color:var(--kart-line)] lg:mt-3">
         <p className="hidden px-4 pb-2 pt-3 text-xs font-bold uppercase tracking-wider text-[color:var(--kart-muted)] lg:block">Ang order mo</p>
         {data.items.map((item) => {
-          const qty = quantities[item.productId] ?? item.quantity;
+          const qty = quantities[item.key] ?? item.quantity;
           const soldOut = item.maxQuantity < 1;
           return (
-            <div key={item.productId} className="flex items-center gap-3 p-3">
+            <div key={item.key} className="flex items-center gap-3 p-3">
               <div className="h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-100 lg:h-20 lg:w-20">
                 {item.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -298,7 +300,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
                   <button
                     type="button"
                     aria-label={`Bawasan ang ${item.title}`}
-                    onClick={() => setQty(item.productId, qty - 1, item.maxQuantity)}
+                    onClick={() => setQty(item.key, qty - 1, item.maxQuantity)}
                     disabled={qty <= 1}
                     className="flex h-10 w-10 items-center justify-center disabled:opacity-30"
                   >
@@ -308,7 +310,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
                   <button
                     type="button"
                     aria-label={`Dagdagan ang ${item.title}`}
-                    onClick={() => setQty(item.productId, qty + 1, item.maxQuantity)}
+                    onClick={() => setQty(item.key, qty + 1, item.maxQuantity)}
                     disabled={qty >= item.maxQuantity}
                     className="flex h-10 w-10 items-center justify-center disabled:opacity-30"
                   >
@@ -325,7 +327,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       {/* Fees, always above the button */}
       <section className="order-3 m-3 mt-6 lg:mt-3">
         <div className="k-card grid gap-2 p-4 text-sm">
-          <Row label={`Items (${data.items.reduce((n, i) => n + (quantities[i.productId] ?? i.quantity), 0)})`} value={peso(totals.subtotal)} />
+          <Row label={`Items (${data.items.reduce((n, i) => n + (quantities[i.key] ?? i.quantity), 0)})`} value={peso(totals.subtotal)} />
           {totals.discount > 0 && <Row label={totals.discountLabel ?? "Discount"} value={`−${peso(totals.discount)}`} />}
           {totals.tax > 0 && <Row label="Tax" value={peso(totals.tax)} />}
           <Row

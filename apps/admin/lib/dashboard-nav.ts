@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Boxes,
   Bot,
   Calculator,
   Database,
@@ -87,6 +88,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         href: "/products",
         icon: Package,
         description: "Your catalog, photos, prices, and stock.",
+      },
+      {
+        id: "inventory",
+        label: "Stock",
+        href: "/inventory",
+        icon: Boxes,
+        badge: "new",
+        description: "Count stock, low-stock alerts, CSV import and export.",
       },
       {
         id: "categories",

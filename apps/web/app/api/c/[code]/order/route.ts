@@ -14,7 +14,7 @@ import { sanitizeUtm } from "@/lib/utm";
 const linkOrderSchema = checkoutSchema
   .omit({ tenantSlug: true, items: true, couponCode: true })
   .extend({
-    /** productId → quantity; only used when the link allows quantity changes. */
+    /** line key (variantId, else productId) → quantity; only used when the link allows quantity changes. */
     quantities: z.record(z.string().uuid(), z.number().int().min(1).max(99)).optional(),
     utm: z.record(z.string()).optional(),
   });
@@ -64,7 +64,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
 
     const items = link.items.map((item) => ({
       productId: item.productId,
-      qty: link.allowQuantityEdit ? (input.quantities?.[item.productId] ?? item.quantity) : item.quantity,
+      variantId: item.variantId,
+      qty: link.allowQuantityEdit
+        ? (input.quantities?.[item.variantId ?? item.productId] ?? input.quantities?.[item.productId] ?? item.quantity)
+        : item.quantity,
     }));
 
     const { quantities: _q, utm, ...rest } = input;

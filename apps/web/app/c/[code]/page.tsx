@@ -97,6 +97,7 @@ export default async function CheckoutLinkPage({ params, searchParams }: PagePro
     code: link.code,
     shop: { name: tenant.name, slug: tenant.slug, logoUrl: tenant.logoUrl },
     items: link.items.map((item) => ({
+      key: item.variantId ?? item.productId,
       productId: item.productId,
       title: item.title,
       variantTitle: item.variantTitle,
