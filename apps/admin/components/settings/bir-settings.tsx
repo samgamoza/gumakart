@@ -5,6 +5,7 @@ import { AlertTriangle, Download, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@gumakart/ui";
 import { SettingsCard } from "@/components/settings/settings-forms";
 import { useShopRole } from "@/lib/use-shop-role";
+import { OfflineInvoiceBlocks } from "@/components/settings/pos-offline-settings";
 
 /**
  * Phase 11 — BIR-ready POS. Off until the owner fills in the PTU details and switches it on.
@@ -285,6 +286,8 @@ export function BirSettingsCard() {
           </ul>
         )}
       </div>
+
+      {status.active && <OfflineInvoiceBlocks />}
 
       <div className="flex flex-wrap items-end gap-2 border-t border-border pt-4">
         <label className="text-xs text-muted-foreground">

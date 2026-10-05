@@ -698,6 +698,23 @@ export {
   type PosStaffRow,
   type ShiftSummary,
   type TenderTotals,
+  type PosOfflineInfo,
+  clampRungAt,
+  refreshClosedShift,
 } from "./queries/pos";
+export {
+  OFFLINE_BLOCK_SIZE,
+  PosOfflineError,
+  getOrReserveInvoiceBlock,
+  listInvoiceBlocks,
+  releaseInvoiceBlock,
+  listSyncIssues,
+  countOpenSyncIssues,
+  resolveSyncIssue,
+  recordRejectedOfflineSale,
+  type InvoiceBlock,
+  type InvoiceBlockRow,
+  type PosSyncIssue,
+} from "./queries/pos-offline";
 export * from "./types/pos-tax";
 export { getPlatformMetrics, type PlatformMetrics } from "./queries/platform-metrics";

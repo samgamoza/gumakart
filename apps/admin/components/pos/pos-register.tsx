@@ -19,7 +19,11 @@ import {
   ShoppingCart,
   Smartphone,
   Trash2,
+  Wifi,
+  WifiOff,
   X,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import {
   checkTenders,
@@ -31,6 +35,24 @@ import {
   type VatConfig,
 } from "@gumakart/db/pos-tax";
 import { productImageSrc } from "@/lib/product-image";
+import {
+  blockRemaining,
+  cacheProducts,
+  cacheRegister,
+  cachedProducts,
+  cachedState,
+  clearBlock,
+  deviceBlock,
+  deviceId,
+  enqueue,
+  ensureBlock,
+  lastShop,
+  outbox,
+  OUTBOX_WARN_AT,
+  storageWorks,
+  syncOutbox,
+  takeInvoiceNumber,
+} from "@/lib/pos-offline";
 
 // ─── Types (API shapes) ──────────────────────────────────────────────────────
 
@@ -120,7 +142,7 @@ interface State {
   ok: boolean;
   error?: string;
   code?: string;
-  actor: { name: string; role: "owner" | "manager" | "cashier"; isStaff: boolean };
+  actor: { name: string; role: "owner" | "manager" | "cashier"; isStaff: boolean; staffId?: string | null };
   shop: { name: string; slug: string };
   shift: Shift | null;
   summary: Summary | null;
@@ -128,6 +150,9 @@ interface State {
   vat: VatConfig;
   wallets: { gcash: boolean; maya: boolean };
   deviceRegistered: boolean;
+  /** Phase 12b: BIR receipt header when numbering is on (offline receipts need it). */
+  bir?: (NonNullable<Receipt["bir"]> & { invoicePrefix?: string }) | null;
+  offlineIssues?: number;
 }
 
 interface Receipt {
@@ -161,6 +186,11 @@ interface Receipt {
   } | null;
   voided?: boolean;
   refunded?: number;
+  /** Phase 12b: rung offline (synced or not). */
+  offline?: boolean;
+  /** Still only on this device. */
+  pendingSync?: boolean;
+  syncIssues?: number;
 }
 
 interface ReturnLine {
@@ -266,7 +296,7 @@ function ReceiptView({ r, vat }: { r: Receipt; vat: VatConfig }) {
       ) : (
         <p className="text-center text-sm font-bold">{r.shopName}</p>
       )}
-      <p className="text-center">Sale #{r.orderNumber}</p>
+      {r.pendingSync ? <p className="text-center">Sale # (sent when online)</p> : <p className="text-center">Sale #{r.orderNumber}</p>}
       <p className="text-center">{when}</p>
       <p className="text-center">Cashier: {r.cashierName}</p>
       <hr className="my-2 border-dashed border-black/40" />
@@ -337,6 +367,7 @@ function ReceiptView({ r, vat }: { r: Receipt; vat: VatConfig }) {
       )}
       <hr className="my-2 border-dashed border-black/40" />
       {(r.refunded ?? 0) > 0 && !r.voided && <p className="text-center text-[11px]">Refunded: {peso(r.refunded ?? 0)}</p>}
+      {r.offline && <p className="text-center text-[10px]">Rung offline{r.pendingSync ? " · saved on this register" : ""}</p>}
       <p className="text-center">Salamat po!</p>
       {r.bir ? (
         <>
@@ -348,6 +379,133 @@ function ReceiptView({ r, vat }: { r: Receipt; vat: VatConfig }) {
         <p className="text-center text-[10px]">This is not an official receipt.</p>
       )}
     </div>
+  );
+}
+
+// ─── Offline helpers ─────────────────────────────────────────────────────────
+
+interface SaleItemBody {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  unitPrice?: number;
+}
+
+/** Take sold units off the device's product list (offline sales; the server does it on sync). */
+function takeStockLocally(products: Product[], items: SaleItemBody[]): Product[] {
+  if (!items.length) return products;
+  return products.map((p) => {
+    const mine = items.filter((i) => i.productId === p.id);
+    if (!mine.length || !p.trackInventory) return p;
+    const sold = mine.reduce((n, i) => n + i.quantity, 0);
+    const variants = p.variants?.map((v) => {
+      const q = mine.filter((i) => i.variantId === v.id).reduce((n, i) => n + i.quantity, 0);
+      return q ? { ...v, stockQty: Math.max(v.stockQty - q, 0) } : v;
+    });
+    const simpleSold = p.hasOptions ? 0 : sold;
+    return {
+      ...p,
+      variants,
+      stockQty: p.stockQty === null ? null : p.hasOptions ? (variants ?? []).reduce((n, v) => n + v.stockQty, 0) : Math.max(p.stockQty - simpleSold, 0),
+    };
+  });
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** Header pill: online / offline / sales waiting to be sent. */
+function SyncPill({ online, pending, syncing, onSync }: { online: boolean; pending: number; syncing: boolean; onSync: () => void }) {
+  if (online && pending === 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300" data-testid="pos-net">
+        <Wifi className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Online</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onSync}
+      disabled={syncing || !online}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${online ? "bg-violet-500/20 text-violet-200" : "bg-amber-500/15 text-amber-200"}`}
+      data-testid="pos-net"
+      title={online ? "Send waiting sales now" : "No internet — sales are saved on this device"}
+    >
+      {online ? <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} /> : <WifiOff className="h-3.5 w-3.5" />}
+      <span className="hidden sm:inline">{online ? "Sending" : "Offline"}</span>
+      {pending > 0 && <span className="rounded-full bg-black/30 px-1.5" data-testid="pos-pending">{pending}</span>}
+    </button>
+  );
+}
+
+/** Managers: offline sales the server flagged (stock short, price changed, …). */
+function OfflineIssuesModal({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const [issues, setIssues] = useState<Array<{ id: string; kind: string; message: string; createdAt: string; detail: Record<string, unknown> | null }> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const loadIssues = useCallback(async () => {
+    const r = await api<{ issues: Array<{ id: string; kind: string; message: string; createdAt: string; detail: Record<string, unknown> | null }> }>("/api/pos/offline/issues");
+    if (r.ok) setIssues(r.issues);
+    else setError(r.error ?? "Could not load.");
+  }, []);
+  useEffect(() => {
+    void loadIssues();
+  }, [loadIssues]);
+  const LABEL: Record<string, string> = {
+    stock_short: "Stock ran short",
+    price_changed: "Price changed",
+    unavailable: "Item no longer for sale",
+    invoice_reassigned: "Invoice no. changed",
+    closed_shift: "After shift close",
+    after_z: "After Z reading",
+    rejected: "Not saved as a sale",
+  };
+  return (
+    <Modal title="Offline sales to check" onClose={onClose}>
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      {!issues ? (
+        <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+      ) : issues.length === 0 ? (
+        <p className="py-6 text-center text-sm text-slate-400">All checked.</p>
+      ) : (
+        <ul className="space-y-2" data-testid="pos-issues">
+          {issues.map((i) => (
+            <li key={i.id} className="rounded-xl border border-white/10 p-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">{LABEL[i.kind] ?? i.kind}</p>
+              <p className="mt-1">{i.message}</p>
+              {i.kind === "rejected" && i.detail && (
+                <details className="mt-1 text-xs text-slate-400">
+                  <summary className="cursor-pointer">What was sold</summary>
+                  <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap">{JSON.stringify({ items: i.detail.items, tenders: i.detail.tenders, customer: i.detail.customer }, null, 1)}</pre>
+                </details>
+              )}
+              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                <span>{new Date(i.createdAt).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })}</span>
+                <button
+                  type="button"
+                  className="rounded-lg border border-white/15 px-3 py-1 font-semibold text-slate-200"
+                  onClick={async () => {
+                    const r = await api("/api/pos/offline/issues", { method: "POST", body: JSON.stringify({ id: i.id }) });
+                    if (r.ok) {
+                      setIssues((list) => (list ?? []).filter((x) => x.id !== i.id));
+                      onChanged();
+                    }
+                  }}
+                >
+                  Checked
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
   );
 }
 
@@ -364,34 +522,134 @@ export function PosRegister() {
   const [discountType, setDiscountType] = useState<PosDiscountType>("none");
   const [holder, setHolder] = useState({ name: "", idNumber: "" });
   const [notice, setNotice] = useState<string | null>(null);
-  const [modal, setModal] = useState<null | "pay" | "receipt" | "close" | "sales" | "cart">(null);
+  const [modal, setModal] = useState<null | "pay" | "receipt" | "close" | "sales" | "cart" | "issues">(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [receiptFromHistory, setReceiptFromHistory] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Phase 12b: offline mode.
+  const [online, setOnline] = useState(true);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [pending, setPending] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+  const [canStore, setCanStore] = useState(true);
+  const [blockLeft, setBlockLeft] = useState<number | null>(null);
+  const shopRef = useRef<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<boolean> => {
     const data = await api<State>("/api/pos/state");
     if (!data.ok) {
       if (data.code === "POS_LOCKED") {
         router.replace("/pos/login");
-        return;
+        return false;
+      }
+      if (data.code === "NETWORK") {
+        // No internet: open the register from what this device saved last time.
+        const shop = shopRef.current ?? lastShop();
+        const cached = shop ? cachedState<State>(shop) : null;
+        if (cached) {
+          shopRef.current = shop;
+          setOnline(false);
+          setCachedAt(cached.savedAt);
+          setState((prev) => prev ?? cached.state);
+          setPending(outbox(shop!).length);
+          setBlockLeft(cached.state.bir ? blockRemaining(deviceBlock(shop!)) : null);
+          setLoadError(null);
+          return false;
+        }
       }
       setLoadError(data.error ?? "Could not load the register.");
-      return;
+      return false;
     }
+    const shop = data.shop.slug;
+    shopRef.current = shop;
     setLoadError(null);
+    setOnline(true);
+    setCachedAt(null);
     setState(data);
+    cacheRegister(shop, data);
+    setPending(outbox(shop).length);
+    if (data.bir) {
+      void ensureBlock(shop, data.bir.invoicePrefix ?? "").then((b) => setBlockLeft(blockRemaining(b)));
+    } else {
+      if (outbox(shop).length === 0) clearBlock(shop);
+      setBlockLeft(null);
+    }
+    return true;
   }, [router]);
 
   const loadProducts = useCallback(async () => {
     const data = await api<{ products: Product[] }>("/api/pos/products");
-    if (data.ok) setProducts(data.products);
+    const shop = shopRef.current;
+    if (data.ok) {
+      // Sales still waiting to sync already took stock on this device.
+      const waiting = shop ? outbox<Receipt>(shop) : [];
+      const list = waiting.reduce((ps, sale) => takeStockLocally(ps, (sale.body.items ?? []) as SaleItemBody[]), data.products);
+      setProducts(list);
+      if (shop) cacheProducts(shop, list);
+    } else if (data.code === "NETWORK" && shop) {
+      const cached = cachedProducts<Product>(shop);
+      if (cached) setProducts((prev) => (prev.length ? prev : cached));
+    }
   }, []);
 
-  useEffect(() => {
-    void load();
-    void loadProducts();
+  const runSync = useCallback(async () => {
+    const shop = shopRef.current;
+    if (!shop || outbox(shop).length === 0) return;
+    setSyncing(true);
+    const r = await syncOutbox(shop);
+    setSyncing(false);
+    setPending(r.remaining);
+    if (r.stop === "offline") setOnline(false);
+    if (r.stop === "locked") setSyncMsg({ text: "Unlock the register with a PIN to send the waiting sales.", tone: "warn" });
+    else if (r.stop === "error") setSyncMsg({ text: "A waiting sale couldn't be sent yet. It will retry; tell the owner if this stays.", tone: "warn" });
+    if (r.synced || r.parked) {
+      const parts = [`${r.synced} offline sale${r.synced === 1 ? "" : "s"} sent.`];
+      if (r.flagged) parts.push(`${r.flagged} need${r.flagged === 1 ? "s" : ""} a look (stock or price changed).`);
+      if (r.parked) parts.push(`${r.parked} couldn't be saved as a sale and ${r.parked === 1 ? "was" : "were"} kept for the owner.`);
+      setSyncMsg({ text: parts.join(" "), tone: r.flagged || r.parked ? "warn" : "ok" });
+      setNotice(null);
+      await load();
+      await loadProducts();
+    }
   }, [load, loadProducts]);
+
+  useEffect(() => {
+    setCanStore(storageWorks());
+    void (async () => {
+      const ok = await load();
+      await loadProducts();
+      if (ok) void runSync();
+    })();
+    // Keep the register usable when the internet drops (production builds only — the
+    // dev server's files change on every edit).
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pos-sw.js", { scope: "/pos" }).catch(() => undefined);
+    }
+  }, [load, loadProducts, runSync]);
+
+  // Back online → send waiting sales. Also check every 20s (navigator.onLine can lie).
+  useEffect(() => {
+    const goOnline = () => {
+      void load().then((ok) => {
+        if (ok) {
+          void loadProducts();
+          void runSync();
+        }
+      });
+    };
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    const timer = window.setInterval(() => {
+      if (!online || pending > 0) goOnline();
+    }, 20_000);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+      window.clearInterval(timer);
+    };
+  }, [online, pending, load, loadProducts, runSync]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -490,6 +748,82 @@ export function PosRegister() {
     router.replace("/pos/login");
   }
 
+  /**
+   * No internet: save the sale on this device and print it. The cash is in the drawer and
+   * the goods are with the buyer; the server records it when the internet is back.
+   */
+  function saveOffline(
+    current: State,
+    body: Record<string, unknown>,
+    tenders: Array<{ method: PosTenderMethod; amount: number; reference?: string }>,
+    customer: { name?: string; phone?: string } | undefined,
+    key: string
+  ): string | null {
+    const shop = shopRef.current;
+    if (!shop || !current.shift) return "Open the register while online first.";
+    if (!canStore) return "This browser can't keep sales offline (private mode or blocked storage). Connect to the internet to continue.";
+    const check = checkTenders(totals.total, tenders);
+    if (!check.ok) return check.error;
+    if (discountType !== "none" && !holder.idNumber.trim()) return "Enter the Senior/PWD ID number for the discount.";
+    let invoiceNumber: string | null = null;
+    if (current.bir) {
+      invoiceNumber = takeInvoiceNumber(shop);
+      if (!invoiceNumber) return "No offline invoice numbers left on this register. Connect to the internet to keep selling.";
+      setBlockLeft(blockRemaining(deviceBlock(shop)));
+    }
+    const now = new Date();
+    const items: SaleItemBody[] = cart.map((l) => ({ productId: l.product.productId, variantId: l.product.variantId, quantity: l.qty, unitPrice: l.product.price }));
+    const receiptLocal: Receipt = {
+      orderId: `offline-${key}`,
+      orderNumber: "",
+      createdAt: now.toISOString(),
+      shopName: current.shop.name,
+      cashierName: current.actor.name,
+      items: cart.map((l) => ({ title: l.product.title, quantity: l.qty, unitPrice: l.product.price, lineTotal: Math.round(l.product.price * l.qty * 100) / 100 })),
+      totals,
+      discountType,
+      discountHolder: discountType !== "none" ? { name: holder.name.trim() || null, idNumberLast4: holder.idNumber.replace(/\s/g, "").slice(-4) || null } : null,
+      tenders: tenders.map((t) => ({ method: t.method, amount: t.amount, reference: t.reference ?? null })),
+      change: check.change,
+      customer: { name: customer?.name ?? null, phone: customer?.phone ?? null },
+      invoiceNumber,
+      bir: current.bir ?? null,
+      voided: false,
+      refunded: 0,
+      offline: true,
+      pendingSync: true,
+    };
+    const saved = enqueue(shop, {
+      key,
+      body: {
+        ...body,
+        items,
+        offline: {
+          rungAt: now.toISOString(),
+          shiftId: current.shift.id,
+          deviceId: deviceId(),
+          invoiceNumber,
+          totals,
+          staffId: current.actor.staffId ?? null,
+          cashierName: current.actor.name,
+        },
+      },
+      receipt: receiptLocal,
+      queuedAt: now.toISOString(),
+      attempts: 0,
+    });
+    if (!saved) return "This device couldn't save the sale (storage full). Connect to the internet before completing it.";
+    setProducts((ps) => {
+      const next = takeStockLocally(ps, items);
+      cacheProducts(shop, next);
+      return next;
+    });
+    setPending(outbox(shop).length);
+    setReceipt(receiptLocal);
+    setModal("receipt");
+    return null;
+  }
+
   if (loadError) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0A0F1D] p-6 text-slate-100">
@@ -538,6 +872,7 @@ export function PosRegister() {
             {state.shift ? ` · shift since ${new Date(state.shift.openedAt).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}` : ""}
           </p>
         </div>
+        <SyncPill online={online} pending={pending} syncing={syncing} onSync={() => void runSync()} />
         {state.shift && (
           <>
             <button type="button" className={`${btnGhost} px-3`} onClick={() => setModal("sales")}>
@@ -545,20 +880,65 @@ export function PosRegister() {
               <span className="hidden sm:inline">Sales</span>
               <span className="rounded-full bg-white/10 px-1.5 text-xs">{state.summary?.sales ?? 0}</span>
             </button>
-            <button type="button" className={`${btnGhost} px-3`} onClick={() => setModal("close")}>
+            <button
+              type="button"
+              className={`${btnGhost} px-3`}
+              onClick={() => {
+                if (pending > 0) return setNotice(`Send the ${pending} waiting sale${pending === 1 ? "" : "s"} first — closing the shift needs them counted.`);
+                if (!online) return setNotice("Closing a shift needs internet.");
+                setModal("close");
+              }}
+            >
               Close shift
             </button>
           </>
         )}
         {(state.actor.isStaff || state.deviceRegistered) && (
-          <button type="button" className={`${btnGhost} px-3`} onClick={() => void lock()} aria-label="Lock register">
+          <button type="button" className={`${btnGhost} px-3`} onClick={() => void lock()} aria-label="Lock register" disabled={!online} title={online ? undefined : "Locking needs internet (unlocking checks the PIN)"}>
             <Lock className="h-4 w-4" />
             <span className="hidden sm:inline">Lock</span>
           </button>
         )}
       </header>
 
-      {isOwner && !state.deviceRegistered && (
+      {!online && (
+        <div className="mx-3 mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm sm:mx-4" data-testid="pos-offline-banner">
+          <p className="flex items-center gap-2 font-semibold text-amber-200">
+            <WifiOff className="h-4 w-4" /> No internet — keep selling
+          </p>
+          <p className="mt-1 text-slate-300">
+            Sales are saved on this device and sent automatically when you&apos;re back online.
+            {cachedAt ? ` Prices and stock are as of ${timeAgo(cachedAt)}.` : ""}
+            {state.bir ? ` ${blockLeft ?? 0} offline invoice number${blockLeft === 1 ? "" : "s"} left.` : ""}
+          </p>
+          {!canStore && <p className="mt-1 font-semibold text-red-300">This browser can&apos;t save sales offline (private mode or blocked storage).</p>}
+          {pending >= OUTBOX_WARN_AT && <p className="mt-1 font-semibold text-amber-200">{pending} sales waiting — connect soon.</p>}
+        </div>
+      )}
+      {syncMsg && (
+        <div className={`mx-3 mt-3 flex items-start gap-2 rounded-xl p-3 text-sm sm:mx-4 ${syncMsg.tone === "ok" ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"}`} data-testid="pos-sync-msg">
+          <p className="min-w-0 flex-1">{syncMsg.text}</p>
+          <button type="button" onClick={() => setSyncMsg(null)} aria-label="Dismiss" className="text-slate-400">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {online && (state.actor.role === "owner" || state.actor.role === "manager") && (state.offlineIssues ?? 0) > 0 && (
+        <button
+          type="button"
+          onClick={() => setModal("issues")}
+          className="mx-3 mt-3 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-left text-sm text-amber-100 sm:mx-4 sm:w-[calc(100%-2rem)]"
+          data-testid="pos-issues-banner"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            {state.offlineIssues} offline sale{state.offlineIssues === 1 ? "" : "s"} need{state.offlineIssues === 1 ? "s" : ""} a look (stock, price or invoice changed).
+          </span>
+          <span className="font-semibold underline">Check</span>
+        </button>
+      )}
+
+      {isOwner && !state.deviceRegistered && online && (
         <div className="mx-3 mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-violet-400/30 bg-violet-500/10 p-3 text-sm sm:mx-4">
           <p className="min-w-0 flex-1">
             Let your staff use this phone or tablet with their own PIN — they won&apos;t see the rest of your dashboard (when a cashier unlocks it,
@@ -627,7 +1007,7 @@ export function PosRegister() {
                         data-testid="pos-product"
                       >
                         <div className="aspect-[4/3] w-full bg-white/5">
-                          {p.imageUrl ? (
+                          {p.imageUrl && online ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={productImageSrc(p.imageUrl)} alt="" className="h-full w-full object-cover" loading="lazy" />
                           ) : (
@@ -743,35 +1123,43 @@ export function PosRegister() {
           total={totals.total}
           wallets={state.wallets}
           onClose={() => setModal(null)}
+          offline={!online}
           submit={async (tenders, customer, key) => {
-            const r = await api<{ receipt: Receipt }>("/api/pos/sales", {
-              method: "POST",
-              body: JSON.stringify({
-                idempotencyKey: key,
-                items: cart.map((l) => ({ productId: l.product.productId, variantId: l.product.variantId, quantity: l.qty })),
-                discountType,
-                discountHolder: discountType !== "none" ? holder : undefined,
-                tenders,
-                customer,
-              }),
-            });
-            if (!r.ok) return r.error ?? "Could not save the sale.";
-            setReceipt(r.receipt);
-            setModal("receipt");
-            void load();
-            void loadProducts();
-            return null;
+            const body = {
+              idempotencyKey: key,
+              items: cart.map((l) => ({ productId: l.product.productId, variantId: l.product.variantId, quantity: l.qty })),
+              discountType,
+              discountHolder: discountType !== "none" ? holder : undefined,
+              tenders,
+              customer,
+            };
+            // Waiting offline sales go first so the server sees them in order.
+            const shop = shopRef.current;
+            if (online && shop && outbox(shop).length > 0) await runSync();
+            if (online && (!shop || outbox(shop).length === 0)) {
+              const r = await api<{ receipt: Receipt }>("/api/pos/sales", { method: "POST", body: JSON.stringify(body) });
+              if (r.ok) {
+                setReceipt(r.receipt);
+                setModal("receipt");
+                void load();
+                void loadProducts();
+                return null;
+              }
+              if (r.code !== "NETWORK") return r.error ?? "Could not save the sale.";
+              setOnline(false);
+            }
+            return saveOffline(state, body, tenders, customer, key);
           }}
         />
       )}
 
       {modal === "receipt" && receipt && (
-        <Modal title={receipt.duplicate ? "Sale already saved" : "Sale complete"} wide>
+        <Modal title={receipt.pendingSync ? "Sale saved on this device" : receipt.duplicate ? "Sale already saved" : "Sale complete"} wide>
           <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
             <ReceiptView r={receipt} vat={state.vat} />
             <div className="space-y-4">
               <ReceiptActions receipt={receipt} onNewSale={resetSale} />
-              {receiptFromHistory && (state.actor.role === "owner" || state.actor.role === "manager") && !receipt.voided && (
+              {receiptFromHistory && online && !receipt.pendingSync && (state.actor.role === "owner" || state.actor.role === "manager") && !receipt.voided && (
                 <SaleManage
                   receipt={receipt}
                   onDone={async (msg) => {
@@ -790,6 +1178,12 @@ export function PosRegister() {
 
       {modal === "sales" && state.shift && (
         <SalesModal
+          queued={shopRef.current ? outbox<Receipt>(shopRef.current).map((q) => q.receipt) : []}
+          onOpenQueued={(r) => {
+            setReceipt(r);
+            setReceiptFromHistory(true);
+            setModal("receipt");
+          }}
           sales={state.sales}
           summary={state.summary}
           onClose={() => setModal(null)}
@@ -801,6 +1195,13 @@ export function PosRegister() {
               setModal("receipt");
             }
           }}
+        />
+      )}
+
+      {modal === "issues" && (
+        <OfflineIssuesModal
+          onClose={() => setModal(null)}
+          onChanged={() => setState((st) => (st ? { ...st, offlineIssues: Math.max((st.offlineIssues ?? 1) - 1, 0) } : st))}
         />
       )}
 
@@ -969,9 +1370,11 @@ function PayModal({
   wallets,
   onClose,
   submit,
+  offline,
 }: {
   total: number;
   wallets: { gcash: boolean; maya: boolean };
+  offline?: boolean;
   onClose: () => void;
   submit: (
     tenders: Array<{ method: PosTenderMethod; amount: number; reference?: string }>,
@@ -1093,6 +1496,11 @@ function PayModal({
           )}
         </div>
         {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
+        {offline && (
+          <p className="flex items-center gap-2 text-xs text-amber-200">
+            <WifiOff className="h-3.5 w-3.5" /> Offline: this sale is saved on the register and sent later. For GCash/Maya/card, check the payment on your phone or terminal.
+          </p>
+        )}
         <button
           type="button"
           className={`${btnPrimary} w-full py-3 text-base`}
@@ -1131,6 +1539,11 @@ function ReceiptActions({ receipt, onNewSale }: { receipt: Receipt; onNewSale: (
       <button type="button" className={`${btnGhost} w-full`} onClick={() => window.print()}>
         <Printer className="h-4 w-4" /> Print receipt
       </button>
+      {receipt.pendingSync ? (
+        <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-200" data-testid="pos-offline-saved">
+          Saved on this register. It&apos;s sent to Guma Kart automatically when the internet is back — texting the receipt works after that.
+        </p>
+      ) : (
       <div className="space-y-2">
         <input className="guma-field h-10" placeholder="09XX XXX XXXX" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="Buyer mobile" />
         <button
@@ -1147,6 +1560,7 @@ function ReceiptActions({ receipt, onNewSale }: { receipt: Receipt; onNewSale: (
         </button>
         {sms.msg && <p className={`text-xs ${sms.ok ? "text-emerald-300" : "text-amber-300"}`}>{sms.msg}</p>}
       </div>
+      )}
       <button type="button" className={`${btnPrimary} w-full py-3`} onClick={onNewSale} autoFocus data-testid="pos-new-sale">
         New sale
       </button>
@@ -1271,9 +1685,42 @@ function SaleManage({ receipt, onDone }: { receipt: Receipt; onDone: (msg: strin
   );
 }
 
-function SalesModal({ sales, summary, onClose, onOpen }: { sales: SaleRow[]; summary: Summary | null; onClose: () => void; onOpen: (id: string) => void }) {
+function SalesModal({
+  sales,
+  summary,
+  onClose,
+  onOpen,
+  queued,
+  onOpenQueued,
+}: {
+  sales: SaleRow[];
+  summary: Summary | null;
+  onClose: () => void;
+  onOpen: (id: string) => void;
+  queued: Receipt[];
+  onOpenQueued: (r: Receipt) => void;
+}) {
   return (
     <Modal title="This shift's sales" onClose={onClose}>
+      {queued.length > 0 && (
+        <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/5 p-2">
+          <p className="px-1 text-xs font-semibold text-amber-200">Waiting to send ({queued.length}) — not in the totals yet</p>
+          <ul className="divide-y divide-white/10" data-testid="pos-queued">
+            {[...queued].reverse().map((r) => (
+              <li key={r.orderId}>
+                <button type="button" className="flex w-full items-center gap-3 py-2 text-left text-sm" onClick={() => onOpenQueued(r)}>
+                  <span className="w-16 text-xs text-slate-400">{new Date(r.createdAt).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}</span>
+                  <span className="min-w-0 flex-1">
+                    {r.invoiceNumber ? `No. ${r.invoiceNumber}` : "Offline sale"} · {r.items.reduce((n, i) => n + i.quantity, 0)} item(s)
+                    <span className="block text-xs text-slate-500">{r.cashierName}</span>
+                  </span>
+                  <span className="font-semibold">{peso(r.totals.total)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {summary && (
         <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-xl bg-white/5 p-3">

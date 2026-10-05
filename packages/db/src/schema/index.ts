@@ -679,6 +679,9 @@ export const orders = pgTable(
     invoiceNumber: varchar("invoice_number", { length: 32 }),
     /** Phase 12: the Guma ID buyer who placed it (verified mobile matched the order). */
     buyerAccountId: uuid("buyer_account_id").references((): AnyPgColumn => buyerAccounts.id, { onDelete: "set null" }),
+    /** Phase 12b: POS sale rung while the register was offline (device clock), synced later. */
+    posOfflineAt: timestamp("pos_offline_at", { withTimezone: true }),
+    posDeviceId: varchar("pos_device_id", { length: 40 }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -1786,6 +1789,61 @@ export const posZReadings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("pos_z_readings_number_idx").on(table.registerId, table.zNumber)]
+);
+
+// ─── Phase 12b: POS offline ──────────────────────────────────────────────────
+
+/** BIR on: invoice numbers reserved by one device for receipts printed while offline. */
+export const posInvoiceBlocks = pgTable(
+  "pos_invoice_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    registerId: uuid("register_id")
+      .references(() => registers.id, { onDelete: "cascade" })
+      .notNull(),
+    deviceId: varchar("device_id", { length: 40 }).notNull(),
+    prefix: varchar("prefix", { length: 12 }).default("").notNull(),
+    startNo: bigint("start_no", { mode: "number" }).notNull(),
+    endNo: bigint("end_no", { mode: "number" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releasedByName: varchar("released_by_name", { length: 80 }),
+  },
+  (table) => [index("pos_invoice_blocks_device_idx").on(table.tenantId, table.registerId, table.deviceId)]
+);
+
+export const POS_SYNC_ISSUE_KINDS = [
+  "stock_short",
+  "price_changed",
+  "unavailable",
+  "invoice_reassigned",
+  "closed_shift",
+  "after_z",
+  "rejected",
+] as const;
+export type PosSyncIssueKind = (typeof POS_SYNC_ISSUE_KINDS)[number];
+
+/** What an offline sale needs the owner to look at after it synced. */
+export const posSyncIssues = pgTable(
+  "pos_sync_issues",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    idempotencyKey: varchar("idempotency_key", { length: 64 }).notNull(),
+    kind: varchar("kind", { length: 24 }).$type<PosSyncIssueKind>().notNull(),
+    message: varchar("message", { length: 300 }).notNull(),
+    detailJson: jsonb("detail_json").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedByName: varchar("resolved_by_name", { length: 80 }),
+  },
+  (table) => [index("pos_sync_issues_open_idx").on(table.tenantId, table.createdAt)]
 );
 
 // ─── Phase 12: Guma ID ───────────────────────────────────────────────────────

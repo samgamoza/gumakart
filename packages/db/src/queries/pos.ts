@@ -10,9 +10,12 @@ import {
   productImages,
   productVariants,
   products,
+  posInvoiceCounters,
+  posSyncIssues,
   registerSessions,
   registers,
   tenants,
+  type PosSyncIssueKind,
 } from "../schema/index";
 import { getDefaultLocationId } from "./locations";
 import { insertOutboxEvent } from "./outbox";
@@ -21,6 +24,7 @@ import { OrderError } from "./order-status";
 import { recordStockMovement } from "./stock-ledger";
 import { shiftRefundsByMethod } from "./after-sale";
 import { birActive, getBirReceiptHeader, nextInvoiceNumberInTx } from "./bir";
+import { claimOfflineInvoiceInTx } from "./pos-offline";
 import type { TenantBirSettings } from "../types/tenant-settings";
 import {
   checkTenders,
@@ -545,12 +549,28 @@ export interface PosSaleInput {
   userId: string | null;
   cashierName: string;
   idempotencyKey: string;
-  items: Array<{ productId: string; quantity: number; variantId?: string | null }>;
+  items: Array<{ productId: string; quantity: number; variantId?: string | null; unitPrice?: number | null }>;
   discountType: PosDiscountType;
   /** Senior/PWD: name and ID number on the card (kept for the seller's records). */
   discountHolder?: { name?: string | null; idNumber?: string | null } | null;
   tenders: PosTender[];
   customer?: { name?: string | null; phone?: string | null } | null;
+  /**
+   * Phase 12b: the sale was rung while the register was offline and is being synced now.
+   * The money and goods already changed hands, so the server records it even when stock
+   * ran short or a price changed meanwhile, and files a sync issue for the owner instead.
+   */
+  offline?: PosOfflineInfo | null;
+}
+
+export interface PosOfflineInfo {
+  /** Device clock when it was rung (clamped into the shift). */
+  rungAt: Date;
+  deviceId: string;
+  /** BIR on: the number printed on the offline receipt (from the device's reserved block). */
+  invoiceNumber?: string | null;
+  /** What the device computed and printed. Used when the shop's VAT settings changed meanwhile. */
+  totals?: SaleTotals | null;
 }
 
 export interface PosReceipt {
@@ -572,6 +592,10 @@ export interface PosReceipt {
   bir: (TenantBirSettings & { vatRegistered: boolean }) | null;
   voided: boolean;
   refunded: number;
+  /** Phase 12b: rung offline and synced later. */
+  offline: boolean;
+  /** Sync issues filed while saving this sale (offline only). */
+  syncIssues?: number;
 }
 
 export interface PosMeta {
@@ -620,6 +644,7 @@ export async function getPosReceipt(tenantId: string, orderId: string): Promise<
     bir: row.order.invoiceNumber ? await getBirReceiptHeader(tenantId) : null,
     voided: Boolean(row.order.voidedAt),
     refunded: Number(row.order.refundedAmount ?? 0),
+    offline: Boolean(row.order.posOfflineAt),
   };
 }
 
@@ -670,17 +695,50 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
   const phone = normalizePhPhone(input.customer?.phone);
   const customerName = input.customer?.name?.trim().slice(0, 120) || null;
 
+  const offline = input.offline ?? null;
+  const offlinePrices = new Map<string, number>();
+  if (offline) {
+    for (const item of input.items) {
+      const price = Number(item.unitPrice);
+      if (item.unitPrice != null && Number.isFinite(price) && price >= 0 && price <= 10_000_000) {
+        offlinePrices.set(`${item.productId}:${item.variantId ?? ""}`, toCentavos(price));
+      }
+    }
+  }
+  const issues: Array<{ kind: PosSyncIssueKind; message: string; detail?: Record<string, unknown> }> = [];
+  let closedShiftId: string | null = null;
+
   let saleId: string;
   try {
     saleId = await db.transaction(async (tx) => {
+      issues.length = 0;
       // Lock the shift: a sale can't land on a shift that's closing.
       const [shift] = await tx
-        .select({ id: registerSessions.id, status: registerSessions.status, registerId: registerSessions.registerId })
+        .select({
+          id: registerSessions.id,
+          status: registerSessions.status,
+          registerId: registerSessions.registerId,
+          openedAt: registerSessions.openedAt,
+          closedAt: registerSessions.closedAt,
+        })
         .from(registerSessions)
         .where(and(eq(registerSessions.id, input.shiftId), eq(registerSessions.tenantId, input.tenantId)))
         .for("update");
       if (!shift) throw new PosError("Open a shift first.", "NO_SHIFT");
-      if (shift.status !== "open") throw new PosError("This shift is closed. Open a new one.", "SHIFT_CLOSED");
+      // An offline sale belongs to the drawer it was rung into, even if that shift has
+      // closed since (the cash was in the drawer when it was counted).
+      if (shift.status !== "open" && !offline) throw new PosError("This shift is closed. Open a new one.", "SHIFT_CLOSED");
+      if (offline && shift.status !== "open") {
+        issues.push({ kind: "closed_shift", message: "Synced after its shift was closed — the shift's expected cash was updated." });
+        const [counter] = await tx
+          .select({ lastZAt: posInvoiceCounters.lastZAt })
+          .from(posInvoiceCounters)
+          .where(eq(posInvoiceCounters.registerId, shift.registerId))
+          .limit(1);
+        if (counter?.lastZAt && shift.closedAt && counter.lastZAt >= shift.closedAt) {
+          issues.push({ kind: "after_z", message: "Synced after the Z reading for its day — it isn't in that Z reading's totals." });
+        }
+      }
 
       const [tenant] = await tx.select().from(tenants).where(eq(tenants.id, input.tenantId)).limit(1);
       if (!tenant) throw new PosError("Shop not found.", "NOT_FOUND");
@@ -715,15 +773,33 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       for (const { productId, variantId, quantity } of quantities.values()) {
         const rows = variantsByProduct.get(productId) ?? [];
         let row = rows[0];
-        if (!row || row.status !== "active") throw new OrderError("An item in this sale is no longer for sale.", "PRODUCT_UNAVAILABLE");
+        if (!row) throw new OrderError("An item in this sale is no longer for sale.", "PRODUCT_UNAVAILABLE");
+        if (row.status !== "active") {
+          if (!offline) throw new OrderError("An item in this sale is no longer for sale.", "PRODUCT_UNAVAILABLE");
+          issues.push({ kind: "unavailable", message: `"${row.title}" was sold offline but is no longer active.`, detail: { productId } });
+        }
         if (variantId) {
           const match = rows.find((r) => r.variantId === variantId);
-          if (!match) throw new OrderError(`That option of "${row.title}" is no longer for sale.`, "PRODUCT_UNAVAILABLE");
-          row = match;
+          if (!match) {
+            if (!offline) throw new OrderError(`That option of "${row.title}" is no longer for sale.`, "PRODUCT_UNAVAILABLE");
+            issues.push({ kind: "unavailable", message: `An option of "${row.title}" sold offline was removed; recorded on "${row.variantTitle ?? row.title}".`, detail: { productId, variantId } });
+          } else {
+            row = match;
+          }
         } else if (row.hasOptions && rows.length > 1) {
-          throw new PosError(`Pick a size or option for "${row.title}".`, "EMPTY");
+          if (!offline) throw new PosError(`Pick a size or option for "${row.title}".`, "EMPTY");
+          issues.push({ kind: "unavailable", message: `"${row.title}" was sold offline without a size; recorded on "${row.variantTitle}".`, detail: { productId } });
         }
-        const unit = toCentavos(row.hasOptions && row.variantPrice != null ? row.variantPrice : row.basePrice);
+        let unit = toCentavos(row.hasOptions && row.variantPrice != null ? row.variantPrice : row.basePrice);
+        const offlinePrice = offline ? offlinePrices.get(`${productId}:${variantId ?? ""}`) : undefined;
+        if (offlinePrice !== undefined && offlinePrice !== unit) {
+          issues.push({
+            kind: "price_changed",
+            message: `"${row.title}" sold offline at ₱${(offlinePrice / 100).toFixed(2)}; the price is now ₱${(unit / 100).toFixed(2)}.`,
+            detail: { productId, variantId: row.variantId, soldAt: offlinePrice / 100, priceNow: unit / 100 },
+          });
+          unit = offlinePrice;
+        }
         subtotalCentavos += unit * quantity;
         lines.push({
           productId,
@@ -737,20 +813,49 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       }
 
       const settings = (tenant.settingsJson ?? {}) as { pos?: { vatRate?: unknown; vatInclusive?: unknown; vatRegistered?: unknown } };
-      const totals = computeSaleTotals({
+      let totals = computeSaleTotals({
         subtotal: subtotalCentavos / 100,
         discountRate: discountRateFor(input.discountType),
         discountType: input.discountType,
         config: vatConfigFromSettings(settings.pos),
       });
-      const tenderCheck = checkTenders(totals.total, input.tenders);
+      let tenderCheck = checkTenders(totals.total, input.tenders);
+      // Offline: the device's printed total wins when the shop changed its VAT settings since.
+      const printed = offline?.totals;
+      if (offline && printed && toCentavos(printed.total) !== toCentavos(totals.total) && validPrintedTotals(printed, subtotalCentavos)) {
+        const printedCheck = checkTenders(printed.total, input.tenders);
+        if (printedCheck.ok) {
+          issues.push({
+            kind: "price_changed",
+            message: `Receipt total ₱${printed.total.toFixed(2)} differs from today's settings (₱${totals.total.toFixed(2)}); kept what the buyer paid.`,
+            detail: { printed: printed.total, now: totals.total },
+          });
+          totals = printed;
+          tenderCheck = printedCheck;
+        }
+      }
       if (!tenderCheck.ok) throw new PosError(tenderCheck.error, "BAD_TENDER");
 
       // Phase 11: BIR numbering (only when the shop turned it on with its PTU details).
       const bir = birActive(tenant.settingsJson as import("../types/tenant-settings").TenantSettingsJson | null);
-      const invoiceNumber = bir ? await nextInvoiceNumberInTx(tx, input.tenantId, shift.registerId, bir.invoicePrefix) : null;
+      let invoiceNumber: string | null = null;
+      if (bir) {
+        const fromDevice = offline?.invoiceNumber
+          ? await claimOfflineInvoiceInTx(tx, { tenantId: input.tenantId, registerId: shift.registerId, deviceId: offline.deviceId, invoiceNumber: offline.invoiceNumber })
+          : null;
+        invoiceNumber = fromDevice ?? (await nextInvoiceNumberInTx(tx, input.tenantId, shift.registerId, bir.invoicePrefix));
+        if (offline && !fromDevice) {
+          issues.push({
+            kind: "invoice_reassigned",
+            message: offline.invoiceNumber
+              ? `Offline receipt no. ${offline.invoiceNumber.slice(0, 32)} couldn't be used; recorded as ${invoiceNumber}. Note it on the shop copy.`
+              : `Sold offline without an invoice number; recorded as ${invoiceNumber}.`,
+            detail: { printed: offline.invoiceNumber ?? null, recorded: invoiceNumber },
+          });
+        }
+      }
 
-      const now = new Date();
+      const now = offline ? clampRungAt(offline.rungAt, shift.openedAt, shift.closedAt) : new Date();
       const facts = { orderState: "completed" as const, paymentState: "paid" as const, fulfillmentState: "delivered" as const, accepted: true };
       const locationId = await getDefaultLocationId(tx, input.tenantId);
       const [seqRow] = await tx
@@ -827,6 +932,9 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           posIdempotencyKey: key,
           posMetaJson: meta,
           invoiceNumber,
+          createdAt: now,
+          posOfflineAt: offline ? offline.rungAt : null,
+          posDeviceId: offline ? offline.deviceId.slice(0, 40) : null,
         })
         .returning({ id: orders.id });
       if (!order) throw new Error("Failed to save the sale.");
@@ -849,7 +957,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
         status: legacyStatusOf(facts),
         event: "pos_sale",
         toState: describeStates(facts),
-        note: `POS sale by ${input.cashierName}${input.discountType !== "none" ? ` · ${input.discountType === "pwd" ? "PWD" : "Senior"} discount` : ""}`,
+        note: `POS sale by ${input.cashierName}${input.discountType !== "none" ? ` · ${input.discountType === "pwd" ? "PWD" : "Senior"} discount` : ""}${offline ? " · rung offline, synced later" : ""}`,
         actorId: input.userId,
       });
 
@@ -872,6 +980,40 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       // POS can't both sell the last unit.
       for (const l of lines) {
         if (!l.track || !l.variantId) continue;
+        if (offline) {
+          // Already handed over: take what's there, never below zero, and flag the gap.
+          const [cur] = await tx
+            .select({ stockQty: productVariants.stockQty })
+            .from(productVariants)
+            .where(eq(productVariants.id, l.variantId))
+            .for("update");
+          const have = Math.max(cur?.stockQty ?? 0, 0);
+          const take = Math.min(have, l.quantity);
+          if (take < l.quantity) {
+            issues.push({
+              kind: "stock_short",
+              message: `"${l.title}": sold ${l.quantity} offline but only ${have} were in stock. Recount it.`,
+              detail: { variantId: l.variantId, sold: l.quantity, inStock: have, short: l.quantity - take },
+            });
+          }
+          if (take > 0) {
+            const [after] = await tx
+              .update(productVariants)
+              .set({ stockQty: sql`${productVariants.stockQty} - ${take}` })
+              .where(eq(productVariants.id, l.variantId))
+              .returning({ stockQty: productVariants.stockQty });
+            await recordStockMovement(tx, {
+              tenantId: input.tenantId,
+              variantId: l.variantId,
+              orderId: order.id,
+              reason: "sale",
+              delta: -take,
+              balanceAfter: after!.stockQty,
+              locationId,
+            });
+          }
+          continue;
+        }
         const decremented = await tx
           .update(productVariants)
           .set({ stockQty: sql`${productVariants.stockQty} - ${l.quantity}` })
@@ -902,6 +1044,19 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       };
       await insertOutboxEvent(tx, { name: "Order.Created.V2", tenantId: input.tenantId, idempotencyKey: `Order.Created.V2:${order.id}`, data: eventData });
       await insertOutboxEvent(tx, { name: "Order.Completed.V1", tenantId: input.tenantId, idempotencyKey: `Order.Completed.V1:${order.id}`, data: eventData });
+      if (issues.length > 0) {
+        await tx.insert(posSyncIssues).values(
+          issues.map((i) => ({
+            tenantId: input.tenantId,
+            orderId: order.id,
+            idempotencyKey: key,
+            kind: i.kind,
+            message: `#${orderNumber}: ${i.message}`.slice(0, 300),
+            detailJson: i.detail ?? null,
+          }))
+        );
+      }
+      if (shift.status !== "open") closedShiftId = shift.id;
       return order.id;
     });
   } catch (error) {
@@ -914,9 +1069,46 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
     throw error;
   }
 
+  // A late sale on a closed shift: refresh that shift's expected totals and variance.
+  if (closedShiftId) await refreshClosedShift(input.tenantId, closedShiftId);
+
   const receipt = await getPosReceipt(input.tenantId, saleId);
   if (!receipt) throw new Error("Sale saved but the receipt could not be read.");
-  return receipt;
+  return issues.length > 0 ? { ...receipt, syncIssues: issues.length } : receipt;
+}
+
+/** Device clocks drift: keep an offline sale's time inside the shift it was rung in. */
+export function clampRungAt(rungAt: Date, openedAt: Date, closedAt: Date | null, now = new Date()): Date {
+  const t = Number.isFinite(rungAt.getTime()) ? rungAt.getTime() : now.getTime();
+  const max = (closedAt ?? now).getTime();
+  return new Date(Math.min(Math.max(t, openedAt.getTime()), max, now.getTime()));
+}
+
+function validPrintedTotals(t: SaleTotals, subtotalCentavos: number): boolean {
+  const total = Number(t?.total);
+  return Number.isFinite(total) && total >= 0 && toCentavos(total) <= subtotalCentavos + toCentavos(Number(t?.vatAmount ?? 0)) + 100;
+}
+
+/** Recompute expected and variance of a closed shift after a late (offline) sale landed on it. */
+export async function refreshClosedShift(tenantId: string, shiftId: string): Promise<void> {
+  const db = getDb();
+  const summary = await getShiftSummary(tenantId, shiftId);
+  if (!summary) return;
+  const [row] = await db
+    .select({ counted: registerSessions.countedJson, status: registerSessions.status })
+    .from(registerSessions)
+    .where(and(eq(registerSessions.id, shiftId), eq(registerSessions.tenantId, tenantId)))
+    .limit(1);
+  if (!row || row.status !== "closed" || !row.counted) return;
+  const counted = row.counted as TenderTotals;
+  const variance: TenderTotals = { ...ZERO_TENDERS };
+  for (const m of Object.keys(ZERO_TENDERS) as PosTenderMethod[]) {
+    variance[m] = (toCentavos(Number(counted[m] ?? 0)) - toCentavos(summary.expected[m])) / 100;
+  }
+  await db
+    .update(registerSessions)
+    .set({ expectedJson: summary.expected, varianceJson: variance })
+    .where(and(eq(registerSessions.id, shiftId), eq(registerSessions.tenantId, tenantId)));
 }
 
 export interface PosSaleListItem {

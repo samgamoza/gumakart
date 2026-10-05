@@ -335,6 +335,7 @@ export async function posEJournalCsv(tenantId: string, from: Date, to: Date): Pr
       total: orders.total,
       refunded: orders.refundedAmount,
       voidedAt: orders.voidedAt,
+      offlineAt: orders.posOfflineAt,
       meta: orders.posMetaJson,
     })
     .from(orders)
@@ -351,7 +352,7 @@ export async function posEJournalCsv(tenantId: string, from: Date, to: Date): Pr
     list.push(`${i.qty}x ${i.title} @${Number(i.unit).toFixed(2)}`);
     byOrder.set(i.orderId, list);
   }
-  const header = ["date_time", "invoice_no", "order_no", "cashier", "items", "gross", "discount", "discount_type", "vatable_sales", "vat", "vat_exempt", "total", "refunded", "voided", "tenders"];
+  const header = ["date_time", "invoice_no", "order_no", "cashier", "items", "gross", "discount", "discount_type", "vatable_sales", "vat", "vat_exempt", "total", "refunded", "voided", "tenders", "rung_offline"];
   const lines = [header.join(",")];
   for (const r of rows) {
     const meta = (r.meta ?? {}) as { cashierName?: string; discountType?: string; totals?: SaleTotals; tenders?: Array<{ method: string; amount: number }> };
@@ -373,6 +374,7 @@ export async function posEJournalCsv(tenantId: string, from: Date, to: Date): Pr
         Number(r.refunded ?? 0).toFixed(2),
         r.voidedAt ? "yes" : "",
         (meta.tenders ?? []).map((x) => `${x.method}:${Number(x.amount).toFixed(2)}`).join(" "),
+        r.offlineAt ? "yes" : "",
       ]
         .map(csvCell)
         .join(",")

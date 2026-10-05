@@ -6,6 +6,7 @@ import { Calculator, KeyRound, Loader2, UserPlus } from "lucide-react";
 import { SettingsShell } from "@/components/settings/settings-shell";
 import { SettingsCard, useTenantSettings } from "@/components/settings/settings-forms";
 import { BirSettingsCard, XReadingButton } from "@/components/settings/bir-settings";
+import { OfflineSalesCard } from "@/components/settings/pos-offline-settings";
 
 interface Staff {
   id: string;
@@ -222,6 +223,8 @@ export function PosSettingsPage() {
           )}
           <p className="text-xs text-muted-foreground">Receipts say &ldquo;This is not an official receipt.&rdquo; until you turn on BIR sales invoices below.</p>
         </SettingsCard>
+
+        <OfflineSalesCard />
 
         <BirSettingsCard />
 
