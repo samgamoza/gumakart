@@ -1144,9 +1144,12 @@ export const planPayments = pgTable(
     periodDays: integer("period_days").default(30).notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /** Phase 16: GK-2026-000001, set when paid (payment receipt, not a BIR official receipt). */
+    receiptNumber: varchar("receipt_number", { length: 24 }),
   },
   (table) => [
     uniqueIndex("plan_payments_intent_idx").on(table.gatewayIntentId),
+    uniqueIndex("plan_payments_receipt_idx").on(table.receiptNumber),
     index("plan_payments_tenant_idx").on(table.tenantId),
   ]
 );
@@ -2130,6 +2133,107 @@ export const webhookDeliveries = pgTable(
     uniqueIndex("webhook_deliveries_unique_idx").on(table.endpointId, table.eventId),
     index("webhook_deliveries_endpoint_idx").on(table.endpointId, table.createdAt),
   ]
+);
+
+// ─── Phase 16: operations ────────────────────────────────────────────────────
+
+/** One row per cron job run (written by /api/cron/ops from the cron worker). Kept 14 days. */
+export const cronRuns = pgTable(
+  "cron_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    job: varchar("job", { length: 80 }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    ok: boolean("ok").notNull(),
+    statusCode: integer("status_code"),
+    summary: varchar("summary", { length: 500 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("cron_runs_job_idx").on(table.job, table.startedAt), index("cron_runs_started_idx").on(table.startedAt)]
+);
+
+/** Server errors grouped by fingerprint (app + route + message). */
+export const appErrors = pgTable(
+  "app_errors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+    app: varchar("app", { length: 16 }).notNull(),
+    route: varchar("route", { length: 200 }),
+    message: varchar("message", { length: 500 }).notNull(),
+    stack: text("stack"),
+    count: integer("count").default(1).notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("app_errors_fingerprint_idx").on(table.fingerprint), index("app_errors_last_seen_idx").on(table.lastSeenAt)]
+);
+
+export const opsAlerts = pgTable(
+  "ops_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    key: varchar("key", { length: 80 }).notNull(),
+    severity: varchar("severity", { length: 10 }).$type<"warning" | "critical">().notNull(),
+    title: varchar("title", { length: 200 }).notNull(),
+    detail: varchar("detail", { length: 1000 }),
+    openedAt: timestamp("opened_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  },
+  (table) => [index("ops_alerts_opened_idx").on(table.openedAt)]
+);
+
+export type IncidentImpact = "minor" | "major" | "maintenance";
+export type IncidentStatus = "investigating" | "identified" | "monitoring" | "resolved";
+
+export const statusIncidents = pgTable(
+  "status_incidents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: varchar("title", { length: 160 }).notNull(),
+    impact: varchar("impact", { length: 12 }).$type<IncidentImpact>().notNull(),
+    status: varchar("status", { length: 14 }).$type<IncidentStatus>().default("investigating").notNull(),
+    components: text("components").array().notNull(),
+    createdBy: varchar("created_by", { length: 120 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => [index("status_incidents_created_idx").on(table.createdAt)]
+);
+
+export const statusIncidentUpdates = pgTable(
+  "status_incident_updates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    incidentId: uuid("incident_id")
+      .references(() => statusIncidents.id, { onDelete: "cascade" })
+      .notNull(),
+    status: varchar("status", { length: 14 }).$type<IncidentStatus>().notNull(),
+    message: varchar("message", { length: 1000 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("status_incident_updates_incident_idx").on(table.incidentId, table.createdAt)]
+);
+
+/** Plan reminders/expiry/downgrade notices — one per tenant, kind and billing period. */
+export const billingNotices = pgTable(
+  "billing_notices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    kind: varchar("kind", { length: 16 }).$type<"reminder_7" | "reminder_3" | "reminder_1" | "expired" | "downgraded">().notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    plan: varchar("plan", { length: 50 }).notNull(),
+    emailSent: boolean("email_sent").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("billing_notices_unique_idx").on(table.tenantId, table.kind, table.periodEnd)]
 );
 
 // ─── Phase 12: Guma ID ───────────────────────────────────────────────────────

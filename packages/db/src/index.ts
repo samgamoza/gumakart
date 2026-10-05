@@ -869,3 +869,58 @@ export {
   type WebhookEndpointRow,
   type WebhookEnvelope,
 } from "./queries/developer";
+
+// Phase 16 — operations, status page, plan billing lifecycle
+export {
+  alertConditions,
+  getOpsSnapshot,
+  listAppErrors,
+  listCronJobStatus,
+  listOpsAlerts,
+  markAlertsNotified,
+  normalizeErrorMessage,
+  pruneCronRuns,
+  recordAppError,
+  recordCronRuns,
+  resolveAppError,
+  syncOpsAlerts,
+  type AlertCondition,
+  type AlertSeverity,
+  type AppErrorRow,
+  type CronExpectations,
+  type CronJobStatus,
+  type CronRunInput,
+  type OpsAlertRow,
+  type OpsSnapshot,
+} from "./queries/operations";
+export {
+  STATUS_COMPONENTS,
+  StatusPageError,
+  addIncidentUpdate,
+  componentForAlert,
+  createIncident,
+  getIncident,
+  getPublicStatus,
+  incidentState,
+  listIncidents,
+  type ComponentState,
+  type IncidentView,
+  type PublicStatus,
+  type StatusComponentId,
+} from "./queries/status-page";
+export {
+  PLAN_GRACE_DAYS,
+  dueNoticeKind,
+  getBillingOverview,
+  getPlanReceipt,
+  markNoticeEmailed,
+  planStatusOf,
+  runPlanLifecycle,
+  type BillingNoticeToSend,
+  type BillingPaymentRow,
+  type NoticeKind,
+  type PlanReceipt,
+  type PlanState,
+  type PlanStatus,
+} from "./queries/billing";
+export { installConsoleErrorCapture } from "./console-capture";

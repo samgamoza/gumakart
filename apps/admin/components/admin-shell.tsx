@@ -25,6 +25,7 @@ import { SETTINGS_SECTIONS } from "@/lib/settings-nav";
 import { planAtLeast, upgradeHref, type SubscriptionPlan } from "@/lib/plan-access";
 import { SuspendedShopNotice } from "@/components/suspended-shop-notice";
 import { SupportAccessBanner } from "@/components/support-access-banner";
+import { PlanNoticeBanner } from "@/components/plan-notice-banner";
 import { storefrontBaseUrl } from "@/lib/utils";
 
 interface SessionUser {
@@ -162,6 +163,7 @@ export function AdminShell({
           tenantSlug={slug}
         />
       )}
+      {shopRole === "owner" && !supportAccess && <PlanNoticeBanner />}
       <div className="relative min-h-screen lg:flex">
       {/* Soft ambient — keep noise low so content stays readable */}
       <div className="pointer-events-none fixed inset-0 grid-bg grid-bg-fade opacity-25" />

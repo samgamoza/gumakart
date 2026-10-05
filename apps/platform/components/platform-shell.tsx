@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ComponentType } from "react";
 import {
+  Activity,
+  Radio,
   BarChart3,
   CreditCard,
   Headphones,
@@ -74,6 +76,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "System",
     items: [
+      { href: "/system", label: "System health", icon: Activity },
+      { href: "/status-page", label: "Status page", icon: Radio },
       { href: "/settings", label: "Settings", icon: Settings },
       { href: "/audit", label: "Audit Log", icon: ScrollText },
     ],

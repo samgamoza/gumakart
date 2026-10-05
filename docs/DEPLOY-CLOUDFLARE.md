@@ -89,7 +89,7 @@ still has `https://admin.guma.one/api/auth/google/callback` as a redirect URI (s
     Old KYC files under `apps/admin/.data/kyc` keep their `local:` keys and won't load on Workers; the
     seller can re-upload, or copy them to `kyc/<tenantId>/<file>` and update `storage_key` to `r2:kyc/...`.
 - **Crons.** The free plan allows 5 cron triggers per account (Kuya Eddie uses one), so admin has a
-  single `*/5 * * * *` trigger and `cron-worker.ts` picks the jobs (UTC): outbox every 5 min,
+  single `* * * * *` trigger (Phase 16; was `*/5`) and `lib/cron-schedule.ts` picks the jobs (UTC): outbox and webhooks every minute,
   expire-orders hourly at :20, wallet-settlement hourly at :40, agent-reminders 09:00,
   agents daily 10:00, agents weekly Mon 02:00. Each job is an in-process request with
   `Authorization: Bearer CRON_SECRET`. Watch them with `pnpm exec wrangler tail` in `apps/admin`.

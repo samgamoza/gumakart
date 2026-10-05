@@ -239,7 +239,7 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
 ];
 
 /** Pages every shop member may open (their own account, help). */
-const OPEN_PAGES = ["/settings/account", "/settings/support", "/verify-email"];
+const OPEN_PAGES = ["/settings/account", "/settings/support", "/verify-email", "/help"];
 
 export function canOpenPage(role: ShopRole | null, pathname: string): boolean {
   if (!role) return false;

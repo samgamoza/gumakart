@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { planPayments, tenants } from "../schema/index";
 import { PLAN_PERIOD_DAYS, PLAN_PRICES_PHP } from "../plans";
+import { nextReceiptNumber } from "./billing";
 
 export { PLAN_PERIOD_DAYS, PLAN_PRICES_PHP };
 
@@ -61,7 +62,7 @@ export async function markPlanPaymentPaidByIntent(
     const now = new Date();
     await tx
       .update(planPayments)
-      .set({ status: "paid", paidAt: now })
+      .set({ status: "paid", paidAt: now, receiptNumber: payment.receiptNumber ?? (await nextReceiptNumber(tx, now)) })
       .where(eq(planPayments.id, payment.id));
 
     // Extend from the current expiry when the tenant renews early.

@@ -47,7 +47,7 @@ Provider keys are listed in `docs/GO-LIVE.md` §1–7.
      status page, billing live.
    - Or API v1.1: product create/edit, near-real-time webhooks via Queues.
 
-**Pending Phase 2 constraints:** `packages/db/drizzle-pending/0034_phase2_constrain.sql` (journal idx 34). Move
+**Pending Phase 2 constraints:** `packages/db/drizzle-pending/0035_phase2_constrain.sql` (journal idx 35). Move
 it into `drizzle/` only after `phase2-verify.sql` returns 0 rows for a week. Renumber it each time a phase adds
 a migration: `git mv` the file and sed the docs.
 
@@ -117,7 +117,7 @@ Also committed in **veyron-pos-saas** (`999833a`, branch `feature/ci-locations-p
 4. Crons: handled by the admin Worker (`apps/admin/cron-worker.ts`, one `*/5` trigger): outbox every 5 min, expire-orders hourly, wallet-settlement hourly, agents as before. `apps/admin/vercel.json` is unused.
 5. Smoke test: COD order; manual GCash order (proof → confirm / "Not received"); book + assign rider; deliver; cancel unpaid; buyer order page via SMS link; draft Preview from admin.
 6. Lalamove: `pnpm --filter @gumakart/services lalamove:check -- https://<web>/api/webhooks/lalamove` with sandbox keys → set `LALAMOVE_WEBHOOK_VARIANT` from the log.
-7. After a clean week of verify queries: move `drizzle-pending/0034_phase2_constrain.sql` into `drizzle/` (journal idx 34) and migrate. Later: a further migration drops legacy columns.
+7. After a clean week of verify queries: move `drizzle-pending/0035_phase2_constrain.sql` into `drizzle/` (journal idx 35) and migrate. Later: a further migration drops legacy columns.
 
 ### Next work when resuming (plan §11)
 - **Phase 3 — Checkout Links** (entity, merchant UI, production checkout from the `/kart` components, abandonment capture, source tracking).
@@ -129,7 +129,7 @@ Also committed in **veyron-pos-saas** (`999833a`, branch `feature/ci-locations-p
 - **Unverified older accounts** are sent to `/verify-email` by the admin middleware (API calls get 403 `EMAIL_UNVERIFIED`) until they enter a code (`POST /api/auth/verify-email/code`). Old `?token=` links still work.
 - Password rule: 8+ chars with a letter and a number, common passwords rejected.
 - **Needs:** run `migrate` against Neon production (0023), and a working sender: `RESEND_API_KEY` + `EMAIL_FROM` on a Resend-verified domain (e.g. `Guma Kart <no-reply@guma.one>`). Without them production refuses to send codes (no silent success); local dev shows the code on screen.
-- The deferred Phase 2 constraint SQL (`drizzle-pending/0034_phase2_constrain.sql`) goes into the journal as **idx 34** (0024 checkout links, 0025 POS Lite, 0026 variants, 0027 staff, 0028 after-sale, 0029 Guma ID, 0030 POS offline, 0031 channels, 0032 growth, 0033 platform).
+- The deferred Phase 2 constraint SQL (`drizzle-pending/0035_phase2_constrain.sql`) goes into the journal as **idx 35** (0024 checkout links, 0025 POS Lite, 0026 variants, 0027 staff, 0028 after-sale, 0029 Guma ID, 0030 POS offline, 0031 channels, 0032 growth, 0033 platform, 0034 operations).
 - Static files (`/brand/*`, images) now bypass the admin/ops auth middleware (the logo was being redirected to /login).
 
 ### Pitfalls learned this session

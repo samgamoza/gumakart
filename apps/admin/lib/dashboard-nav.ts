@@ -3,6 +3,7 @@ import {
   BadgePercent,
   Blocks,
   Code2,
+  LifeBuoy,
   BarChart3,
   Megaphone,
   Boxes,
@@ -281,6 +282,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         icon: Code2,
         badge: "new",
         description: "API keys and webhooks for your own tools (owner only).",
+      },
+      {
+        id: "help",
+        label: "Help",
+        href: "/help",
+        icon: LifeBuoy,
+        badge: "new",
+        description: "Short Taglish how-tos, the status page, and support.",
       },
       {
         id: "settings-subscription",

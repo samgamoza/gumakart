@@ -102,3 +102,13 @@ Works as soon as migration 0033 is on Neon. Webhook signing secrets are sealed w
 `CHANNEL_TOKEN_KEY` (else `AUTH_SECRET`) — rotating that key makes stored webhook secrets unreadable,
 so shops would rotate their webhook secrets. Optional: `UPSTASH_REDIS_REST_URL` /
 `UPSTASH_REDIS_REST_TOKEN` (admin) make the API rate limit hold across Worker instances.
+
+## 8. Operations (Phase 16 — no new required secrets)
+
+| Secret / setting | Workers | Notes |
+|---|---|---|
+| `OPS_ALERT_EMAIL` | admin | Where alerts are emailed (else `HELPDESK_NOTIFY_EMAIL`). Needs Resend (§3). |
+| Cron trigger | admin | `wrangler.jsonc` now runs **every minute** (`* * * * *`); `lib/cron-schedule.ts` picks the jobs. Deploys with the Worker. |
+| `NEXT_PUBLIC_PLAN_BILLING_ENABLED` | admin | `true` once PayMongo live + Guma Kart's business/BIR registration are done; turns on Upgrade/Renew buttons. Reminders, grace and downgrade already run for any plan with an end date. |
+
+Backups: follow `docs/RUNBOOK-BACKUPS.md` once a quarter.

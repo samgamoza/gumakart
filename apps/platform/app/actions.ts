@@ -935,3 +935,52 @@ export async function generateAiStockSkinsAction(
     return fail(error);
   }
 }
+
+// ─── Phase 16: system health & status page ────────────────────────────────────
+
+export async function resolveAppErrorAction(id: string): Promise<ActionResult> {
+  try {
+    const session = await guard();
+    const { resolveAppError } = await import("@gumakart/db");
+    if (!(await resolveAppError(id))) return { ok: false, error: "That error is gone." };
+    await writeAudit({ actorId: session.userId, actorEmail: session.email, action: "app_error_resolved", entityType: "app_error", entityId: id, entityLabel: id.slice(0, 8) });
+    revalidatePath("/system");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function createIncidentAction(input: {
+  title: string;
+  impact: "minor" | "major" | "maintenance";
+  components: string[];
+  message: string;
+}): Promise<ActionResult> {
+  try {
+    const session = await guard();
+    const { createIncident } = await import("@gumakart/db");
+    const id = await createIncident({ ...input, createdBy: session.email ?? "ops" });
+    await writeAudit({ actorId: session.userId, actorEmail: session.email, action: "status_incident_created", entityType: "status_incident", entityId: id, entityLabel: input.title.slice(0, 80) });
+    revalidatePath("/status-page");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function addIncidentUpdateAction(
+  id: string,
+  input: { status: "investigating" | "identified" | "monitoring" | "resolved"; message: string }
+): Promise<ActionResult> {
+  try {
+    const session = await guard();
+    const { addIncidentUpdate } = await import("@gumakart/db");
+    await addIncidentUpdate(id, input);
+    await writeAudit({ actorId: session.userId, actorEmail: session.email, action: `status_incident_${input.status}`, entityType: "status_incident", entityId: id, entityLabel: input.message.slice(0, 80) });
+    revalidatePath("/status-page");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}

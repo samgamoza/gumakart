@@ -12,8 +12,8 @@
   "routes": [{ "pattern": "admin.guma.one", "custom_domain": true }],
   // Same bucket as the storefront: product photos (public, served by kart.guma.one) + KYC (private).
   "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "gumakart-uploads" }],
-  // One trigger (free plan allows 5 per account); cron-worker.ts decides which jobs are due.
-  "triggers": { "crons": ["*/5 * * * *"] },
+  // One every-minute trigger (free plan allows 5 per account); lib/cron-schedule.ts picks the jobs.
+  "triggers": { "crons": ["* * * * *"] },
   // Cloudflare Hyperdrive "gumakart-db" -> Neon production (direct). getDb() uses it on Workers.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "93f8b5636eb1478c9f3d13b3e7d589b8" }],
   "vars": {

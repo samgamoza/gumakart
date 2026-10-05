@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card } from "@gumakart/ui";
 import { SELLER_PLANS, normalizePlanId, planDisplayName } from "@gumakart/plans";
 import { SettingsShell } from "@/components/settings/settings-shell";
+import { BillingStatus } from "@/components/settings/billing-status";
 import { useTenantSettings } from "@/components/settings/settings-forms";
 import { modelStoreUrl } from "@/lib/utils";
 
@@ -89,15 +90,17 @@ export function SubscriptionSettingsPage() {
         </p>
       )}
 
-      <Card className="mb-4 border-emerald-100 bg-emerald-50/50 p-5">
+      <Card className="mb-4 border-emerald-500/30 bg-emerald-500/10 p-5">
         <p className="text-sm text-muted-foreground">Current plan</p>
-        <p className="mt-1 text-2xl font-bold text-emerald-800">
+        <p className="mt-1 text-2xl font-bold text-emerald-300">
           {planDisplayName(currentPlan)}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           Shop status: <span className="font-medium capitalize">{settings?.status}</span>
         </p>
       </Card>
+
+      <BillingStatus onRenew={(p) => void upgrade(p)} renewing={payingPlan !== null} />
 
       {currentPlan === "free" && (
         <Card className="mb-4 border-amber-200 bg-gradient-to-r from-amber-50 to-white p-5">
@@ -125,7 +128,7 @@ export function SubscriptionSettingsPage() {
       )}
 
       {!PLAN_BILLING_ENABLED && (
-        <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+        <div className="mb-4 rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
           <p className="font-semibold">Paid plans are coming soon</p>
           <p className="mt-1">
             During the beta every shop runs on the plan shown as current. We&apos;ll let you know
@@ -211,8 +214,8 @@ export function SubscriptionSettingsPage() {
       </div>
 
       <p className="mt-6 text-sm text-muted-foreground">
-        Plans renew every 30 days via PayMongo (GCash, Maya, or card). Your upgrade activates
-        automatically the moment your payment is confirmed. Questions? Email {SUPPORT_EMAIL}.
+        Each payment adds 30 days (GCash, Maya or card via PayMongo); we remind you 7, 3 and 1 day before it ends, and
+        everything stays on for 7 days after. Your upgrade activates the moment your payment is confirmed. Questions? Email {SUPPORT_EMAIL}.
       </p>
     </SettingsShell>
   );

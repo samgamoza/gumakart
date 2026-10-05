@@ -9,6 +9,7 @@ import {
   type ApiScope,
 } from "@gumakart/db";
 import { rateLimit } from "@gumakart/services";
+import { captureError } from "@/lib/errors";
 
 /**
  * Phase 15 — the public REST API (/api/v1). Server-to-server only: a shop API key in
@@ -73,7 +74,8 @@ export async function withApi(
     }
     if (error instanceof ApiInputError) return apiError(400, "invalid_request", error.message, error.details);
     if (error instanceof SyntaxError) return apiError(400, "invalid_json", "The request body isn't valid JSON.");
-    console.error("[api v1]", error);
+    console.error(`[api v1] ${request.method} ${new URL(request.url).pathname}`, error);
+    await captureError(`${request.method} /api/v1`, error);
     return apiError(500, "internal_error", "Something went wrong on our side. Try again.");
   }
 }

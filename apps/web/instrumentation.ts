@@ -1,0 +1,30 @@
+/**
+ * Phase 16 — every uncaught server error (route handlers, server components, actions) and
+ * every Error logged with console.error is grouped into app_errors and shows in
+ * ops.guma.one → System health. Node runtime only; never throws.
+ */
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    try {
+      const { installErrorCapture } = await import("./instrumentation-node");
+      installErrorCapture();
+    } catch {
+      /* optional */
+    }
+  }
+}
+
+export async function onRequestError(
+  error: unknown,
+  request: { path: string; method: string },
+  context: { routerKind: string; routePath: string; routeType: string }
+): Promise<void> {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    try {
+      const { captureRequestError } = await import("./instrumentation-node");
+      await captureRequestError(error, `${request.method} ${context.routePath || request.path.split("?")[0]}`);
+    } catch {
+      /* reporting must never cause a second failure */
+    }
+  }
+}
