@@ -9,6 +9,37 @@ export interface CheckoutCoupon {
   minSubtotal?: number;
   maxRedemptions?: number;
   active?: boolean;
+  /** Phase 14: valid from / until (ISO). Outside the window the code doesn't apply. */
+  startsAt?: string;
+  endsAt?: string;
+  /** One use per buyer mobile number. */
+  oncePerBuyer?: boolean;
+  /** Seller-only note, e.g. "Payday sale — FB post". */
+  note?: string;
+}
+
+/**
+ * Phase 14: "Buy N or more, get X off" — applies by itself (no code) to the matching items.
+ * percent = % off those lines; fixed = ₱ off each matching item.
+ */
+export interface CheckoutVolumeDiscount {
+  id: string;
+  label: string;
+  /** Empty = any product. */
+  productIds: string[];
+  minQty: number;
+  type: "percent" | "fixed";
+  value: number;
+  active?: boolean;
+  startsAt?: string;
+  endsAt?: string;
+}
+
+export interface CheckoutLineForDiscount {
+  productId: string;
+  quantity: number;
+  /** Price × quantity for this line (pesos). */
+  lineTotal: number;
 }
 
 export interface CheckoutTaxConfig {
@@ -24,6 +55,8 @@ export interface CheckoutAutomaticDiscount {
   value: number;
   minSubtotal?: number;
   label?: string;
+  startsAt?: string;
+  endsAt?: string;
 }
 
 export interface CheckoutPaymentAdapters {
@@ -55,6 +88,8 @@ export interface TenantCheckoutJson {
   tax?: CheckoutTaxConfig;
   coupons?: CheckoutCoupon[];
   automaticDiscount?: CheckoutAutomaticDiscount | null;
+  /** Phase 14: quantity / bundle deals. */
+  volumeDiscounts?: CheckoutVolumeDiscount[];
   paymentAdapters?: CheckoutPaymentAdapters;
   customer?: CheckoutCustomerRequirements;
   /** Minutes of inactivity before a checkout session is marked abandoned */
@@ -99,6 +134,44 @@ function normalizeCoupon(raw: unknown): CheckoutCoupon | null {
     minSubtotal: c.minSubtotal != null ? asNumber(c.minSubtotal, 0) : undefined,
     maxRedemptions: c.maxRedemptions != null ? asNumber(c.maxRedemptions, 0) : undefined,
     active: c.active !== false,
+    startsAt: isoOrUndefined(c.startsAt),
+    endsAt: isoOrUndefined(c.endsAt),
+    oncePerBuyer: c.oncePerBuyer === true ? true : undefined,
+    note: typeof c.note === "string" && c.note.trim() ? c.note.trim().slice(0, 120) : undefined,
+  };
+}
+
+function isoOrUndefined(v: unknown): string | undefined {
+  if (typeof v !== "string" || !v.trim()) return undefined;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? new Date(t).toISOString() : undefined;
+}
+
+/** Inside [startsAt, endsAt) — open ends allowed. */
+export function inDiscountWindow(d: { startsAt?: string; endsAt?: string }, now: Date = new Date()): boolean {
+  const t = now.getTime();
+  if (d.startsAt && Date.parse(d.startsAt) > t) return false;
+  if (d.endsAt && Date.parse(d.endsAt) <= t) return false;
+  return true;
+}
+
+function normalizeVolume(raw: unknown, index: number): CheckoutVolumeDiscount | null {
+  if (!raw || typeof raw !== "object") return null;
+  const v = raw as Record<string, unknown>;
+  const minQty = Math.trunc(asNumber(v.minQty, 0));
+  const value = asNumber(v.value, 0);
+  const type = v.type === "fixed" ? "fixed" : "percent";
+  if (minQty < 2 || value <= 0 || (type === "percent" && value > 100)) return null;
+  return {
+    id: typeof v.id === "string" && v.id ? v.id.slice(0, 40) : `deal-${index + 1}`,
+    label: typeof v.label === "string" && v.label.trim() ? v.label.trim().slice(0, 60) : `Buy ${minQty}+`,
+    productIds: Array.isArray(v.productIds) ? v.productIds.filter((x): x is string => typeof x === "string").slice(0, 200) : [],
+    minQty,
+    type,
+    value,
+    active: v.active !== false,
+    startsAt: isoOrUndefined(v.startsAt),
+    endsAt: isoOrUndefined(v.endsAt),
   };
 }
 
@@ -143,8 +216,13 @@ export function normalizeCheckoutJson(input: unknown): TenantCheckoutJson {
             value: asNumber(auto.value, 0),
             minSubtotal: auto.minSubtotal != null ? asNumber(auto.minSubtotal, 0) : undefined,
             label: typeof auto.label === "string" ? auto.label : undefined,
+            startsAt: isoOrUndefined((auto as { startsAt?: unknown }).startsAt),
+            endsAt: isoOrUndefined((auto as { endsAt?: unknown }).endsAt),
           }
         : null,
+    volumeDiscounts: Array.isArray(raw.volumeDiscounts)
+      ? raw.volumeDiscounts.map(normalizeVolume).filter((d): d is CheckoutVolumeDiscount => !!d).slice(0, 20)
+      : [],
     paymentAdapters: {
       cod: adapters?.cod !== false,
       manual_ewallet: {
@@ -187,13 +265,48 @@ export function checkoutFromLegacySettings(settings: {
 
 export function findActiveCoupon(
   checkout: TenantCheckoutJson,
-  code: string | null | undefined
+  code: string | null | undefined,
+  now: Date = new Date()
 ): CheckoutCoupon | null {
   if (!code?.trim()) return null;
   const normalized = code.trim().toUpperCase();
   return (
-    checkout.coupons?.find((c) => c.active !== false && c.code === normalized) ?? null
+    checkout.coupons?.find((c) => c.active !== false && c.code === normalized && inDiscountWindow(c, now)) ?? null
   );
+}
+
+/**
+ * Phase 14: quantity deals. Each line gets at most one deal (the best for it); a deal needs
+ * its minimum quantity across all its matching lines. Returns ₱ off and the deal labels used.
+ */
+export function computeVolumeDiscount(
+  deals: CheckoutVolumeDiscount[] | undefined,
+  lines: CheckoutLineForDiscount[] | undefined,
+  now: Date = new Date()
+): { amount: number; labels: string[] } {
+  if (!deals?.length || !lines?.length) return { amount: 0, labels: [] };
+  const live = deals.filter((d) => d.active !== false && inDiscountWindow(d, now));
+  const eligible = live.filter((d) => {
+    const qty = lines.filter((l) => d.productIds.length === 0 || d.productIds.includes(l.productId)).reduce((n, l) => n + l.quantity, 0);
+    return qty >= d.minQty;
+  });
+  let amount = 0;
+  const used = new Set<string>();
+  for (const line of lines) {
+    let best = 0;
+    let bestLabel: string | null = null;
+    for (const d of eligible) {
+      if (d.productIds.length && !d.productIds.includes(line.productId)) continue;
+      const off = Math.min(line.lineTotal, d.type === "percent" ? (line.lineTotal * d.value) / 100 : d.value * line.quantity);
+      if (off > best) {
+        best = off;
+        bestLabel = d.label;
+      }
+    }
+    amount += best;
+    if (bestLabel) used.add(bestLabel);
+  }
+  return { amount: Math.round(amount * 100) / 100, labels: [...used] };
 }
 
 export interface CheckoutTotalsInput {
@@ -201,6 +314,9 @@ export interface CheckoutTotalsInput {
   deliveryFee: number;
   checkout: TenantCheckoutJson;
   couponCode?: string | null;
+  /** Phase 14: the cart lines, so quantity deals can apply. */
+  lines?: CheckoutLineForDiscount[];
+  now?: Date;
 }
 
 export interface CheckoutTotals {
@@ -216,30 +332,38 @@ export interface CheckoutTotals {
 /** Pure totals math used by createOrder and storefront preview. */
 export function computeCheckoutTotals(input: CheckoutTotalsInput): CheckoutTotals {
   const subtotal = Math.max(0, input.subtotal);
+  const now = input.now ?? new Date();
   let discount = 0;
   let discountLabel: string | null = null;
   let couponCode: string | null = null;
 
-  const coupon = findActiveCoupon(input.checkout, input.couponCode);
+  // Quantity deals first (on the items), then one order discount on what's left.
+  const volume = computeVolumeDiscount(input.checkout.volumeDiscounts, input.lines, now);
+  const afterVolume = Math.max(0, subtotal - volume.amount);
+  const labels: string[] = [...volume.labels];
+
+  const coupon = findActiveCoupon(input.checkout, input.couponCode, now);
   if (coupon) {
     const min = coupon.minSubtotal ?? 0;
     if (subtotal >= min) {
       discount =
         coupon.type === "percent"
-          ? (subtotal * coupon.value) / 100
+          ? (afterVolume * coupon.value) / 100
           : coupon.value;
-      discountLabel = `Coupon ${coupon.code}`;
+      labels.push(`Coupon ${coupon.code}`);
       couponCode = coupon.code;
     }
-  } else if (input.checkout.automaticDiscount) {
+  } else if (input.checkout.automaticDiscount && inDiscountWindow(input.checkout.automaticDiscount, now)) {
     const auto = input.checkout.automaticDiscount;
     const min = auto.minSubtotal ?? 0;
     if (subtotal >= min) {
       discount =
-        auto.type === "percent" ? (subtotal * auto.value) / 100 : auto.value;
-      discountLabel = auto.label ?? "Automatic discount";
+        auto.type === "percent" ? (afterVolume * auto.value) / 100 : auto.value;
+      labels.push(auto.label ?? "Automatic discount");
     }
   }
+  discount = Math.min(discount, afterVolume) + volume.amount;
+  discountLabel = labels.length ? labels.join(" + ") : null;
 
   discount = Math.min(discount, subtotal);
   const afterDiscount = subtotal - discount;

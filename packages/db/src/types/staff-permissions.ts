@@ -39,6 +39,8 @@ export const PERMISSIONS = [
   "pos.manage",
   "staff.manage",
   "activity.view",
+  /** Phase 14: sales/profit reports and exports (owner + manager). */
+  "reports.view",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -137,6 +139,7 @@ export const API_RULES: ApiRule[] = [
   { pattern: /^\/api\/categories$/, methods: READ, permission: "products.view" },
   { pattern: /^\/api\/categories$/, methods: WRITE, permission: "products.edit" },
   { pattern: /^\/api\/inventory\/(count|import)$/, permission: "stock.adjust" },
+  { pattern: /^\/api\/inventory\/cost$/, permission: "products.edit" },
   { pattern: /^\/api\/inventory(\/export)?$/, methods: READ, permission: "products.view" },
 
   // Selling
@@ -156,6 +159,9 @@ export const API_RULES: ApiRule[] = [
 
   // Marketing and AI
   { pattern: /^\/api\/(automations|agents|ai|seo|change-requests)(\/|$)/, permission: "marketing.manage" },
+  // Phase 14
+  { pattern: /^\/api\/reports(\/|$)/, permission: "reports.view" },
+  { pattern: /^\/api\/(discounts|campaigns)(\/|$)/, permission: "marketing.manage" },
 
   // Shop setup
   { pattern: /^\/api\/onboarding\/payments$/, permission: "settings.payments" },
@@ -212,6 +218,9 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/inbox", permission: "messages.reply" },
   { prefix: "/channels", permission: "settings.shop" },
   { prefix: "/automations", permission: "marketing.manage" },
+  { prefix: "/reports", permission: "reports.view" },
+  { prefix: "/discounts", permission: "marketing.manage" },
+  { prefix: "/campaigns", permission: "marketing.manage" },
   { prefix: "/agents", permission: "marketing.manage" },
   { prefix: "/ai-studio", permission: "marketing.manage" },
   { prefix: "/workspace", permission: "marketing.manage" },

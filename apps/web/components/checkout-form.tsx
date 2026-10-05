@@ -66,8 +66,8 @@ function formatPrice(amount: number, currency = "PHP"): string {
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency,
-    minimumFractionDigits: 0,
-  }).format(amount);
+    minimumFractionDigits: 2,
+  }).format(amount).replace(/\.00$/, "");
 }
 
 export function CheckoutForm({
@@ -250,6 +250,8 @@ export function CheckoutForm({
     deliveryFee,
     checkout,
     couponCode,
+    // Phase 14: quantity deals need the lines (the server recomputes the same way).
+    lines: cart.items.map((i) => ({ productId: i.productId, quantity: i.qty, lineTotal: i.price * i.qty })),
   });
   const belowMinimum = subtotal > 0 && subtotal < storeSettings.minOrderAmount;
 
@@ -777,7 +779,7 @@ export function CheckoutForm({
                   onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
                   className="h-11 min-w-0 flex-1 rounded-md border border-orange-300 bg-orange-50 px-3 text-sm font-semibold tracking-wide text-stone-900 placeholder:font-normal placeholder:tracking-normal placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
                 />
-                {totals.discount > 0 && (
+                {totals.couponCode && (
                   <span className="inline-flex h-11 items-center rounded-md bg-emerald-50 px-3 text-xs font-bold text-emerald-700">
                     Applied
                   </span>

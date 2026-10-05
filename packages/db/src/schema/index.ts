@@ -523,6 +523,8 @@ export const productVariants = pgTable(
     active: boolean("active").default(true).notNull(),
     compareAtPrice: decimal("compare_at_price", { precision: 12, scale: 2 }),
     barcode: varchar("barcode", { length: 64 }),
+    /** Phase 14: what the seller paid per unit (optional) — profit and stock value. */
+    costPrice: decimal("cost_price", { precision: 12, scale: 2 }),
   },
   (table) => [index("product_variants_product_idx").on(table.productId)]
 );
@@ -723,6 +725,8 @@ export const orderItems = pgTable(
     customizationsJson: jsonb("customizations_json"),
     /** Phase 11: units returned so far (≤ quantity). */
     returnedQty: integer("returned_qty").default(0).notNull(),
+    /** Phase 14: the variant's cost price when sold (null = no cost set). */
+    unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
   },
   (table) => [
     index("order_items_order_idx").on(table.orderId),
@@ -1987,6 +1991,51 @@ export const marketplaceListings = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("marketplace_listings_external_idx").on(table.accountId, table.externalItemId, table.externalModelId)]
+);
+
+// ─── Phase 14: SMS campaigns ─────────────────────────────────────────────────
+
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled";
+
+export const smsCampaigns = pgTable(
+  "sms_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    segmentJson: jsonb("segment_json").$type<Record<string, unknown>>().notNull(),
+    body: varchar("body", { length: 480 }).notNull(),
+    status: varchar("status", { length: 12 }).$type<CampaignStatus>().default("draft").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    recipients: integer("recipients").default(0).notNull(),
+    sent: integer("sent").default(0).notNull(),
+    failed: integer("failed").default(0).notNull(),
+    suppressed: integer("suppressed").default(0).notNull(),
+    createdByName: varchar("created_by_name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [index("sms_campaigns_tenant_idx").on(table.tenantId, table.createdAt)]
+);
+
+export const smsCampaignRecipients = pgTable(
+  "sms_campaign_recipients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .references(() => smsCampaigns.id, { onDelete: "cascade" })
+      .notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    phone: varchar("phone", { length: 20 }).notNull(),
+    name: varchar("name", { length: 255 }),
+    status: varchar("status", { length: 12 }).$type<"queued" | "sent" | "failed" | "suppressed">().default("queued").notNull(),
+    error: varchar("error", { length: 300 }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("sms_campaign_recipients_phone_idx").on(table.campaignId, table.phone), index("sms_campaign_recipients_queue_idx").on(table.campaignId, table.status)]
 );
 
 // ─── Phase 12: Guma ID ───────────────────────────────────────────────────────

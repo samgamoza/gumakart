@@ -46,8 +46,8 @@ function formatPrice(amount: string | number): string {
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
-    minimumFractionDigits: 0,
-  }).format(Number(amount));
+    minimumFractionDigits: 2,
+  }).format(Number(amount)).replace(/\.00$/, "");
 }
 
 function formatTime(date: Date | string | null | undefined): string {

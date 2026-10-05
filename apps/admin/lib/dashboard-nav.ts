@@ -1,5 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BadgePercent,
+  BarChart3,
+  Megaphone,
   Boxes,
   Bot,
   Calculator,
@@ -54,6 +57,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         href: "/",
         icon: LayoutDashboard,
         description: "What needs you today: orders to confirm, pack and ship.",
+      },
+      {
+        id: "reports",
+        label: "Reports",
+        href: "/reports",
+        icon: BarChart3,
+        badge: "new",
+        description: "Sales, profit, top products and buyers, repeat rate — with CSV exports.",
       },
     ],
   },
@@ -148,6 +159,22 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
     id: "automate",
     label: "Automate",
     items: [
+      {
+        id: "campaigns",
+        label: "SMS campaigns",
+        href: "/campaigns",
+        icon: Megaphone,
+        badge: "new",
+        description: "Text a sale to buyers who said yes — repeat buyers, VIPs, people who haven't ordered lately.",
+      },
+      {
+        id: "discounts",
+        label: "Discounts",
+        href: "/discounts",
+        icon: BadgePercent,
+        badge: "new",
+        description: "Coupon codes, quantity deals and automatic discounts.",
+      },
       {
         id: "automations",
         label: "Auto SMS",

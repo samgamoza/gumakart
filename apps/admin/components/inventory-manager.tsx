@@ -25,12 +25,14 @@ interface Row {
   sku: string | null;
   barcode: string | null;
   price: string;
+  /** Phase 14: cost per unit (hidden from staff). */
+  costPrice?: string | null;
   stockQty: number;
 }
 
 interface ImportPlan {
   applied: boolean;
-  changes: Array<{ line: number; label: string; fromStock: number; fromPrice: string; stockQty?: number; price?: number }>;
+  changes: Array<{ line: number; label: string; fromStock: number; fromPrice: string; stockQty?: number; price?: number; costPrice?: number | null; fromCost?: string | null }>;
   skipped: Array<{ line: number; reason: string }>;
   changed?: number;
 }
@@ -38,7 +40,7 @@ interface ImportPlan {
 type Filter = "all" | "low" | "out";
 
 const peso = (n: number) =>
-  new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
+  new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n).replace(/\.00$/, "");
 
 export function InventoryManager() {
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -54,7 +56,19 @@ export function InventoryManager() {
   const [csvText, setCsvText] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const canAdjust = useShopRole().can("stock.adjust");
+  const role = useShopRole();
+  const canAdjust = role.can("stock.adjust");
+  // Phase 14: cost prices (profit reports) — managers and owners.
+  const canCost = role.can("products.edit");
+  const [costSaving, setCostSaving] = useState<string | null>(null);
+  async function saveCost(variantId: string, value: string) {
+    const v = value.trim() === "" ? null : Number(value.replace(/[₱,\s]/g, ""));
+    if (v !== null && (!Number.isFinite(v) || v < 0)) return;
+    setCostSaving(variantId);
+    const res = await fetch("/api/inventory/cost", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ variantId, costPrice: v }) });
+    setCostSaving(null);
+    if (res.ok) setRows((list) => (list ?? []).map((r) => (r.variantId === variantId ? { ...r, costPrice: v === null ? null : v.toFixed(2) } : r)));
+  }
 
   const load = useCallback(async () => {
     try {
@@ -248,6 +262,7 @@ export function InventoryManager() {
                     {c.stockQty !== undefined ? `Stock ${c.fromStock} → ${c.stockQty}` : ""}
                     {c.stockQty !== undefined && c.price !== undefined ? " · " : ""}
                     {c.price !== undefined ? `Price ${peso(Number(c.fromPrice))} → ${peso(c.price)}` : ""}
+                    {c.costPrice != null ? `${c.stockQty !== undefined || c.price !== undefined ? " · " : ""}Cost ${c.fromCost != null ? peso(Number(c.fromCost)) : "—"} → ${peso(c.costPrice)}` : ""}
                   </span>
                 </li>
               ))}
@@ -330,6 +345,7 @@ export function InventoryManager() {
                   <th className="px-4 py-2.5 font-medium">Item</th>
                   <th className="px-4 py-2.5 font-medium">SKU</th>
                   <th className="px-4 py-2.5 font-medium">Price</th>
+                  {canCost && <th className="px-4 py-2.5 font-medium">Cost</th>}
                   <th className="px-4 py-2.5 text-right font-medium">In system</th>
                   <th className="px-4 py-2.5 font-medium">Counted</th>
                 </tr>
@@ -347,6 +363,23 @@ export function InventoryManager() {
                       </td>
                       <td className="px-4 py-2 font-mono text-xs text-slate-400">{r.sku ?? "—"}</td>
                       <td className="px-4 py-2 text-slate-300">{peso(Number(r.price))}</td>
+                      {canCost && (
+                        <td className="px-4 py-1.5">
+                          <input
+                            key={`${r.variantId}:${r.costPrice ?? ""}`}
+                            defaultValue={r.costPrice != null ? Number(r.costPrice).toFixed(2) : ""}
+                            onBlur={(e) => {
+                              const before = r.costPrice != null ? Number(r.costPrice).toFixed(2) : "";
+                              if (e.target.value.trim() !== before) void saveCost(r.variantId, e.target.value);
+                            }}
+                            inputMode="decimal"
+                            placeholder="₱ —"
+                            aria-label={`Cost of ${r.productTitle}${r.variantTitle ? ` ${r.variantTitle}` : ""}`}
+                            className={`h-9 w-24 rounded-lg border border-border bg-card px-2 ${costSaving === r.variantId ? "opacity-50" : ""}`}
+                            data-testid="cost-input"
+                          />
+                        </td>
+                      )}
                       <td
                         className={`px-4 py-2 text-right font-semibold ${
                           r.stockQty <= 0 ? "text-red-300" : r.stockQty <= threshold ? "text-amber-300" : "text-slate-100"

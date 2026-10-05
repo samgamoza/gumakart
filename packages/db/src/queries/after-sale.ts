@@ -418,6 +418,10 @@ export async function editOrderItems(
           quantity: p.qty,
           unitPrice: peso(p.unitC),
           lineTotal: peso(p.unitC * p.qty),
+          // Phase 14: cost snapshot for profit reports.
+          unitCost: p.variantId
+            ? ((await tx.select({ c: productVariants.costPrice }).from(productVariants).where(eq(productVariants.id, p.variantId)).limit(1))[0]?.c ?? null)
+            : null,
         });
         changes.push(`added ${p.qty}× ${p.title}`);
       }

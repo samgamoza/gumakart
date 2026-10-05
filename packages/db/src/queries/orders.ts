@@ -172,6 +172,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         variantId: productVariants.id,
         variantTitle: productVariants.title,
         variantPrice: productVariants.price,
+        costPrice: productVariants.costPrice,
         stockQty: productVariants.stockQty,
         hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
       })
@@ -200,6 +201,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       variantTitle: string | null;
       quantity: number;
       unitPriceCentavos: number;
+      unitCost: string | null;
     }> = [];
 
     const byProduct = new Map<string, (typeof catalog)[number]>();
@@ -243,6 +245,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         variantTitle: row.hasOptions ? row.variantTitle : null,
         quantity,
         unitPriceCentavos,
+        unitCost: row.costPrice ?? null,
       });
     }
 
@@ -289,11 +292,33 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       }
     }
 
+    // Phase 14: one use per buyer number, when the shop set it on the coupon.
+    if (input.couponCode) {
+      const coupon = findActiveCoupon(checkoutConfig, input.couponCode);
+      if (coupon?.oncePerBuyer && input.customer.phone) {
+        const [used] = await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(orders)
+          .where(
+            and(
+              eq(orders.tenantId, tenant.id),
+              eq(orders.couponCode, coupon.code),
+              sql`right(regexp_replace(coalesce(${orders.guestPhone}, ''), '\D', '', 'g'), 10) = right(regexp_replace(${input.customer.phone}, '\D', '', 'g'), 10)`,
+              sql`coalesce(${orders.orderState}::text, 'open') <> 'cancelled'`
+            )
+          );
+        if (Number(used?.n ?? 0) > 0) {
+          throw new OrderError("You've already used this coupon.", "COUPON_LIMIT_REACHED");
+        }
+      }
+    }
+
     const totals = computeCheckoutTotals({
       subtotal: subtotalCentavos / 100,
       deliveryFee: deliveryFeeCentavos / 100,
       checkout: checkoutConfig,
       couponCode: input.couponCode,
+      lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, lineTotal: (l.unitPriceCentavos * l.quantity) / 100 })),
     });
 
     const discountCentavos = toCentavos(totals.discount);
@@ -443,6 +468,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         quantity: line.quantity,
         unitPrice: fromCentavos(line.unitPriceCentavos),
         lineTotal: fromCentavos(line.unitPriceCentavos * line.quantity),
+        unitCost: line.unitCost,
       }))
     );
 

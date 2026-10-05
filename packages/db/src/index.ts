@@ -775,3 +775,41 @@ export {
   type MarketplaceAccountRow,
   type StockPushItem,
 } from "./queries/marketplaces";
+// Phase 14 — reports, discounts, campaigns
+export {
+  getSalesReport,
+  getRepeatCohorts,
+  getStockValue,
+  reportCsv,
+  type ReportRange,
+  type ReportKpis,
+  type SalesReport,
+  type RepeatCohort,
+  type StockValue,
+  type ReportExport,
+} from "./queries/reports";
+export { getDiscountSettings, saveDiscountSettings, DiscountError, type DiscountSettings, type CouponUsage } from "./queries/discounts";
+export { computeVolumeDiscount, inDiscountWindow, type CheckoutVolumeDiscount, type CheckoutLineForDiscount } from "./types/tenant-checkout";
+export {
+  CampaignError,
+  MAX_CAMPAIGN_RECIPIENTS,
+  SEGMENT_KINDS,
+  campaignTag,
+  cancelCampaign,
+  claimCampaignBatches,
+  createCampaign,
+  describeSegment,
+  finishCampaignIfDone,
+  getCampaign,
+  isCampaignActive,
+  listCampaigns,
+  normalizeSegment,
+  previewSegment,
+  queueCampaign,
+  recordCampaignSend,
+  updateCampaign,
+  type CampaignBatch,
+  type CampaignRow,
+  type CampaignSegment,
+  type SegmentKind,
+} from "./queries/campaigns";

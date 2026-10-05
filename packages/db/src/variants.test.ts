@@ -355,7 +355,7 @@ describe("stock tools", () => {
   it("CSV round-trip: export, edit, plan, apply", async () => {
     const csv = inventoryToCsv(await listInventory(shop.id));
     const table = parseCsv(csv);
-    assert.deepEqual(table[0], ["product", "product_slug", "variant", "sku", "barcode", "price", "stock"]);
+    assert.deepEqual(table[0], ["product", "product_slug", "variant", "sku", "barcode", "price", "cost", "stock"]);
     assert.equal(table.length, 1 + 4, "3 shirt sizes + mug");
 
     const edited = [
@@ -392,6 +392,7 @@ describe("stock tools", () => {
         hasOptions: false,
         variantId: "x",
         variantTitle: null,
+        costPrice: null,
         sku: "-5",
         barcode: null,
         price: "1.00",

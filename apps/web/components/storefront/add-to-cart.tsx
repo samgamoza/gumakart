@@ -184,5 +184,5 @@ export function AddToCartButton({
 }
 
 function formatPeso(amount: number): string {
-  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount);
+  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount).replace(/\.00$/, "");
 }

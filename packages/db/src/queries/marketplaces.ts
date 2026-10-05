@@ -413,7 +413,7 @@ export async function importMarketplaceOrder(
     if (!tenant) throw new MarketplaceSyncError("Shop not found.", "NOT_FOUND");
     const variantIds = [...new Set(input.items.map((i) => linkOf.get(`${i.externalItemId}:${i.externalModelId ?? ""}`)!))];
     const catalog = await tx
-      .select({ variantId: productVariants.id, productId: productVariants.productId, title: products.title, variantTitle: productVariants.title, track: products.trackInventory })
+      .select({ variantId: productVariants.id, productId: productVariants.productId, title: products.title, variantTitle: productVariants.title, track: products.trackInventory, cost: productVariants.costPrice })
       .from(productVariants)
       .innerJoin(products, eq(products.id, productVariants.productId))
       .where(inArray(productVariants.id, variantIds));
@@ -471,6 +471,7 @@ export async function importMarketplaceOrder(
           quantity: i.quantity,
           unitPrice: i.unitPrice.toFixed(2),
           lineTotal: (Math.round(i.unitPrice * 100 * i.quantity) / 100).toFixed(2),
+          unitCost: v.cost ?? null,
         };
       })
     );

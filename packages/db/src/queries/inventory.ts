@@ -34,6 +34,8 @@ export interface InventoryRow {
   sku: string | null;
   barcode: string | null;
   price: string;
+  /** Phase 14: what the seller paid per unit (null = not set). */
+  costPrice: string | null;
   stockQty: number;
 }
 
@@ -54,6 +56,7 @@ export async function listInventory(
       sku: productVariants.sku,
       barcode: productVariants.barcode,
       price: productVariants.price,
+      costPrice: productVariants.costPrice,
       stockQty: productVariants.stockQty,
     })
     .from(productVariants)
@@ -82,6 +85,7 @@ export async function listInventory(
       sku: r.sku,
       barcode: r.barcode,
       price: r.price,
+      costPrice: r.costPrice ?? null,
       stockQty: r.stockQty ?? 0,
     };
   });
@@ -123,6 +127,8 @@ export interface StockChange {
   stockQty?: number;
   /** New selling price (pesos). */
   price?: number;
+  /** Phase 14: cost per unit (pesos); null clears it. */
+  costPrice?: number | null;
 }
 
 export interface StockChangeResult {
@@ -151,6 +157,9 @@ export async function applyStockChanges(
     if (c.price !== undefined && (!Number.isFinite(c.price) || c.price <= 0 || c.price > 999_999)) {
       throw new InventoryError("Prices must be more than 0.");
     }
+    if (c.costPrice != null && (!Number.isFinite(c.costPrice) || c.costPrice < 0 || c.costPrice > 999_999)) {
+      throw new InventoryError("Cost must be 0 or more.");
+    }
     byId.set(c.variantId, { ...byId.get(c.variantId), ...c });
   }
 
@@ -162,6 +171,7 @@ export async function applyStockChanges(
         productId: productVariants.productId,
         stockQty: productVariants.stockQty,
         price: productVariants.price,
+        costPrice: productVariants.costPrice,
       })
       .from(productVariants)
       .innerJoin(products, eq(products.id, productVariants.productId))
@@ -174,11 +184,16 @@ export async function applyStockChanges(
     const repriced = new Set<string>();
     for (const row of current) {
       const change = byId.get(row.id)!;
-      const set: { stockQty?: number; price?: string } = {};
+      const set: { stockQty?: number; price?: string; costPrice?: string | null } = {};
       if (change.stockQty !== undefined && change.stockQty !== (row.stockQty ?? 0)) set.stockQty = change.stockQty;
       if (change.price !== undefined && change.price.toFixed(2) !== Number(row.price).toFixed(2)) {
         set.price = change.price.toFixed(2);
         repriced.add(row.productId);
+      }
+      if (change.costPrice !== undefined) {
+        const next = change.costPrice === null ? null : change.costPrice.toFixed(2);
+        const prev = row.costPrice == null ? null : Number(row.costPrice).toFixed(2);
+        if (next !== prev) set.costPrice = next;
       }
       if (Object.keys(set).length === 0) continue;
       changed += 1;
@@ -212,7 +227,7 @@ export async function applyStockChanges(
 
 // ─── CSV ─────────────────────────────────────────────────────────────────────
 
-export const INVENTORY_CSV_HEADERS = ["product", "product_slug", "variant", "sku", "barcode", "price", "stock"] as const;
+export const INVENTORY_CSV_HEADERS = ["product", "product_slug", "variant", "sku", "barcode", "price", "cost", "stock"] as const;
 
 function csvCell(value: string | number | null | undefined): string {
   const s = value == null ? "" : String(value);
@@ -225,7 +240,7 @@ export function inventoryToCsv(rows: InventoryRow[]): string {
   const lines = [INVENTORY_CSV_HEADERS.join(",")];
   for (const r of rows) {
     lines.push(
-      [r.productTitle, r.productSlug, r.variantTitle ?? "", r.sku ?? "", r.barcode ?? "", Number(r.price).toFixed(2), r.stockQty]
+      [r.productTitle, r.productSlug, r.variantTitle ?? "", r.sku ?? "", r.barcode ?? "", Number(r.price).toFixed(2), r.costPrice == null ? "" : Number(r.costPrice).toFixed(2), r.stockQty]
         .map(csvCell)
         .join(",")
     );
@@ -269,7 +284,7 @@ export function parseCsv(text: string): string[][] {
 }
 
 export interface CsvImportPlan {
-  changes: Array<StockChange & { line: number; label: string; fromStock: number; fromPrice: string }>;
+  changes: Array<StockChange & { line: number; label: string; fromStock: number; fromPrice: string; fromCost?: string | null }>;
   skipped: Array<{ line: number; reason: string }>;
 }
 
@@ -290,7 +305,8 @@ export async function planInventoryCsvImport(tenantId: string, csv: string): Pro
   const iVariant = col("variant");
   const iPrice = col("price");
   const iStock = col("stock");
-  if (iStock === -1 && iPrice === -1) throw new InventoryError('The file needs a "stock" or "price" column.');
+  const iCost = col("cost");
+  if (iStock === -1 && iPrice === -1 && iCost === -1) throw new InventoryError('The file needs a "stock", "price" or "cost" column.');
   if (iSku === -1 && iSlug === -1) throw new InventoryError('The file needs a "sku" or "product_slug" column.');
 
   const inventory = await listInventory(tenantId);
@@ -331,18 +347,28 @@ export async function planInventoryCsvImport(tenantId: string, csv: string): Pro
       plan.skipped.push({ line, reason: `Price "${priceRaw}" isn't valid.` });
       continue;
     }
+    // Phase 14: an empty cost cell leaves the cost as it is.
+    const costRaw = get(iCost).replace(/[₱,\s]/g, "");
+    const cost = costRaw === "" ? undefined : Number(costRaw);
+    if (cost !== undefined && (!Number.isFinite(cost) || cost < 0 || cost > 999_999)) {
+      plan.skipped.push({ line, reason: `Cost "${costRaw}" isn't valid.` });
+      continue;
+    }
     seen.add(match.variantId);
     const stockChanges = stock !== undefined && stock !== match.stockQty;
     const priceChanges = price !== undefined && price.toFixed(2) !== Number(match.price).toFixed(2);
-    if (!stockChanges && !priceChanges) continue;
+    const costChanges = cost !== undefined && cost.toFixed(2) !== (match.costPrice == null ? "" : Number(match.costPrice).toFixed(2));
+    if (!stockChanges && !priceChanges && !costChanges) continue;
     plan.changes.push({
       line,
       variantId: match.variantId,
       label: match.variantTitle ? `${match.productTitle} (${match.variantTitle})` : match.productTitle,
       fromStock: match.stockQty,
       fromPrice: match.price,
+      fromCost: match.costPrice,
       ...(stockChanges ? { stockQty: stock } : {}),
       ...(priceChanges ? { price } : {}),
+      ...(costChanges ? { costPrice: cost } : {}),
     });
   }
   return plan;

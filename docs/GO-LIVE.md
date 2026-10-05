@@ -6,7 +6,7 @@ Check status any time in **ops.guma.one → Settings → Integrations** (shows c
 
 Never paste secret values into chat, docs or commits.
 
-## 1. SMS — Semaphore (buyer updates, reminders, seller alerts, POS receipts)
+## 1. SMS — Semaphore (buyer updates, reminders, seller alerts, POS receipts, SMS campaigns)
 
 | Secret | Workers | Notes |
 |---|---|---|

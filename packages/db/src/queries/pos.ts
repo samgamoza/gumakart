@@ -753,6 +753,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           variantId: productVariants.id,
           variantTitle: productVariants.title,
           variantPrice: productVariants.price,
+          costPrice: productVariants.costPrice,
           stockQty: productVariants.stockQty,
           hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
         })
@@ -769,7 +770,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       for (const row of catalog) variantsByProduct.set(row.id, [...(variantsByProduct.get(row.id) ?? []), row]);
 
       let subtotalCentavos = 0;
-      const lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; quantity: number; unit: number; track: boolean }> = [];
+      const lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; quantity: number; unit: number; track: boolean; cost: string | null }> = [];
       for (const { productId, variantId, quantity } of quantities.values()) {
         const rows = variantsByProduct.get(productId) ?? [];
         let row = rows[0];
@@ -809,6 +810,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           quantity,
           unit,
           track: Boolean(row.trackInventory),
+          cost: row.costPrice ?? null,
         });
       }
 
@@ -950,6 +952,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           quantity: l.quantity,
           unitPrice: fromCentavos(l.unit),
           lineTotal: fromCentavos(l.unit * l.quantity),
+          unitCost: l.cost,
         }))
       );
 

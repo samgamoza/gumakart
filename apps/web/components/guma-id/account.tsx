@@ -49,7 +49,7 @@ const BUCKET_TL: Record<string, { label: string; tone: string }> = {
 };
 
 const PAY_LABEL: Record<string, string> = { gcash: "GCash", paymaya: "Maya", cod: "Cash on delivery", bank: "Bank transfer", qrph: "QR Ph", card: "Card" };
-const peso = (n: number) => `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const peso = (n: number) => `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
 
 export function GumaIdAccount() {
   const id = useGumaId();

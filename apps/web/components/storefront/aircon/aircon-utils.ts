@@ -2,8 +2,8 @@ export function formatPhpPrice(amount: number): string {
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
-    minimumFractionDigits: 0,
-  }).format(amount);
+    minimumFractionDigits: 2,
+  }).format(amount).replace(/\.00$/, "");
 }
 
 export function airconBrandName(name: string): string {

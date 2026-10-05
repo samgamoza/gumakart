@@ -48,7 +48,7 @@ export interface LinkCheckoutData {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function peso(n: number): string {
-  return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
 }
 
 /** 0917 123 4567 / +63 917… / 917… → 09171234567, or null. */
@@ -172,6 +172,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
     deliveryFee: deliveryFee ?? 0,
     checkout: data.checkout,
     couponCode: data.couponCode ?? undefined,
+    lines: data.items.map((i) => ({ productId: i.productId, quantity: quantities[i.key] ?? i.quantity, lineTotal: i.price * (quantities[i.key] ?? i.quantity) })),
   });
   const belowMinimum = data.minOrderAmount > 0 && subtotal < data.minOrderAmount;
 

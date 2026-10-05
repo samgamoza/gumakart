@@ -28,6 +28,8 @@ export const CRON_JOBS: Job[] = [
   { path: "/api/cron/automations", due: () => true },
   // Phase 13: Shopee/Lazada — push stock to linked listings, import new paid orders. Every tick.
   { path: "/api/cron/marketplaces", due: () => true },
+  // Phase 14: SMS campaigns (quiet hours respected inside). Every tick.
+  { path: "/api/cron/campaigns", due: () => true },
   // Unpaid orders past each shop's window (1–72 h) → cancelled + restocked. Hourly.
   { path: "/api/cron/expire-orders", due: (t) => t.getUTCMinutes() === 20 },
   // Wallet: release cleared earnings / payouts (no-op while WALLET_PAYOUTS_ENABLED=false). Hourly.

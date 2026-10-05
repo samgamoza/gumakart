@@ -59,6 +59,7 @@ const RECIPE_NAMES: Record<string, string> = {
   email_delivered: "Email: delivered",
   pos_receipt: "POS receipt (text)",
   pos_receipt_email: "POS receipt (email)",
+  campaign: "SMS campaign",
 };
 
 const STATUS_STYLE: Record<string, string> = {

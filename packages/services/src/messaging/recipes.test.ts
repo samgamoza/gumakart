@@ -106,3 +106,14 @@ test("POS receipt text", async () => {
   assert.match(t, /2x Sabon P90; 1x Kape 3-in-1 P12\. Total P102\. Sukli P98\. Salamat!$/);
   assert.ok(/^[\x20-\x7E]*$/.test(t));
 });
+
+test("Phase 14 campaign texts", async (t0) => {
+  await t0.test("prefixes the shop, personalises, folds to ASCII and appends the link", async () => {
+    const { campaignSms, smsSegments } = await import("./recipes");
+    const t = campaignSms({ shopName: "Tess Lifestyle PH", body: "Hi {name}! ₱100 off 🎉 today", buyerName: "Ana Reyes", link: "https://kart.guma.one/tess?ref=sms" });
+    assert.equal(t, "Tess Lifestyle PH: Hi Ana! P100 off today https://kart.guma.one/tess?ref=sms");
+    assert.match(campaignSms({ shopName: "S", body: "Hello {NAME}" }), /Hello po$/);
+    assert.equal(smsSegments("a".repeat(160)), 1);
+    assert.equal(smsSegments("a".repeat(161)), 2);
+  });
+});

@@ -221,3 +221,29 @@ export function posReceiptSms(r: {
   const change = r.change > 0 ? ` Sukli ${smsPeso(r.change)}.` : "";
   return `${shop} receipt #${r.orderNumber} ${asciiText(when, 20)}: ${lines.join("; ")}.${discount} Total ${smsPeso(r.totals.total)}.${change} Salamat!`;
 }
+
+// ─── Phase 14: SMS campaigns ─────────────────────────────────────────────────
+
+/** Most a campaign message can be before the shop prefix, link and opt-out footer. */
+export const CAMPAIGN_BODY_MAX = 300;
+
+/**
+ * A promo text: "Shop: <message> <link>". ASCII only (₱ → P, emoji dropped) so it goes out
+ * as cheap GSM-7 segments; {name} becomes the buyer's first name (or "po"). The caller adds
+ * the signed opt-out footer (withOptOutFooter) — campaigns are marketing.
+ */
+export function campaignSms(input: { shopName: string; body: string; buyerName?: string | null; link?: string | null }): string {
+  const first = (input.buyerName ?? "").trim().split(/\s+/)[0] ?? "";
+  const personal = input.body.replace(/\{name\}/gi, first ? asciiText(first, 20) : "po").replace(/₱\s?/g, "P");
+  const text = asciiText(personal, CAMPAIGN_BODY_MAX);
+  return `${smsShopName(input.shopName)}: ${text}${input.link ? ` ${input.link}` : ""}`;
+}
+
+/** SMS segments a message will use (GSM-7: 160 / 153 per part). */
+export function smsSegments(text: string): number {
+  // eslint-disable-next-line no-control-regex
+  const unicode = /[^\x00-\x7F]/.test(text);
+  const single = unicode ? 70 : 160;
+  const multi = unicode ? 67 : 153;
+  return text.length <= single ? 1 : Math.ceil(text.length / multi);
+}

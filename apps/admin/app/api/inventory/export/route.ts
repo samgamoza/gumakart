@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { can } from "@gumakart/db/staff-permissions";
 import { inventoryToCsv, listInventory } from "@gumakart/db";
 import { requireTenantSession } from "@/lib/api-auth";
 import { inventoryFail } from "../_errors";
@@ -7,7 +8,9 @@ import { inventoryFail } from "../_errors";
 export async function GET() {
   try {
     const session = await requireTenantSession();
-    const csv = inventoryToCsv(await listInventory(session.tenantId));
+    // Phase 14: the cost column is blank for people who can't see costs.
+    const showCost = can(session.shopRole, "products.edit");
+    const csv = inventoryToCsv((await listInventory(session.tenantId)).map((r) => (showCost ? r : { ...r, costPrice: null })));
     const date = new Date().toISOString().slice(0, 10);
     return new NextResponse(`﻿${csv}`, {
       headers: {

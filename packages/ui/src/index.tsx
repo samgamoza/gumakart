@@ -64,10 +64,13 @@ export function Badge({ children, className = "" }: { children: ReactNode; class
 }
 
 export function formatPrice(amount: number): string {
+  // Whole pesos without decimals (₱1,890); otherwise always two (₱31,741.40, never ₱31,741.4).
+  const whole = Math.abs(Math.round(amount * 100)) % 100 === 0;
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
-    minimumFractionDigits: 0,
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
   }).format(amount);
 }
 
