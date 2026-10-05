@@ -1,51 +1,50 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-05 (roadmap Phases 8–15 built; paused after Phase 15 — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–16 built; Phase 16 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-05 (paused after Phase 15, waiting on Sam)
+## ▶ Resume here — 2026-10-06 (Phase 16 in review)
 
-**Status.** Roadmap phases 8–15 are built and committed on branch `wip/uncommitted-work-2026-08-01`. The last
-commits are:
+**Status.** Phases 8–16 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- `146c9d0` Phase 15 platform: public API, keys, webhooks, integrations. In review; not yet approved.
+- `f521677` Phase 16 operations: monitoring/alerts, status page, billing lifecycle, backups drill,
+  help centre. In review.
+- `146c9d0` Phase 15 platform: approved 2026-10-06.
 - `4483da8` Phase 14 growth: approved.
-- `61fb279` Phase 13 channels.
 
 Sam pushes; Cloudflare Workers deploy on push.
 
-**Before pushing (Sam):** `pnpm --filter @gumakart/db migrate` against Neon. Neon already has 0026–0031;
-this run applies **0032_growth** and **0033_platform**. The agent sandbox cannot reach Neon (egress 403),
-so Sam always runs migrations.
+**Before pushing (Sam):** `pnpm --filter @gumakart/db migrate` against Neon. Neon has 0026–0031; this
+applies **0032_growth**, **0033_platform** and **0034_operations**. The agent sandbox cannot reach Neon.
+Pushing also switches the admin Worker cron to **every minute**.
 
 **Then check live:**
 
-- admin.guma.one → Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks (owner).
-- `https://admin.guma.one/api/v1/openapi.json` should load without a key.
+- ops.guma.one → System health and Status page.
+- kart.guma.one/status.
+- admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13-NOTES.md`, `docs/PHASE-14-NOTES.md`, `docs/PHASE-15-NOTES.md`.
-Provider keys are listed in `docs/GO-LIVE.md` §1–7.
+**Phase notes:** `docs/PHASE-13/14/15/16-NOTES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**
 
-- Semaphore SMS: `SEMAPHORE_API_KEY` and `SMS_OPT_OUT_SECRET`. This also turns on campaigns and Guma ID.
-- PayMongo live keys.
-- Resend email.
-- Meta app review (Messenger/IG). No fabricated documents.
-- Shopee and Lazada partner keys.
+- Semaphore (`SEMAPHORE_API_KEY`, `SMS_OPT_OUT_SECRET`).
+- PayMongo live, plus `NEXT_PUBLIC_PLAN_BILLING_ENABLED=true`.
+- Resend (also needed for alert and billing emails; `OPS_ALERT_EMAIL`).
+- Meta review.
+- Shopee and Lazada keys.
 - `GUMA_ID_SECRET`.
-- Accountant review before any shop turns on BIR numbering.
-- Reset the Neon password (it appeared in a screenshot).
+- Accountant review before BIR numbering.
+- Reset the Neon password.
+- First restore drill.
 
-**Open decisions for Sam when resuming:**
+**Next phases proposed:**
 
-1. Approve Phase 15, or list changes.
-2. Partner program for agencies (not built). It needs a commission model and a multi-shop agency
-   dashboard. Agencies can be invited as Manager staff today.
-3. What next after the roadmap:
-   - The Operations track: monitoring/alerts, job runner instead of cron relay, backups drill,
-     status page, billing live.
-   - Or API v1.1: product create/edit, near-real-time webhooks via Queues.
+- 17 — Seller polish: deals at POS, multi-branch stock, gift cards/store credit, free-delivery
+  thresholds, saved addresses.
+- 18 — Platform v1.1: product writes in the API, Zapier/Make recipes, agency partner program. The
+  partner program needs a commission decision.
 
 **Pending Phase 2 constraints:** `packages/db/drizzle-pending/0035_phase2_constrain.sql` (journal idx 35). Move
 it into `drizzle/` only after `phase2-verify.sql` returns 0 rows for a week. Renumber it each time a phase adds
