@@ -22,8 +22,8 @@
     "seed": "tsx src/seed.ts",
     "seed:ph-locations": "tsx src/seed-ph-locations.ts",
     "seed:simply-sweet": "tsx src/seed-simply-sweet.ts",
-    "test": "tsx --test src/order-state.test.ts src/types/tenant-seo.test.ts src/types/tenant-checkout.test.ts src/types/tenant-shipping.test.ts src/tenant-access.test.ts src/migration-journal.test.ts src/types/pos-tax.test.ts src/types/staff-permissions.test.ts",
-    "test:integration": "tsx --test src/orders-concurrency.test.ts src/order-lifecycle.test.ts src/phase2.test.ts src/checkout-links.test.ts src/automations.test.ts src/pos.test.ts src/variants.test.ts src/staff.test.ts src/after-sale.test.ts src/guma-id.test.ts src/pos-offline.test.ts"
+    "test": "tsx --test src/order-state.test.ts src/types/tenant-seo.test.ts src/types/tenant-checkout.test.ts src/types/tenant-shipping.test.ts src/tenant-access.test.ts src/migration-journal.test.ts src/types/pos-tax.test.ts src/types/staff-permissions.test.ts src/types/sales-channel.test.ts",
+    "test:integration": "tsx --test src/orders-concurrency.test.ts src/order-lifecycle.test.ts src/phase2.test.ts src/checkout-links.test.ts src/automations.test.ts src/pos.test.ts src/variants.test.ts src/staff.test.ts src/after-sale.test.ts src/guma-id.test.ts src/pos-offline.test.ts src/channels.test.ts"
   },
   "dependencies": {
     "@gumakart/plans": "workspace:*",

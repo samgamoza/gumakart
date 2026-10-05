@@ -10,6 +10,7 @@ import {
   History,
   Loader2,
   Lock,
+  Mail,
   Minus,
   Plus,
   Printer,
@@ -1528,6 +1529,8 @@ function PayModal({
 function ReceiptActions({ receipt, onNewSale }: { receipt: Receipt; onNewSale: () => void }) {
   const [phone, setPhone] = useState(receipt.customer.phone ?? "");
   const [sms, setSms] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({ busy: false, msg: null, ok: false });
+  const [email, setEmail] = useState("");
+  const [mail, setMail] = useState<{ busy: boolean; msg: string | null; ok: boolean }>({ busy: false, msg: null, ok: false });
   return (
     <div className="space-y-3">
       {receipt.change > 0 && (
@@ -1559,6 +1562,21 @@ function ReceiptActions({ receipt, onNewSale }: { receipt: Receipt; onNewSale: (
           {sms.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Text receipt
         </button>
         {sms.msg && <p className={`text-xs ${sms.ok ? "text-emerald-300" : "text-amber-300"}`}>{sms.msg}</p>}
+        <input className="guma-field h-10" placeholder="buyer@email.com" inputMode="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Buyer email" />
+        <button
+          type="button"
+          className={`${btnGhost} w-full`}
+          disabled={mail.busy || !email.trim() || mail.ok}
+          data-testid="pos-email-receipt"
+          onClick={async () => {
+            setMail({ busy: true, msg: null, ok: false });
+            const r = await api<{ status?: string }>(`/api/pos/sales/${receipt.orderId}/email`, { method: "POST", body: JSON.stringify({ email }) });
+            setMail({ busy: false, ok: r.ok, msg: r.ok ? (r.status === "already_sent" ? "Already emailed." : "Receipt emailed.") : (r.error ?? "Could not send.") });
+          }}
+        >
+          {mail.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Email receipt
+        </button>
+        {mail.msg && <p className={`text-xs ${mail.ok ? "text-emerald-300" : "text-amber-300"}`}>{mail.msg}</p>}
       </div>
       )}
       <button type="button" className={`${btnPrimary} w-full py-3`} onClick={onNewSale} autoFocus data-testid="pos-new-sale">

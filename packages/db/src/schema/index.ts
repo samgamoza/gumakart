@@ -682,6 +682,12 @@ export const orders = pgTable(
     /** Phase 12b: POS sale rung while the register was offline (device clock), synced later. */
     posOfflineAt: timestamp("pos_offline_at", { withTimezone: true }),
     posDeviceId: varchar("pos_device_id", { length: 40 }),
+    /** Phase 13: where the sale came from (facebook, tiktok, shopee, pos, direct…; types/sales-channel). */
+    salesChannel: varchar("sales_channel", { length: 20 }),
+    /** Marketplace order number (Shopee/Lazada import), unique per shop + channel. */
+    externalOrderId: varchar("external_order_id", { length: 80 }),
+    /** The Messenger/Instagram conversation the order link was sent in. */
+    socialThreadId: uuid("social_thread_id").references((): AnyPgColumn => socialThreads.id, { onDelete: "set null" }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -1844,6 +1850,143 @@ export const posSyncIssues = pgTable(
     resolvedByName: varchar("resolved_by_name", { length: 80 }),
   },
   (table) => [index("pos_sync_issues_open_idx").on(table.tenantId, table.createdAt)]
+);
+
+// ─── Phase 13: channels ──────────────────────────────────────────────────────
+
+export type SocialPlatform = "messenger" | "instagram";
+export type ChannelAccountStatus = "connected" | "mock" | "error" | "disconnected";
+
+/** A connected Facebook Page (Messenger) or Instagram professional account. */
+export const socialAccounts = pgTable(
+  "social_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    platform: varchar("platform", { length: 16 }).$type<SocialPlatform>().notNull(),
+    /** Page id (Messenger) or Instagram account id — what webhooks address. */
+    externalId: varchar("external_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    /** Instagram: the Facebook Page it's linked to (sends go through the Page). */
+    pageId: varchar("page_id", { length: 64 }),
+    /** Page access token, sealed (AES-GCM). Null for mock accounts. */
+    accessTokenSealed: text("access_token_sealed"),
+    status: varchar("status", { length: 16 }).$type<ChannelAccountStatus>().default("connected").notNull(),
+    lastError: varchar("last_error", { length: 300 }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("social_accounts_external_idx").on(table.platform, table.externalId), index("social_accounts_tenant_idx").on(table.tenantId)]
+);
+
+export const socialThreads = pgTable(
+  "social_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: uuid("account_id")
+      .references(() => socialAccounts.id, { onDelete: "cascade" })
+      .notNull(),
+    platform: varchar("platform", { length: 16 }).$type<SocialPlatform>().notNull(),
+    /** PSID (Messenger) / IGSID (Instagram) — page-scoped buyer id. */
+    externalUserId: varchar("external_user_id", { length: 64 }).notNull(),
+    buyerName: varchar("buyer_name", { length: 160 }),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    /** Meta's 24-hour rule: replies are allowed within 24 h of the buyer's last message. */
+    lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow().notNull(),
+    lastPreview: varchar("last_preview", { length: 200 }),
+    unread: integer("unread").default(0).notNull(),
+    status: varchar("status", { length: 12 }).$type<"open" | "done">().default("open").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("social_threads_user_idx").on(table.accountId, table.externalUserId),
+    index("social_threads_inbox_idx").on(table.tenantId, table.status, table.lastMessageAt),
+  ]
+);
+
+export const socialMessages = pgTable(
+  "social_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    threadId: uuid("thread_id")
+      .references(() => socialThreads.id, { onDelete: "cascade" })
+      .notNull(),
+    direction: varchar("direction", { length: 4 }).$type<"in" | "out">().notNull(),
+    kind: varchar("kind", { length: 12 }).$type<"text" | "link" | "product" | "image" | "other">().default("text").notNull(),
+    body: text("body").notNull(),
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>(),
+    externalMessageId: varchar("external_message_id", { length: 160 }),
+    status: varchar("status", { length: 12 }).$type<"received" | "sent" | "mock" | "failed">().default("sent").notNull(),
+    error: varchar("error", { length: 300 }),
+    sentByName: varchar("sent_by_name", { length: 80 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("social_messages_thread_idx").on(table.threadId, table.createdAt)]
+);
+
+export type MarketplacePlatform = "shopee" | "lazada";
+
+/** A connected Shopee / Lazada shop. */
+export const marketplaceAccounts = pgTable(
+  "marketplace_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    platform: varchar("platform", { length: 12 }).$type<MarketplacePlatform>().notNull(),
+    shopExternalId: varchar("shop_external_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    region: varchar("region", { length: 4 }).default("PH").notNull(),
+    /** {accessToken, refreshToken}, sealed (AES-GCM). Null for mock accounts. */
+    tokensSealed: text("tokens_sealed"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    status: varchar("status", { length: 16 }).$type<ChannelAccountStatus>().default("connected").notNull(),
+    syncStock: boolean("sync_stock").default(true).notNull(),
+    importOrders: boolean("import_orders").default(true).notNull(),
+    lastStockPushAt: timestamp("last_stock_push_at", { withTimezone: true }),
+    lastOrderPullAt: timestamp("last_order_pull_at", { withTimezone: true }),
+    ordersCursorAt: timestamp("orders_cursor_at", { withTimezone: true }),
+    lastError: varchar("last_error", { length: 300 }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("marketplace_accounts_external_idx").on(table.platform, table.shopExternalId), index("marketplace_accounts_tenant_idx").on(table.tenantId)]
+);
+
+/** One marketplace item/model, linked to the Guma variant whose stock it mirrors. */
+export const marketplaceListings = pgTable(
+  "marketplace_listings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: uuid("account_id")
+      .references(() => marketplaceAccounts.id, { onDelete: "cascade" })
+      .notNull(),
+    externalItemId: varchar("external_item_id", { length: 64 }).notNull(),
+    /** Shopee model id / Lazada SkuId; '' when the item has no models. */
+    externalModelId: varchar("external_model_id", { length: 64 }).default("").notNull(),
+    externalSku: varchar("external_sku", { length: 120 }),
+    title: varchar("title", { length: 300 }).notNull(),
+    price: decimal("price", { precision: 12, scale: 2 }),
+    externalStock: integer("external_stock"),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+    lastPushedQty: integer("last_pushed_qty"),
+    lastPushedAt: timestamp("last_pushed_at", { withTimezone: true }),
+    pushError: varchar("push_error", { length: 300 }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("marketplace_listings_external_idx").on(table.accountId, table.externalItemId, table.externalModelId)]
 );
 
 // ─── Phase 12: Guma ID ───────────────────────────────────────────────────────

@@ -43,6 +43,7 @@ export {
   withOptOutFooter,
 } from "./messaging/opt-out-link";
 export * from "./messaging/recipes";
+export * from "./messaging/email-templates";
 export {
   COURIER_NOTES,
   grabFulfillment,
@@ -142,3 +143,6 @@ export {
   type IntegrationStatus,
   type IntegrationSeverity,
 } from "./config/integrations";
+export * from "./channels/meta";
+export * from "./crypto/token-box";
+export * from "./channels/marketplaces";

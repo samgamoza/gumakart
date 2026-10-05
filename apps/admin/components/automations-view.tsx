@@ -35,6 +35,7 @@ interface Data {
   recipes: Recipe[];
   seller: { smsOnNewOrder: boolean; mobile: string | null };
   smsLive: boolean;
+  email?: { enabled: boolean; live: boolean };
   summary: { sent30d: number; failed30d: number; byRecipe: Record<string, number>; recovered: { orders: number; sales: number } };
   messages: MessageRow[];
 }
@@ -51,6 +52,13 @@ const RECIPE_NAMES: Record<string, string> = {
   seller_payment_proof: "Alert to you: payment proof",
   seller_delivery_failed: "Alert to you: delivery failed",
   seller_payment_received: "Alert to you: paid online",
+  email_order_created: "Email: order received",
+  email_payment_confirmed: "Email: payment confirmed",
+  email_shipped: "Email: rider booked / pickup ready",
+  email_out_for_delivery: "Email: out for delivery",
+  email_delivered: "Email: delivered",
+  pos_receipt: "POS receipt (text)",
+  pos_receipt_email: "POS receipt (email)",
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -215,6 +223,25 @@ export function AutomationsView() {
           <MessageSquareText className="h-4 w-4" /> Order updates to buyers
         </h2>
         <ul className="mt-2 divide-y divide-white/10">{transactional.map(recipeRow)}</ul>
+        {data.email && (
+          <div className="mt-3 flex items-start gap-3 border-t border-white/10 pt-3" data-testid="email-copies">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">Email copies</p>
+              <p className="text-sm text-muted-foreground">
+                When the buyer types an email at checkout, they also get each update by email — with the full item list. Free.
+                {!data.email.live ? " Email sending isn't connected yet; it starts once it is." : ""}
+              </p>
+            </div>
+            <Toggle
+              on={data.email.enabled}
+              label="Email copies"
+              disabled={saving === "email"}
+              onChange={(v) =>
+                void patch("email", { automations: { email_copies: v } }, (d) => ({ ...d, email: { ...(d.email ?? { live: false }), enabled: v } }))
+              }
+            />
+          </div>
+        )}
       </Card>
 
       <Card className="p-5">

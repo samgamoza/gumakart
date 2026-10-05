@@ -24,7 +24,10 @@ export type IntegrationId =
   | "web_push"
   | "email"
   | "sentry"
-  | "auth_secret";
+  | "auth_secret"
+  | "meta"
+  | "shopee"
+  | "lazada";
 
 export type IntegrationSeverity = "required" | "optional";
 
@@ -295,6 +298,8 @@ export function getIntegrationChecks(): IntegrationCheck[] {
           : "Resend not configured — notifications must report not sent (never fake success). Set RESEND_API_KEY + HELPDESK_NOTIFY_EMAIL for helpdesk.",
       envVars: ["RESEND_API_KEY", "EMAIL_FROM", "HELPDESK_NOTIFY_EMAIL"],
     }),
+    // Phase 13 — channels (ready to hook up; optional, never fake success in production).
+    ...channelChecks(mocks).map(buildCheck),
     buildCheck({
       id: "sentry",
       label: "Sentry error tracking",
@@ -440,4 +445,30 @@ export function integrationHealthPayload(): {
     blockers: report.blockers.map((c) => c.id),
     warnings: report.warnings.map((c) => c.id),
   };
+}
+
+function channelChecks(mocks: boolean): Array<Omit<IntegrationCheck, "wouldMock"> & { wouldMock: boolean }> {
+  const has = (...keys: string[]) => keys.every((k) => Boolean(process.env[k]?.trim()));
+  const entry = (id: IntegrationId, label: string, envVars: string[], need: string) => {
+    const configured = has(...envVars);
+    return {
+      id,
+      label,
+      severity: "optional" as const,
+      status: (configured ? "configured" : mocks ? "mock_allowed" : "missing") as IntegrationStatus,
+      configured,
+      wouldMock: !configured && mocks,
+      message: configured
+        ? `${envVars.join(" + ")} set.`
+        : mocks
+          ? `${label} not configured — demo connection and labeled mock sends allowed in this runtime.`
+          : `${label} not configured — the shop sees "Malapit na" and nothing is sent. ${need}`,
+      envVars,
+    };
+  };
+  return [
+    entry("meta", "Messenger & Instagram (Meta)", ["META_APP_ID", "META_APP_SECRET", "META_VERIFY_TOKEN"], "Needs Meta business verification + app review (pages_messaging, instagram_manage_messages)."),
+    entry("shopee", "Shopee Open Platform", ["SHOPEE_PARTNER_ID", "SHOPEE_PARTNER_KEY"], "Needs a Shopee Open Platform partner app."),
+    entry("lazada", "Lazada Open Platform", ["LAZADA_APP_KEY", "LAZADA_APP_SECRET"], "Needs a Lazada Open Platform app."),
+  ];
 }

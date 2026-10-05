@@ -109,7 +109,7 @@ export async function productSnapshot(
       price: products.basePrice,
       status: products.status,
       options: products.optionsJson,
-      stock: sql<number>`(select coalesce(sum(${productVariants.stockQty}), 0)::int from ${productVariants} where ${productVariants.productId} = ${products.id} and ${productVariants.active})`,
+      stock: sql<number>`(select coalesce(sum(pv.stock_qty), 0)::int from product_variants pv where pv.product_id = "products"."id" and pv.active)`,
     })
     .from(products)
     .where(and(eq(products.id, productId), eq(products.tenantId, tenantId)))

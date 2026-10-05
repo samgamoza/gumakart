@@ -480,7 +480,7 @@ export async function listPosProducts(tenantId: string, query?: string): Promise
       basePrice: products.basePrice,
       trackInventory: products.trackInventory,
       hasOptions: sql<boolean>`${products.optionsJson} is not null and jsonb_array_length(${products.optionsJson}) > 0`,
-      firstImage: sql<string | null>`(select ${productImages.url} from ${productImages} where ${productImages.productId} = ${products.id} order by ${productImages.sortOrder} asc nulls last limit 1)`,
+      firstImage: sql<string | null>`(select pi.url from product_images pi where pi.product_id = "products"."id" order by pi.sort_order asc nulls last limit 1)`,
     })
     .from(products)
     .where(
@@ -930,6 +930,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           registerSessionId: input.shiftId,
           posStaffId: input.staffId,
           posIdempotencyKey: key,
+          salesChannel: "pos",
           posMetaJson: meta,
           invoiceNumber,
           createdAt: now,
@@ -1131,7 +1132,8 @@ export async function listShiftSales(tenantId: string, shiftId: string, limit = 
       createdAt: orders.createdAt,
       meta: orders.posMetaJson,
       method: orders.paymentMethod,
-      itemCount: sql<number>`(select coalesce(sum(${orderItems.quantity}), 0)::int from ${orderItems} where ${orderItems.orderId} = ${orders.id})`,
+      // Raw aliases: drizzle leaves columns unqualified inside sql`` subqueries (this showed 0 items).
+      itemCount: sql<number>`(select coalesce(sum(oi.quantity), 0)::int from order_items oi where oi.order_id = "orders"."id")`,
     })
     .from(orders)
     .where(and(eq(orders.tenantId, tenantId), eq(orders.registerSessionId, shiftId), isNotNull(orders.registerSessionId), ne(orders.sourceChannel, "storefront")))

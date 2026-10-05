@@ -103,7 +103,9 @@ export type AutomationRecipeId =
   | "out_for_delivery"
   | "delivered"
   | "abandoned_checkout"
-  | "unpaid_reminder";
+  | "unpaid_reminder"
+  /** Phase 13: email copies of the order texts when the buyer gave an email (missing = on). */
+  | "email_copies";
 
 export type TenantAutomationSettings = Partial<Record<AutomationRecipeId, boolean>>;
 

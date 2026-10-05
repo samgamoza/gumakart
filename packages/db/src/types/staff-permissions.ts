@@ -143,6 +143,10 @@ export const API_RULES: ApiRule[] = [
   { pattern: /^\/api\/checkout-links(\/|$)/, permission: "links.manage" },
   { pattern: /^\/api\/customers(\/|$)/, permission: "customers.view" },
   { pattern: /^\/api\/messages(\/|$)/, permission: "messages.reply" },
+  // Phase 13: Messenger / Instagram inbox (reply, send links) and channel setup.
+  { pattern: /^\/api\/inbox(\/|$)/, permission: "messages.reply" },
+  { pattern: /^\/api\/channels\/summary$/, methods: READ, permission: "dashboard.view" },
+  { pattern: /^\/api\/channels(\/|$)/, permission: "settings.shop" },
 
   // POS (the register itself also accepts a cashier PIN cookie; see lib/pos-auth)
   { pattern: /^\/api\/pos-staff(\/|$)/, permission: "pos.manage" },
@@ -205,6 +209,8 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/checkout-links", permission: "links.manage" },
   { prefix: "/customers", permission: "customers.view" },
   { prefix: "/messages", permission: "messages.reply" },
+  { prefix: "/inbox", permission: "messages.reply" },
+  { prefix: "/channels", permission: "settings.shop" },
   { prefix: "/automations", permission: "marketing.manage" },
   { prefix: "/agents", permission: "marketing.manage" },
   { prefix: "/ai-studio", permission: "marketing.manage" },

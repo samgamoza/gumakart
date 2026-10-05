@@ -25,7 +25,9 @@ import {
   productVariants,
   products,
   tenants,
+  socialThreads,
 } from "../schema/index";
+import { salesChannelOf } from "../types/sales-channel";
 import {
   computeCheckoutTotals,
   findActiveCoupon,
@@ -93,6 +95,8 @@ export interface CreateOrderInput {
   checkoutLinkId?: string | null;
   /** utm_source / utm_medium / utm_campaign / utm_content (+ fbclid etc.), already sanitized. */
   utmJson?: Record<string, string> | null;
+  /** Phase 13: set when the channel is known for sure (marketplace import, chat order). */
+  salesChannel?: string | null;
 }
 
 export interface CreatedOrder {
@@ -376,6 +380,24 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       }
     }
 
+    // Phase 13: where the sale came from, and the chat it was sent in (?th=<thread id>).
+    let shareChannel: string | null = null;
+    if (input.checkoutLinkId) {
+      const [link] = await tx.select({ share: checkoutLinks.shareChannel }).from(checkoutLinks).where(eq(checkoutLinks.id, input.checkoutLinkId)).limit(1);
+      shareChannel = link?.share ?? null;
+    }
+    let socialThreadId: string | null = null;
+    const threadRef = input.utmJson?.th;
+    if (threadRef && /^[0-9a-f-]{36}$/i.test(threadRef)) {
+      const [thread] = await tx
+        .select({ id: socialThreads.id, platform: socialThreads.platform })
+        .from(socialThreads)
+        .where(and(eq(socialThreads.id, threadRef), eq(socialThreads.tenantId, tenant.id)))
+        .limit(1);
+      if (thread) socialThreadId = thread.id;
+    }
+    const salesChannel = salesChannelOf({ explicit: input.salesChannel, sourceChannel: input.sourceChannel, utm: input.utmJson, shareChannel });
+
     const [order] = await tx
       .insert(orders)
       .values({
@@ -400,6 +422,8 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         sourceChannel: input.sourceChannel ?? "storefront",
         checkoutLinkId: input.checkoutLinkId ?? null,
         utmJson: input.utmJson && Object.keys(input.utmJson).length > 0 ? input.utmJson : null,
+        salesChannel,
+        socialThreadId,
         orderState: initialFacts.orderState,
         paymentState: initialFacts.paymentState,
         fulfillmentState: initialFacts.fulfillmentState,
@@ -460,6 +484,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         orderNumber: order.orderNumber,
         paymentMethod: input.paymentMethod,
         sourceChannel: input.sourceChannel ?? "storefront",
+        salesChannel,
         checkoutLinkId: input.checkoutLinkId ?? null,
         total: order.total,
         historyId: history?.id ?? null,
@@ -717,6 +742,12 @@ export interface TenantOrderListItem {
   deliveryProvider: string | null;
   /** storefront | checkout_link | … */
   sourceChannel: string;
+  /** Phase 13: facebook / tiktok / shopee / messenger / pos / direct … */
+  salesChannel: string | null;
+  /** Shopee/Lazada order number for imported orders. */
+  externalOrderId: string | null;
+  /** Sent from a Messenger/Instagram chat (opens it in Chats). */
+  socialThreadId: string | null;
   /** Checkout link the order came from: its seller-side name and where it was shared. */
   checkoutLink: { title: string; shareChannel: string | null } | null;
   /** Phase 11: seller-only note/tags, money given back, edits/voids. */
@@ -851,6 +882,9 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       acceptedAt: row.acceptedAt,
       deliveryProvider: providerByOrder.get(row.id) ?? null,
       sourceChannel: row.sourceChannel ?? "storefront",
+      salesChannel: row.salesChannel ?? null,
+      externalOrderId: row.externalOrderId ?? null,
+      socialThreadId: row.socialThreadId ?? null,
       checkoutLink: row.checkoutLinkId ? linkById.get(row.checkoutLinkId) ?? null : null,
       staffNote: row.staffNote,
       tags: row.tagsJson ?? [],

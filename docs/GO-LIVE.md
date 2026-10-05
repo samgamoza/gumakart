@@ -40,11 +40,44 @@ Then per shop: ops → Tenants → shop → Payments mode → `paymongo` or `bot
 Until then sellers use **direct GCash/Maya** (buyer uploads proof, seller confirms) and COD — fully working.
 Test: ₱1 per method (GCash, Maya, QR Ph, card) on a test shop, confirm the order turns Paid by itself.
 
-## 4. Messenger & Instagram — Meta (Phase 13, ready-to-hook-up)
+## 4. Messenger & Instagram — Meta (Phase 13, built, ready to hook up)
 
-Waiting on: Meta business verification + app review (`pages_messaging`, `instagram_manage_messages`).
-Secrets will be `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN` (admin). Do not submit
-documents that aren't real; use the actual Guma One registration papers.
+Waiting on: Meta business verification + app review for `pages_messaging`, `pages_manage_metadata`,
+`pages_show_list`, `instagram_basic`, `instagram_manage_messages`. Do not submit documents that
+aren't real; use the actual Guma One registration papers.
+
+| Secret | Workers | Notes |
+|---|---|---|
+| `META_APP_ID` | admin | Meta app id |
+| `META_APP_SECRET` | admin | Checks webhook signatures and exchanges login codes |
+| `META_VERIFY_TOKEN` | admin | Any random string; paste the same into the Meta webhook setup |
+| `CHANNEL_TOKEN_KEY` | admin | Optional, 32+ random characters; seals Page/marketplace tokens (falls back to `AUTH_SECRET`) |
+
+In the Meta app: Facebook Login redirect `https://admin.guma.one/api/channels/meta/callback`;
+Webhooks (Page + Instagram) callback `https://admin.guma.one/api/webhooks/meta`, fields
+`messages`, `messaging_postbacks`, `message_echoes`. Test: connect a test Page from Channels, send
+it a message from another account, reply from Chats, send a product card, order from it — the
+order shows in the chat and under Messenger in Channels. Replies only within 24 h of the buyer's
+last message (Meta's rule).
+
+## 4b. Shopee & Lazada (Phase 13, built, ready to hook up)
+
+| Secret | Workers | Notes |
+|---|---|---|
+| `SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY` | admin | Shopee Open Platform live partner app (`SHOPEE_API_HOST` optional for the sandbox) |
+| `LAZADA_APP_KEY`, `LAZADA_APP_SECRET` | admin | Lazada Open Platform app (`LAZADA_API_HOST` optional; default PH) |
+
+Redirect URLs: `https://admin.guma.one/api/channels/marketplaces/shopee/callback` and
+`.../lazada/callback`. The admin cron pushes stock and imports paid orders every 5 minutes.
+First real sync: watch one shop — check listings auto-linked by SKU, one stock push, one imported
+order, one cancellation (restocks). Endpoint fields follow the 2026 public docs; adjust if the
+partner console differs.
+
+## 4c. Email copies of order updates (Phase 13)
+
+Uses the Resend setup in §2. Buyers who type an email get order received / paid / shipped / out
+for delivery / delivered emails; the POS can email a receipt. Shops can turn it off in Auto SMS.
+`EMAIL_FROM` must be on the verified domain.
 
 ## 5. BIR sales invoices for POS (built, off by default — Phase 11)
 

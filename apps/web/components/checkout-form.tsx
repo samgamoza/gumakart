@@ -1,5 +1,6 @@
 "use client";
 
+import { storedUtm } from "@/components/storefront/attribution-capture";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -303,6 +304,7 @@ export function CheckoutForm({
           sessionKey: sessionKey || undefined,
           couponCode: couponCode.trim() || undefined,
           smsConsent,
+          utm: storedUtm(tenantSlug),
           customer: {
             name: name.trim(),
             phone: cleanPhone,

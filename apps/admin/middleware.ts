@@ -32,6 +32,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/pos/",
   // Staff invites: the token in the link is the credential (checked in the route).
   "/api/invite",
+  // Phase 13: Meta webhook — signed with META_APP_SECRET (checked in the route).
+  "/api/webhooks/meta",
 ];
 
 const SHOP_SETUP_PATHS = ["/signup/shop", "/api/auth/google/complete-shop", "/api/auth/logout"];

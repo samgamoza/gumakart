@@ -13,6 +13,7 @@ import {
 } from "@gumakart/services";
 import { getTenant as getDemoTenant } from "@/lib/demo-data";
 import { checkoutSchema, placeOrder, type CheckoutBody } from "@/lib/place-order";
+import { sanitizeUtm } from "@/lib/utm";
 
 export async function POST(request: Request) {
   logIntegrationStatusOnce();
@@ -73,7 +74,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Shop not found." }, { status: 404 });
     }
 
-    return placeOrder(tenant, body, { sourceChannel: "storefront" });
+    // Phase 13: the ref/utm the buyer arrived with (kept in the tab by AttributionCapture).
+    return placeOrder(tenant, body, { sourceChannel: "storefront", utm: sanitizeUtm(body.utm) });
   } catch (error) {
     console.error("[checkout] failed before placing the order:", error);
     return NextResponse.json({ error: "Checkout failed. Please try again." }, { status: 500 });

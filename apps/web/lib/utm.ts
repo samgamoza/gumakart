@@ -8,6 +8,10 @@ const UTM_KEYS = [
   "fbclid",
   "ttclid",
   "igshid",
+  // Phase 13: channel tag added by Guma's share buttons (?ref=tiktok) and the chat thread a
+  // link was sent in (?th=<id>, so the order shows in that Messenger/Instagram conversation).
+  "ref",
+  "th",
 ] as const;
 
 export function sanitizeUtm(input: unknown): Record<string, string> | null {

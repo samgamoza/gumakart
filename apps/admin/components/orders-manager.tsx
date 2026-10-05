@@ -54,6 +54,9 @@ interface OrderRow {
   acceptedAt: string | null;
   deliveryProvider: string | null;
   sourceChannel?: string;
+  salesChannel?: string | null;
+  externalOrderId?: string | null;
+  socialThreadId?: string | null;
   checkoutLink?: { title: string; shareChannel: string | null } | null;
   staffNote?: string | null;
   tags?: string[];
@@ -68,16 +71,22 @@ const SHARE_CHANNEL_LABEL: Record<string, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",
   messenger: "Messenger",
+  shopee: "Shopee",
+  lazada: "Lazada",
   other: "Other",
 };
 
 /** Where the order came from, e.g. "Checkout link · Payday post (Facebook)". */
 function sourceLabel(order: OrderRow): string | null {
   if (order.sourceChannel === "pos") return "In-store (POS)";
-  if (order.sourceChannel !== "checkout_link") return null;
-  if (!order.checkoutLink) return "Checkout link";
-  const where = order.checkoutLink.shareChannel ? SHARE_CHANNEL_LABEL[order.checkoutLink.shareChannel] : null;
-  return `Checkout link · ${order.checkoutLink.title}${where ? ` (${where})` : ""}`;
+  // Phase 13: marketplace imports, chat orders and tagged links.
+  if (order.sourceChannel === "marketplace") return `${SHARE_CHANNEL_LABEL[order.salesChannel ?? ""] ?? "Marketplace"} order ${order.externalOrderId ?? ""}`.trim();
+  const via = order.salesChannel && SHARE_CHANNEL_LABEL[order.salesChannel] ? SHARE_CHANNEL_LABEL[order.salesChannel] : null;
+  const chat = order.socialThreadId ? " · from chat" : "";
+  if (order.sourceChannel !== "checkout_link") return via ? `Online store · ${via}${chat}` : null;
+  if (!order.checkoutLink) return `Checkout link${via ? ` · ${via}` : ""}${chat}`;
+  const where = via ?? (order.checkoutLink.shareChannel ? SHARE_CHANNEL_LABEL[order.checkoutLink.shareChannel] : null);
+  return `Checkout link · ${order.checkoutLink.title}${where ? ` (${where})` : ""}${chat}`;
 }
 
 /** Merchant tabs, in the order work happens (plan §6). */
@@ -178,6 +187,8 @@ function canCancel(order: OrderRow): boolean {
 
 /** Includes cancelled orders whose payment arrived after the cancel. */
 function canRefund(order: OrderRow): boolean {
+  // Shopee/Lazada refund their own orders; cancellations sync in.
+  if (order.sourceChannel === "marketplace") return false;
   return order.paymentState === "paid" && !IN_TRANSIT.has(order.fulfillmentState);
 }
 

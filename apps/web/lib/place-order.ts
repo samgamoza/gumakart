@@ -86,6 +86,8 @@ export const checkoutSchema = z.object({
     )
     .min(1, "Your cart is empty.")
     .max(50),
+  /** Phase 13: where the buyer came from (?ref=tiktok, utm_*, click ids); sanitized server-side. */
+  utm: z.record(z.string().max(200)).optional(),
 });
 
 /** Path to the buyer's order page. The `t` token is what lets them see it. */

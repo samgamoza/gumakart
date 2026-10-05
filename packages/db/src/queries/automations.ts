@@ -7,6 +7,7 @@ import {
   customers,
   deliveries,
   messageLog,
+  orderItems,
   orders,
   products,
   tenants,
@@ -36,6 +37,9 @@ export interface OrderMessagingContext {
   deliveryType: string;
   buyerName: string | null;
   phone: string | null;
+  /** Phase 13: buyer email (checkout field), for email copies of the order texts. */
+  email: string | null;
+  sourceChannel: string | null;
   accessToken: string;
   orderState: string;
   paymentState: string;
@@ -80,12 +84,43 @@ export async function getOrderMessagingContext(orderId: string): Promise<OrderMe
     deliveryType: row.order.deliveryType ?? "delivery",
     buyerName: row.order.guestName,
     phone: row.order.guestPhone,
+    email: row.order.guestEmail ?? null,
+    sourceChannel: row.order.sourceChannel ?? null,
     accessToken: row.order.accessToken,
     orderState: facts.orderState,
     paymentState: facts.paymentState,
     fulfillmentState: facts.fulfillmentState,
     courier: delivery ? (COURIER_NAMES[delivery.provider] ?? delivery.provider) || null : null,
     createdAt: row.order.createdAt,
+  };
+}
+
+/** Phase 13: what an order email lists (lines and money). */
+export async function getOrderEmailDetails(orderId: string): Promise<{
+  items: Array<{ title: string; quantity: number; lineTotal: number }>;
+  subtotal: number;
+  deliveryFee: number;
+  discount: number;
+  total: number;
+} | null> {
+  const db = getDb();
+  const [o] = await db
+    .select({ subtotal: orders.subtotal, deliveryFee: orders.deliveryFee, discount: orders.discount, total: orders.total })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!o) return null;
+  const items = await db
+    .select({ title: orderItems.titleSnapshot, quantity: orderItems.quantity, lineTotal: orderItems.lineTotal })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(orderItems.id);
+  return {
+    items: items.map((i) => ({ title: i.title, quantity: i.quantity, lineTotal: Number(i.lineTotal) })),
+    subtotal: Number(o.subtotal ?? 0),
+    deliveryFee: Number(o.deliveryFee ?? 0),
+    discount: Number(o.discount ?? 0),
+    total: Number(o.total ?? 0),
   };
 }
 

@@ -148,6 +148,7 @@ type OrderRow = typeof orders.$inferSelect;
 
 function editBlocked(order: OrderRow, hasPendingGateway: boolean, hasHistory: boolean): string | null {
   if (order.sourceChannel === "pos") return "POS sales can't be edited — void or return instead.";
+  if (order.sourceChannel === "marketplace") return MARKETPLACE_NOTE;
   if (order.orderState !== "open") return "Only open orders can be edited.";
   if (order.fulfillmentState !== "unfulfilled") return "This order is already packed — return items after delivery instead.";
   if (order.paymentState === "pending_verification") return "Confirm or reject the buyer's payment first.";
@@ -156,7 +157,10 @@ function editBlocked(order: OrderRow, hasPendingGateway: boolean, hasHistory: bo
   return null;
 }
 
+const MARKETPLACE_NOTE = "Shopee/Lazada handle refunds and returns for their orders; a cancellation there syncs here and restocks.";
+
 function returnBlocked(order: OrderRow, refundableC: number): string | null {
+  if (order.sourceChannel === "marketplace") return MARKETPLACE_NOTE;
   if (order.paymentState !== "paid") return "Only paid orders can have returns. Unpaid orders can be edited or cancelled.";
   if (order.fulfillmentState !== "delivered") return "Returns are for orders the buyer already received. Edit or refund the order instead.";
   if (refundableC <= 0) return "Everything on this order was already refunded.";

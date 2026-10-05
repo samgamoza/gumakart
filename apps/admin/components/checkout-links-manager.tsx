@@ -865,6 +865,26 @@ export function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; ur
         </button>
       </div>
       <p className="text-sm text-emerald-300">{tip}</p>
+      {/* Phase 13: the same link tagged per channel, so Channels can tell TikTok from Facebook sales. */}
+      <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="link-channel-copies">
+        <span className="text-muted-foreground">Copy for:</span>
+        {(["tiktok", "facebook", "instagram", "messenger"] as const).map((ch) => {
+          let tagged = url;
+          try {
+            const u = new URL(url);
+            u.searchParams.set("ref", ch);
+            tagged = u.toString();
+          } catch {
+            tagged = `${url}${url.includes("?") ? "&" : "?"}ref=${ch}`;
+          }
+          return (
+            <button key={ch} type="button" className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1" onClick={() => void copy(`ref-${ch}`, tagged)}>
+              {copied === `ref-${ch}` ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {ch === "tiktok" ? "TikTok" : ch === "facebook" ? "Facebook" : ch === "instagram" ? "Instagram" : "Messenger"}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {canNativeShare && (

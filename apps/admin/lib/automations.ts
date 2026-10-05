@@ -2,6 +2,7 @@ import {
   claimRecoveryStep,
   deletePushSubscriptions,
   describeRecoveryCart,
+  getOrderEmailDetails,
   getOrderMessagingContext,
   getTenantOwnerContact,
   listPushSubscriptionsForTenant,
@@ -17,8 +18,12 @@ import {
   createSemaphoreClient,
   deliveredSms,
   isPushConfigured,
+  isEmailAddress,
   isQuietHours,
   isRecipeEnabled,
+  orderEmail,
+  sendTransactionalEmail,
+  type BuyerEmailKind,
   outForDeliverySms,
   paymentConfirmedSms,
   readyForPickupSms,
@@ -104,6 +109,65 @@ async function textBuyer(
   return { recipe, status: result.status };
 }
 
+/**
+ * Phase 13: the email copy of a buyer text (only when the buyer typed an email at
+ * checkout and the shop left "Email copies" on). Own message_log key (`email_<recipe>`),
+ * so SMS and email never block each other. Transactional only.
+ */
+async function emailBuyer(ctx: OrderMessagingContext, kind: BuyerEmailKind, extra: { codDue?: boolean } = {}): Promise<Outcome> {
+  const recipe = `email_${kind}`;
+  if (!isEmailAddress(ctx.email)) return { recipe, status: "no_email" };
+  if (ctx.settings.automations?.email_copies === false) return { recipe, status: "off" };
+  const details = await getOrderEmailDetails(ctx.orderId);
+  if (!details) return null;
+  const mail = orderEmail(kind, {
+    shopName: ctx.tenantName,
+    orderNumber: ctx.orderNumber,
+    buyerName: ctx.buyerName,
+    items: details.items,
+    subtotal: details.subtotal,
+    deliveryFee: details.deliveryFee,
+    discount: details.discount,
+    total: details.total,
+    paymentMethod: ctx.paymentMethod,
+    deliveryType: ctx.deliveryType,
+    orderUrl: orderUrl(ctx),
+    pickupAddress: ctx.settings.delivery?.pickupAddress ?? null,
+    courier: ctx.courier,
+    codDue: extra.codDue ?? ctx.paymentState === "cod_due",
+  });
+  const to = ctx.email.trim();
+  const result = await sendWithLog(
+    {
+      tenantId: ctx.tenantId,
+      orderId: ctx.orderId,
+      channel: "email",
+      recipient: to,
+      recipe,
+      entityId: ctx.orderId,
+      body: mail.text,
+      provider: "resend",
+      kind: "transactional",
+    },
+    async () => {
+      const sent = await sendTransactionalEmail({ to, subject: mail.subject, text: mail.text, html: mail.html, tags: [{ name: "recipe", value: recipe }] });
+      return { success: sent.sent || Boolean(sent.mock), messageId: sent.id, error: sent.error, mock: sent.mock };
+    }
+  );
+  return { recipe, status: result.status };
+}
+
+/** Both copies of a buyer update: the text (per-recipe switch) and the email. */
+async function notifyBuyer(
+  ctx: OrderMessagingContext,
+  recipe: BuyerRecipe & BuyerEmailKind,
+  sms: string,
+  extra: { codDue?: boolean } = {}
+): Promise<Outcome> {
+  const [text, email] = await Promise.all([textBuyer(ctx, recipe, sms), emailBuyer(ctx, recipe, extra)]);
+  return text?.status === "sent" || !email ? text : { recipe, status: `${text?.status ?? "none"}+email_${email.status}` };
+}
+
 /** Seller's alert number: Business → mobile, else WhatsApp number, else the owner's phone. */
 async function sellerPhone(tenantId: string, settings: TenantSettingsJson): Promise<string | null> {
   const fromSettings = settings.contact?.mobile?.trim() || settings.whatsapp?.phone?.trim();
@@ -184,7 +248,9 @@ export async function handleOrderEvent(row: OutboxRow, now = new Date()): Promis
   const buyerSilenced = ctx.orderState === "cancelled";
 
   switch (row.name) {
-    case "Order.Created.V2":
+    case "Order.Created.V2": {
+      // The "order received" text is sent at checkout; the email copy goes from here.
+      if (ctx.sourceChannel !== "pos" && !buyerSilenced) await emailBuyer(ctx, "order_created");
       // COD orders need the seller now; e-wallet orders alert when proof arrives.
       // (The instant COD push is sent at checkout; this adds the opt-in SMS.)
       if (ctx.paymentMethod !== "cod") return null;
@@ -194,6 +260,7 @@ export async function handleOrderEvent(row: OutboxRow, now = new Date()): Promis
         sellerNewOrderSms({ orderNumber: ctx.orderNumber, total: ctx.total, buyerName: ctx.buyerName, paymentMethod: ctx.paymentMethod }),
         null
       );
+    }
     case "Order.PaymentSubmitted.V1":
       return alertSeller(ctx, "seller_payment_proof", sellerProofSubmittedSms({ orderNumber: ctx.orderNumber, total: ctx.total }), {
         title: "Payment proof received 🧾",
@@ -206,19 +273,19 @@ export async function handleOrderEvent(row: OutboxRow, now = new Date()): Promis
       });
     case "Order.PaymentConfirmed.V1":
       if (buyerSilenced || ctx.paymentMethod === "cod") return null;
-      return textBuyer(ctx, "payment_confirmed", paymentConfirmedSms(smsContext(ctx)));
+      return notifyBuyer(ctx, "payment_confirmed", paymentConfirmedSms(smsContext(ctx)));
     case "Fulfillment.Ready.V1":
       // "Ready" for a delivery order just means packed — only pickup buyers need to know.
       if (buyerSilenced || ctx.deliveryType !== "pickup") return null;
-      return textBuyer(ctx, "shipped", readyForPickupSms(smsContext(ctx, { codDue })));
+      return notifyBuyer(ctx, "shipped", readyForPickupSms(smsContext(ctx, { codDue })), { codDue });
     case "Fulfillment.Booked.V1":
       if (buyerSilenced || ctx.deliveryType === "pickup") return null;
-      return textBuyer(ctx, "shipped", riderBookedSms(smsContext(ctx)));
+      return notifyBuyer(ctx, "shipped", riderBookedSms(smsContext(ctx)));
     case "Fulfillment.OutForDelivery.V1":
       if (buyerSilenced) return null;
-      return textBuyer(ctx, "out_for_delivery", outForDeliverySms(smsContext(ctx, { codDue })));
+      return notifyBuyer(ctx, "out_for_delivery", outForDeliverySms(smsContext(ctx, { codDue })), { codDue });
     case "Fulfillment.Delivered.V1":
-      return textBuyer(ctx, "delivered", deliveredSms(smsContext(ctx)));
+      return notifyBuyer(ctx, "delivered", deliveredSms(smsContext(ctx)));
   }
   return null;
 }

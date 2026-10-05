@@ -56,6 +56,8 @@ export async function GET() {
         mobile: settings.contact?.mobile ?? null,
       },
       smsLive: Boolean(process.env.SEMAPHORE_API_KEY?.trim()),
+      // Phase 13: email copies of the order texts (free; only when the buyer typed an email).
+      email: { enabled: settings.automations?.email_copies !== false, live: Boolean(process.env.RESEND_API_KEY?.trim()) },
       summary,
       messages,
     });

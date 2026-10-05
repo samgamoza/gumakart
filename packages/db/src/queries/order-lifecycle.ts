@@ -581,6 +581,10 @@ export async function refundOrder(params: {
         .where(and(eq(orders.id, params.orderId), eq(orders.tenantId, params.tenantId)))
         .limit(1);
       if (!order) throw new OrderError("Order not found.", "ORDER_NOT_FOUND");
+      // Phase 13: marketplace orders are refunded on Shopee/Lazada (cancellations sync here).
+      if (order.sourceChannel === "marketplace") {
+        throw new OrderError("Refund this order in Shopee/Lazada — the cancellation syncs here and restocks.", "INVALID_TRANSITION");
+      }
 
       // Check the rules BEFORE any money moves.
       const plan = planOrderAction(factsOf(order), { type: "refund" }, "seller");

@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/delivery/orchestrator.test.ts src/delivery/bayango.test.ts src/delivery/webhook-signature.test.ts src/config/integrations.test.ts src/notifications/email.test.ts src/payments/paymongo-webhook.test.ts src/preview-token.test.ts src/delivery/lalamove-webhook.test.ts src/payments/paymongo-checkout.test.ts src/delivery/courier-status.test.ts src/messaging/opt-out-link.test.ts src/messaging/recipes.test.ts",
+    "test": "tsx --test src/delivery/orchestrator.test.ts src/delivery/bayango.test.ts src/delivery/webhook-signature.test.ts src/config/integrations.test.ts src/notifications/email.test.ts src/payments/paymongo-webhook.test.ts src/preview-token.test.ts src/delivery/lalamove-webhook.test.ts src/payments/paymongo-checkout.test.ts src/delivery/courier-status.test.ts src/messaging/opt-out-link.test.ts src/messaging/recipes.test.ts src/channels/channels.test.ts",
     "lalamove:check": "tsx scripts/lalamove-sandbox-check.ts"
   },
   "devDependencies": {
