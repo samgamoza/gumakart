@@ -1,7 +1,74 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-03 (Cloudflare Workers setup for all three apps; Phase 1 + Phase 2 of the V1 plan shipped to branch `wip/uncommitted-work-2026-08-01`; PayMongo on hold; work paused for another venture)  
+**Last updated:** 2026-10-05 (roadmap Phases 8–15 built; paused after Phase 15 — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
+
+## ▶ Resume here — 2026-10-05 (paused after Phase 15, waiting on Sam)
+
+**Status.** Roadmap phases 8–15 are built and committed on branch `wip/uncommitted-work-2026-08-01`. The last
+commits are:
+
+- `146c9d0` Phase 15 platform: public API, keys, webhooks, integrations. In review; not yet approved.
+- `4483da8` Phase 14 growth: approved.
+- `61fb279` Phase 13 channels.
+
+Sam pushes; Cloudflare Workers deploy on push.
+
+**Before pushing (Sam):** `pnpm --filter @gumakart/db migrate` against Neon. Neon already has 0026–0031;
+this run applies **0032_growth** and **0033_platform**. The agent sandbox cannot reach Neon (egress 403),
+so Sam always runs migrations.
+
+**Then check live:**
+
+- admin.guma.one → Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks (owner).
+- `https://admin.guma.one/api/v1/openapi.json` should load without a key.
+
+**Phase notes:** `docs/PHASE-13-NOTES.md`, `docs/PHASE-14-NOTES.md`, `docs/PHASE-15-NOTES.md`.
+Provider keys are listed in `docs/GO-LIVE.md` §1–7.
+
+**Ready to hook up (owner to-dos):**
+
+- Semaphore SMS: `SEMAPHORE_API_KEY` and `SMS_OPT_OUT_SECRET`. This also turns on campaigns and Guma ID.
+- PayMongo live keys.
+- Resend email.
+- Meta app review (Messenger/IG). No fabricated documents.
+- Shopee and Lazada partner keys.
+- `GUMA_ID_SECRET`.
+- Accountant review before any shop turns on BIR numbering.
+- Reset the Neon password (it appeared in a screenshot).
+
+**Open decisions for Sam when resuming:**
+
+1. Approve Phase 15, or list changes.
+2. Partner program for agencies (not built). It needs a commission model and a multi-shop agency
+   dashboard. Agencies can be invited as Manager staff today.
+3. What next after the roadmap:
+   - The Operations track: monitoring/alerts, job runner instead of cron relay, backups drill,
+     status page, billing live.
+   - Or API v1.1: product create/edit, near-real-time webhooks via Queues.
+
+**Pending Phase 2 constraints:** `packages/db/drizzle-pending/0034_phase2_constrain.sql` (journal idx 34). Move
+it into `drizzle/` only after `phase2-verify.sql` returns 0 rows for a week. Renumber it each time a phase adds
+a migration: `git mv` the file and sed the docs.
+
+**How the agent works in this repo:**
+
+- Build in the cloud copy (`/home/claude/gk`).
+- Transfer a tarball and md5 to `D:\All Apps\gumakart\.transfer\`, then run
+  `bash .transfer/apply.sh <tar> <md5> <msg>` on the device.
+- Clean `.git/*.lock` afterwards.
+- One review gate per phase: screenshots, then approve, change or pause.
+- Never commit:
+  - `.env*` (including `.env.cloudflare`, `.env.ct`, `.dev.vars`)
+  - `data/rates.json`
+  - `dialer-exports/`
+  - the untracked `apps/web/public/logo*.png`
+  - `docs/Guma_Kart_V1_Implementation_Plan.md`
+  - the `simply-sweet-source` change
+- Integration tests run only against local Postgres (:5434), never Neon.
+- Local dev logins:
+  - Seller: `otp31541@example.com` (shop `tess5244`).
+  - Ask Sam for the password; it is not stored in docs.
 
 > **Strategy re-audit (external review):** [`GUMA-SOCIAL-CHECKOUT-STRATEGY-REVIEW.md`](./GUMA-SOCIAL-CHECKOUT-STRATEGY-REVIEW.md)  
 > **Repo preservation / baseline investigation:** [`MISSION-000-EXECUTABLE-BASELINE.md`](./MISSION-000-EXECUTABLE-BASELINE.md)  
