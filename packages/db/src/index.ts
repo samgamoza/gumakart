@@ -102,6 +102,32 @@ export {
   type XReading,
   type ZReading,
 } from "./queries/bir";
+export {
+  GumaIdError,
+  normalizeBuyerPhone,
+  createBuyerOtp,
+  verifyBuyerOtp,
+  getBuyer,
+  updateBuyerProfile,
+  bumpBuyerSession,
+  listBuyerAddresses,
+  saveBuyerAddress,
+  deleteBuyerAddress,
+  listBuyerOrders,
+  linkOrderToBuyer,
+  listBuyerShops,
+  setBuyerShopReminders,
+  exportBuyerData,
+  deleteBuyerAccount,
+  gumaIdShare,
+  OTP_TTL_MINUTES,
+  MAX_ADDRESSES,
+  type BuyerAccount,
+  type BuyerAddress,
+  type BuyerOrder,
+  type BuyerShopPrefs,
+  type BuyerAddressJson,
+} from "./queries/guma-id";
 export { logActivity, listActivity, orderNumberFor, productSnapshot, type ActivityActor, type ActivityInput, type ActivityRow } from "./queries/activity";
 export {
   classifyTenantPublicAccess,

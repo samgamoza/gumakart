@@ -8,6 +8,7 @@ import { buildManualEwalletInstructions } from "@gumakart/services";
 import { Badge, Button, Card } from "@gumakart/ui";
 import { getTenant as getDemoTenant } from "@/lib/demo-data";
 import { OrderAutoRefresh } from "@/components/order-auto-refresh";
+import { GumaIdOrderPrompt } from "@/components/guma-id/order-prompt";
 import { ManualPaymentPanel } from "@/components/manual-payment-panel";
 import { MessageSellerButton } from "@/components/storefront/message-seller-button";
 import { resolveStorefrontSettings } from "@/lib/storefront-settings";
@@ -472,6 +473,8 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
             />
           </Card>
         ) : null}
+
+        {order && <GumaIdOrderPrompt />}
 
         {/* Ways back (bottom). Paying comes first, so while unpaid the main way back lives here. */}
         <div className="space-y-2" data-testid="ways-back">

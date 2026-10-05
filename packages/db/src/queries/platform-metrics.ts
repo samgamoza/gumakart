@@ -35,6 +35,8 @@ export interface PlatformMetrics {
   messaging: { sent: number; failed: number; suppressed: number; optOuts: number };
   retention: { activeShops7d: number; activeShops30d: number; buyers: number; repeatBuyers: number };
   pos: { sales: number; total: number };
+  /** Phase 12: online orders placed by signed-in Guma ID buyers. */
+  gumaId: { orders: number; withGumaId: number; accounts: number };
   byChannel: Array<{ channel: string; orders: number; sales: number }>;
   weekly: Array<{ week: string; checkoutLink: number; store: number; pos: number }>;
 }
@@ -58,7 +60,7 @@ export async function getPlatformMetrics(options: { days?: number; now?: Date } 
   const now = options.now ?? new Date();
   const since = new Date(now.getTime() - days * 86_400_000).toISOString();
 
-  const [activation, conversion, payConfirm, recovery, fulfillment, messaging, optOuts, retention, buyers, pos, byChannel, weekly] =
+  const [activation, conversion, payConfirm, recovery, fulfillment, messaging, optOuts, retention, buyers, pos, gid, byChannel, weekly] =
     await Promise.all([
       one(sql`
         with s as (select id, created_at from tenants where created_at >= ${since}::timestamptz)
@@ -131,6 +133,12 @@ export async function getPlatformMetrics(options: { days?: number; now?: Date } 
         from orders where created_at >= ${since}::timestamptz and source_channel = 'pos'
           and coalesce(order_state::text, 'open') <> 'cancelled'
       `),
+      one(sql`
+        select
+          (select count(*) from orders where created_at >= ${since}::timestamptz and coalesce(source_channel, '') <> 'pos') as orders,
+          (select count(*) from orders where created_at >= ${since}::timestamptz and coalesce(source_channel, '') <> 'pos' and buyer_account_id is not null) as with_id,
+          (select count(*) from buyer_accounts) as accounts
+      `),
       many(sql`
         select coalesce(source_channel, 'storefront') as channel, count(*) as orders, coalesce(sum(total), 0) as sales
         from orders where created_at >= ${since}::timestamptz and coalesce(order_state::text, 'open') <> 'cancelled'
@@ -181,6 +189,7 @@ export async function getPlatformMetrics(options: { days?: number; now?: Date } 
       repeatBuyers: n(buyers.repeat_buyers),
     },
     pos: { sales: n(pos.sales), total: n(pos.total) },
+    gumaId: { orders: n(gid.orders), withGumaId: n(gid.with_id), accounts: n(gid.accounts) },
     byChannel: byChannel.map((r) => ({ channel: String(r.channel), orders: n(r.orders), sales: n(r.sales) })),
     weekly: weekly.map((r) => ({ week: String(r.week), checkoutLink: n(r.link), store: n(r.store), pos: n(r.pos) })),
   };

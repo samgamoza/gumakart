@@ -677,6 +677,8 @@ export const orders = pgTable(
     voidedAt: timestamp("voided_at", { withTimezone: true }),
     /** POS with BIR numbering on: the sales invoice number printed on the receipt. */
     invoiceNumber: varchar("invoice_number", { length: 32 }),
+    /** Phase 12: the Guma ID buyer who placed it (verified mobile matched the order). */
+    buyerAccountId: uuid("buyer_account_id").references((): AnyPgColumn => buyerAccounts.id, { onDelete: "set null" }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -1784,4 +1786,66 @@ export const posZReadings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("pos_z_readings_number_idx").on(table.registerId, table.zNumber)]
+);
+
+// ─── Phase 12: Guma ID ───────────────────────────────────────────────────────
+
+export const buyerAccounts = pgTable(
+  "buyer_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 09XXXXXXXXX, verified by SMS code. */
+    phone: varchar("phone", { length: 11 }).notNull(),
+    name: varchar("name", { length: 120 }),
+    email: varchar("email", { length: 255 }),
+    preferredPayment: varchar("preferred_payment", { length: 20 }),
+    sessionVersion: integer("session_version").default(0).notNull(),
+    termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("buyer_accounts_phone_idx").on(table.phone)]
+);
+
+export interface BuyerAddressJson {
+  line1: string;
+  regionCode?: string;
+  region?: string;
+  provinceCode?: string;
+  province?: string;
+  cityCode?: string;
+  city?: string;
+  barangay?: string;
+  landmark?: string;
+}
+
+export const buyerAddresses = pgTable(
+  "buyer_addresses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    buyerId: uuid("buyer_id")
+      .references(() => buyerAccounts.id, { onDelete: "cascade" })
+      .notNull(),
+    label: varchar("label", { length: 40 }),
+    recipient: varchar("recipient", { length: 120 }),
+    addressJson: jsonb("address_json").$type<BuyerAddressJson>().notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("buyer_addresses_buyer_idx").on(table.buyerId)]
+);
+
+export const buyerOtpCodes = pgTable(
+  "buyer_otp_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    phone: varchar("phone", { length: 11 }).notNull(),
+    codeHash: varchar("code_hash", { length: 64 }).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    ip: varchar("ip", { length: 64 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("buyer_otp_codes_phone_idx").on(table.phone, table.createdAt)]
 );

@@ -204,6 +204,13 @@
       "when": 1785900000000,
       "tag": "0028_after_sale",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0029_guma_id",
+      "breakpoints": true
     }
   ]
 }

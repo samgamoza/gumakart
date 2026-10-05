@@ -41,6 +41,8 @@ import {
 
 const log = createLogger("checkout");
 import { getCheckoutDeliveryQuote } from "@/lib/delivery-quote";
+import { currentBuyer } from "@/lib/guma-id";
+import { linkOrderToBuyer } from "@gumakart/db";
 import {
   computeDeliveryFee,
   resolveStorefrontSettings,
@@ -343,6 +345,15 @@ export async function placeOrder(
       checkoutLinkId: ctx.checkoutLinkId ?? null,
       utmJson: ctx.utm ?? null,
     });
+
+    // Phase 12: a signed-in Guma ID buyer whose verified number is on the order gets it
+    // in "My orders" (only when the numbers match — never someone else's order).
+    try {
+      const buyer = await currentBuyer();
+      if (buyer) await linkOrderToBuyer(order.id, buyer);
+    } catch (error) {
+      console.error("[checkout] guma id link failed:", error);
+    }
 
     if (body.sessionKey) {
       await markCheckoutSessionConverted({

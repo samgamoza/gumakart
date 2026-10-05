@@ -83,7 +83,7 @@ importers:
         version: 5.20260928.1
       '@opennextjs/cloudflare':
         specifier: 1.20.6
-        version: 1.20.6(next@15.5.20(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))
+        version: 1.20.6(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.0
@@ -156,7 +156,7 @@ importers:
         version: 5.20260928.1
       '@opennextjs/cloudflare':
         specifier: 1.20.6
-        version: 1.20.6(next@15.5.20(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))
+        version: 1.20.6(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.0
@@ -187,6 +187,9 @@ importers:
       '@gumakart/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@gumakart/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@gumakart/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -262,7 +265,7 @@ importers:
         version: 5.20260928.1
       '@opennextjs/cloudflare':
         specifier: ^1.20.6
-        version: 1.20.6(next@15.5.20(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))
+        version: 1.20.6(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))
       '@tailwindcss/postcss':
         specifier: ^4.2.0
         version: 4.3.2
@@ -7451,7 +7454,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@opennextjs/aws@4.1.4(next@15.5.20(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))':
+  '@opennextjs/aws@4.1.4(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -7474,11 +7477,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.6(next@15.5.20(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))':
+  '@opennextjs/cloudflare@1.20.6(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(wrangler@4.142.0(@cloudflare/workers-types@5.20260928.1)(@types/node@22.20.0))':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@dotenvx/dotenvx': 1.31.0
-      '@opennextjs/aws': 4.1.4(next@15.5.20(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
+      '@opennextjs/aws': 4.1.4(next@15.5.20(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
       ci-info: 4.4.0
       cloudflare: 4.5.0
       comment-json: 4.6.2

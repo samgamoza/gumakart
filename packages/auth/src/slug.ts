@@ -2,6 +2,8 @@ const RESERVED_SLUGS = new Set([
   // Top-level storefront routes (apps/web/app/*) — a shop with one of these
   // slugs would be shadowed by, or shadow, a real page.
   "about",
+  "account", // Guma ID buyer page (Phase 12)
+  "guma-id",
   "frontend1",
   "guma-one-ai",
   "kart",

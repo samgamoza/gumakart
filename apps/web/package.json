@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@gumakart/ai": "workspace:*",
+    "@gumakart/auth": "workspace:*",
     "@gumakart/db": "workspace:*",
     "@gumakart/events": "workspace:*",
     "@gumakart/plans": "workspace:*",

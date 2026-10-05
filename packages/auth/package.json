@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./session": "./src/session.ts"
+    "./session": "./src/session.ts",
+    "./buyer-token": "./src/buyer-token.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

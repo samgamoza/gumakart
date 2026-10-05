@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cartLineKey, useCart } from "@/lib/cart";
+import { GumaIdSignIn } from "@/components/guma-id/sign-in";
+import { maskPhone, useGumaId } from "@/components/guma-id/use-guma-id";
 import type { StorefrontStoreSettings } from "@/lib/storefront-settings";
 import {
   computeDeliveryFee,
@@ -101,6 +103,35 @@ export function CheckoutForm({
     cityCode: "",
   });
   const [couponCode, setCouponCode] = useState("");
+  // Phase 12: Guma ID pre-fill.
+  const gid = useGumaId();
+  const [gidOpen, setGidOpen] = useState(false);
+  const [gidFilled, setGidFilled] = useState(false);
+  useEffect(() => {
+    if (!gid.buyer || gidFilled) return;
+    setGidFilled(true);
+    const b = gid.buyer;
+    setName((n) => n || b.name || "");
+    setPhone(b.phone);
+    if (b.email) setEmail((e) => e || b.email || "");
+    const def = gid.addresses.find((a) => a.isDefault) ?? gid.addresses[0];
+    if (def) {
+      setPhAddress((cur) =>
+        cur.street1
+          ? cur
+          : {
+              street1: def.address.line1 ?? "",
+              street2: def.address.landmark ? `Landmark: ${def.address.landmark}` : "",
+              barangay: def.address.barangay ?? "",
+              city: def.address.city ?? "",
+              province: def.address.province ?? "",
+              provinceCode: def.address.provinceCode ?? "",
+              cityCode: def.address.cityCode ?? "",
+            }
+      );
+    }
+    if (b.preferredPayment && paymentMethods.some((m) => m.id === b.preferredPayment)) setPayment(b.preferredPayment);
+  }, [gid.buyer, gid.addresses, gidFilled, paymentMethods]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -574,6 +605,21 @@ export function CheckoutForm({
               </h2>
             </div>
             <div className="space-y-3 p-4">
+              {gid.available && !gid.buyer && (
+                <div className="rounded-lg border border-dashed border-stone-300 p-3 text-sm" data-testid="guma-id-bar">
+                  {!gidOpen ? (
+                    <button type="button" className="flex w-full items-center justify-between gap-2 text-left" onClick={() => setGidOpen(true)}>
+                      <span>⚡ <strong>May Guma ID ka?</strong> <span className="text-stone-500">Auto-fill ang detalye mo.</span></span>
+                      <span className="font-semibold text-[#ee4d2d] underline">Sign in</span>
+                    </button>
+                  ) : (
+                    <GumaIdSignIn compact accent="#ee4d2d" defaultPhone={phone} onSignedIn={() => gid.refresh()} />
+                  )}
+                </div>
+              )}
+              {gid.buyer && (
+                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">✓ Guma ID: {maskPhone(gid.buyer.phone)} — na-fill na ang detalye mo.</p>
+              )}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-stone-600">Full name</label>
                 <div className="relative">

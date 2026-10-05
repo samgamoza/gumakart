@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, MapPin, Minus, Plus, ShieldCheck, Store, Truck } from "lucide-react";
 import { computeCheckoutTotals, type TenantCheckoutJson } from "@gumakart/db/checkout";
 import { AddressSelect } from "@/components/kart/address-select";
+import { GumaIdSignIn } from "@/components/guma-id/sign-in";
+import { maskPhone, toKartAddress, useGumaId } from "@/components/guma-id/use-guma-id";
 import { Field, SectionTitle } from "@/components/kart/ui";
 import { EMPTY_ADDRESS, formatAddress, isAddressComplete, type KartAddress } from "@/lib/kart/ph-address";
 
@@ -86,6 +88,28 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   const [address, setAddress] = useState<KartAddress>(EMPTY_ADDRESS);
   const [method, setMethod] = useState<LinkPaymentId | null>(data.payments.length === 1 ? data.payments[0]!.id : null);
   const [smsConsent, setSmsConsent] = useState(false);
+  // Phase 12: Guma ID pre-fill (buyer's own saved details, never shown to other shops).
+  const gid = useGumaId();
+  const [gidOpen, setGidOpen] = useState(false);
+  const [saveAddress, setSaveAddress] = useState(true);
+  const [fromSaved, setFromSaved] = useState<string | null>(null);
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (!gid.buyer || prefilled.current) return;
+    prefilled.current = true;
+    const b = gid.buyer;
+    setName((n) => n || b.name || "");
+    setPhone(b.phone);
+    const def = gid.addresses.find((a) => a.isDefault) ?? gid.addresses[0];
+    if (def) {
+      setAddress((cur) => (cur.line1 || cur.cityCode ? cur : toKartAddress(def.address)));
+      setFromSaved(def.id);
+    }
+    if (b.preferredPayment && data.payments.some((p) => p.id === b.preferredPayment)) {
+      setMethod((m) => m ?? (b.preferredPayment as LinkPaymentId));
+    }
+    setGidOpen(false);
+  }, [gid.buyer, gid.addresses, data.payments]);
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [quote, setQuote] = useState<{ fee: number; etaMinutes: number | null; live: boolean } | null>(null);
@@ -239,6 +263,13 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       try {
         window.localStorage.removeItem(`guma-link-session:${data.code}`);
       } catch {}
+      // Guma ID: keep a new delivery address for next time (best effort, 3s max).
+      if (gid.buyer && fulfillment === "delivery" && saveAddress && !fromSaved) {
+        await Promise.race([
+          fetch("/api/id/addresses", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, makeDefault: gid.addresses.length === 0 }) }).catch(() => null),
+          new Promise((r) => setTimeout(r, 3000)),
+        ]);
+      }
       window.location.href = json.redirectUrl ?? json.orderUrl;
     } catch {
       setErrors({ form: "Walang connection. I-check ang signal mo at subukan ulit." });
@@ -369,6 +400,49 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       {/* Contact */}
       <section className="m-3 mt-5 grid gap-3">
         <SectionTitle n={++step}>Ang iyong detalye</SectionTitle>
+        {gid.available && !gid.buyer && (
+          <div className="k-card p-3" data-testid="guma-id-bar">
+            {!gidOpen ? (
+              <button type="button" className="flex w-full items-center justify-between gap-2 text-left text-sm" onClick={() => setGidOpen(true)}>
+                <span>
+                  <span className="font-semibold">⚡ May Guma ID ka?</span>{" "}
+                  <span className="text-[color:var(--kart-muted)]">Mag-sign in para auto-fill ang detalye mo.</span>
+                </span>
+                <span className="shrink-0 font-semibold underline">Sign in</span>
+              </button>
+            ) : (
+              <GumaIdSignIn compact defaultPhone={phone} onSignedIn={() => gid.refresh()} />
+            )}
+          </div>
+        )}
+        {gid.buyer && (
+          <div className="k-card flex flex-wrap items-center justify-between gap-2 p-3 text-sm" data-testid="guma-id-signed-in">
+            <span>
+              ✓ Guma ID: <strong>{maskPhone(gid.buyer.phone)}</strong>
+            </span>
+            {gid.addresses.length > 1 && fulfillment === "delivery" && (
+              <select
+                className="k-input h-9 w-auto py-0 text-sm"
+                value={fromSaved ?? ""}
+                onChange={(e) => {
+                  const a = gid.addresses.find((x) => x.id === e.target.value);
+                  if (a) {
+                    setAddress(toKartAddress(a.address));
+                    setFromSaved(a.id);
+                  }
+                }}
+                aria-label="Saved address"
+              >
+                <option value="">Bagong address</option>
+                {gid.addresses.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label || a.address.city || "Address"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
         <div className="k-card grid gap-4 p-4">
           <Field label="Pangalan" error={errors.name}>
             <input
@@ -436,7 +510,20 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
         {fulfillment === "delivery" ? (
           <>
             <div className="k-card p-4">
-              <AddressSelect value={address} onChange={setAddress} errors={errors} lang="tl" />
+              <AddressSelect
+                value={address}
+                onChange={(next) => {
+                  setAddress(next);
+                  setFromSaved(null);
+                }}
+                errors={errors}
+                lang="tl"
+              />
+              {gid.buyer && !fromSaved && (
+                <label className="flex items-center gap-2 text-sm text-[color:var(--kart-muted)]">
+                  <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} /> I-save ang address na ito sa Guma ID
+                </label>
+              )}
             </div>
             <div
               className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${

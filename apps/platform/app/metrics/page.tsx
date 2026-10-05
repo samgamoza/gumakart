@@ -98,6 +98,8 @@ export default async function MetricsPage({ searchParams }: PageProps) {
               <StatCard label="Shops with an order · 30 days" value={formatNumber(m.retention.activeShops30d)} />
               <StatCard label="Buyers" value={formatNumber(m.retention.buyers)} />
               <StatCard label="Repeat buyers" value={pct(m.retention.repeatBuyers, m.retention.buyers)} sub={`${m.retention.repeatBuyers} ordered 2+ times`} />
+              <StatCard label="Orders with Guma ID" value={pct(m.gumaId.withGumaId, m.gumaId.orders)} sub={`${m.gumaId.withGumaId} of ${m.gumaId.orders} online orders`} />
+              <StatCard label="Guma ID accounts" value={formatNumber(m.gumaId.accounts)} />
             </div>
           </Panel>
           <Panel>
