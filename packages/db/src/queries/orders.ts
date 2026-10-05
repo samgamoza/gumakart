@@ -877,6 +877,8 @@ export interface OrderTrackingDelivery {
 export interface OrderTrackingData {
   /** "checkout_link" for orders from a shared checkout link, else storefront/null. */
   sourceChannel: string | null;
+  /** Code of the checkout link the order came through (buyer's "Bumalik sa order form"). */
+  checkoutLinkCode: string | null;
   orderId: string;
   orderNumber: string;
   tenantSlug: string;
@@ -970,8 +972,17 @@ export async function getOrderForTracking(
     .orderBy(desc(paymentTransactions.createdAt))
     .limit(1);
 
+  const [link] = row.order.checkoutLinkId
+    ? await db
+        .select({ code: checkoutLinks.code })
+        .from(checkoutLinks)
+        .where(eq(checkoutLinks.id, row.order.checkoutLinkId))
+        .limit(1)
+    : [];
+
   return {
     orderId: row.order.id,
+    checkoutLinkCode: link?.code ?? null,
     paymentGateway: payment?.gateway ?? null,
     ...(() => {
       const f = factsOf(row.order);

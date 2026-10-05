@@ -151,6 +151,13 @@ export async function getSellerToday(
     { id: "product", label: "Add your first product", done: hasProduct, href: "/products", action: "Add product" },
     { id: "payments", label: "Set how buyers pay you", done: paymentsReady, href: "/settings/payments", action: "Set up" },
     { id: "link", label: "Share your first checkout link", done: linkCount > 0, href: "/checkout-links", action: "Make a link" },
+    {
+      id: "chat",
+      label: "Add your page or chat link (buyers' way back to you)",
+      done: Boolean(settings.social?.chatUrl?.trim()),
+      href: "/settings/shop",
+      action: "Add link",
+    },
     { id: "email", label: "Confirm your email", done: options.emailVerified, href: "/verify-email", action: "Confirm" },
     {
       id: "store",

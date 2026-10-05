@@ -185,6 +185,27 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
       })
     : null;
   const fromLink = order?.sourceChannel === "checkout_link";
+  // Checkout-link buyers saw a Taglish order form, so their order page is Taglish too.
+  const tx = (en: string, tl: string) => (fromLink ? tl : en);
+  const TL_STEP: Record<string, string> = {
+    "Order placed": "Na-place ang order",
+    "Payment confirmed": "Kumpirmado ang bayad",
+    "Ready for pickup": "Ready na for pickup",
+    "Picked up": "Na-pickup na",
+    Packed: "Naka-pack na",
+    "Rider booked": "May rider na",
+    "Out for delivery": "Paparating na",
+    Delivered: "Na-deliver na",
+  };
+  // A way back for every buyer: the shop's chat link if saved, else the order form they came from,
+  // plus the online store when the shop has one.
+  const orderFormHref = fromLink && order?.checkoutLinkCode ? `/c/${order.checkoutLinkCode}` : null;
+  const storeBuilt = Boolean((tenant?.themeJson as { templateId?: string } | null | undefined)?.templateId);
+  const primaryBack = backToChat
+    ? { href: backToChat.href, label: backToChat.label, external: true }
+    : orderFormHref
+      ? { href: orderFormHref, label: "Bumalik sa order form", external: false }
+      : null;
   const delivery = order?.delivery ?? null;
   const driverMapUrl =
     delivery?.driverLat && delivery.driverLng
@@ -202,26 +223,29 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
           <h1 className="mt-3 text-xl font-bold">
             {isCancelled
               ? facts.paymentState === "refunded"
-                ? "Order refunded"
-                : "Order cancelled"
+                ? tx("Order refunded", "Na-refund ang order")
+                : tx("Order cancelled", "Na-cancel ang order")
               : awaitingPayment
-                ? "Waiting for payment"
+                ? tx("Waiting for payment", "Hinihintay ang bayad")
                 : checkingPayment
-                  ? "Checking your payment"
+                  ? tx("Checking your payment", "Chine-check ang bayad mo")
                   : deliveryProblem
-                    ? "There was a problem with the delivery"
+                    ? tx("There was a problem with the delivery", "Nagka-problema sa delivery")
                     : isDone
-                      ? "Order complete — salamat!"
-                      : "Order confirmed!"}
+                      ? tx("Order complete — salamat!", "Kumpleto na ang order — salamat!")
+                      : tx("Order confirmed!", "Natanggap ang order mo!")}
           </h1>
           {checkingPayment && (
             <p className="mx-auto mt-2 max-w-xs text-sm text-gray-600">
-              The shop received your payment details and will confirm them shortly.
+              {tx(
+                "The shop received your payment details and will confirm them shortly.",
+                "Natanggap ng shop ang payment details mo. Ico-confirm nila ito agad."
+              )}
             </p>
           )}
           {deliveryProblem && (
             <p className="mx-auto mt-2 max-w-xs text-sm text-gray-600">
-              The shop will contact you to arrange a new delivery.
+              {tx("The shop will contact you to arrange a new delivery.", "Kokontakin ka ng shop para sa bagong delivery.")}
             </p>
           )}
           <p className="mt-1 text-gray-500">Order #{orderNumber}</p>
@@ -230,7 +254,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
               {order.tenantName} · {formatTime(order.createdAt)}
             </p>
           )}
-          {!isCancelled && <Badge className="mt-3">SMS updates sent to your phone</Badge>}
+          {!isCancelled && <Badge className="mt-3">{tx("SMS updates sent to your phone", "Ite-text namin sa iyo ang updates")}</Badge>}
           {awaitingPayment && returningFromCheckout && (
             <p className="mx-auto mt-3 max-w-xs text-sm text-emerald-700">
               Thanks! We&apos;re confirming your payment with PayMongo — this page updates by itself.
@@ -238,19 +262,20 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
           )}
           {awaitingPayment && !returningFromCheckout && (
             <p className="mx-auto mt-3 max-w-xs text-sm text-amber-700">
-              Complete your {PAYMENT_LABELS[order?.paymentMethod ?? ""] ?? "online"} payment to
-              start the order. This page updates once payment is confirmed.
+              {tx(
+                `Complete your ${PAYMENT_LABELS[order?.paymentMethod ?? ""] ?? "online"} payment to start the order. This page updates once payment is confirmed.`,
+                `Magbayad via ${PAYMENT_LABELS[order?.paymentMethod ?? ""] ?? "online"} para masimulan ang order. Mag-a-update ang page na ito kapag na-confirm na.`
+              )}
             </p>
           )}
-          {backToChat && !awaitingPayment ? (
+          {primaryBack && !awaitingPayment ? (
             <a
-              href={backToChat.href}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={primaryBack.href}
+              {...(primaryBack.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               className="mt-4 flex w-full items-center justify-center rounded-xl bg-neutral-900 py-3 text-sm font-semibold text-white"
               data-testid="back-to-chat"
             >
-              {backToChat.label}
+              {primaryBack.label}
             </a>
           ) : null}
           {awaitingPayment && order?.resumePaymentUrl ? (
@@ -271,13 +296,14 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
             shopAssistant={storeSettings.shopAssistant}
             shopName={order.tenantName}
             alreadyPaid={order.paymentState === "paid"}
+            lang={fromLink ? "tl" : "en"}
           />
         ) : null}
 
         {!isCancelled && (
           <Card>
             <h2 className="font-semibold">
-              {order?.deliveryType === "pickup" ? "Pickup status" : "Delivery status"}
+              {order?.deliveryType === "pickup" ? tx("Pickup status", "Status ng pickup") : tx("Delivery status", "Status ng delivery")}
             </h2>
             <ol className="mt-4 space-y-4">
               {timeline.map((step) => (
@@ -294,7 +320,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
                     {step.done ? "✓" : "·"}
                   </div>
                   <span className={step.done || step.active ? "font-medium" : "text-gray-400"}>
-                    {step.label}
+                    {fromLink ? (TL_STEP[step.label] ?? step.label) : step.label}
                   </span>
                 </li>
               ))}
@@ -304,7 +330,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
 
         {delivery && !isCancelled && (
           <Card>
-            <h2 className="font-semibold">Your rider</h2>
+            <h2 className="font-semibold">{tx("Your rider", "Ang rider mo")}</h2>
             {delivery.driverName ? (
               <div className="mt-3 space-y-1 text-sm">
                 <p className="font-medium">
@@ -350,7 +376,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
 
         {order && (
           <Card>
-            <h2 className="font-semibold">Order details</h2>
+            <h2 className="font-semibold">{tx("Order details", "Detalye ng order")}</h2>
             <div className="mt-3 space-y-2 text-sm">
               {order.items.map((item) => (
                 <div key={`${item.title}-${item.quantity}`} className="flex justify-between">
@@ -361,7 +387,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
                 </div>
               ))}
               <div className="flex justify-between border-t border-gray-100 pt-2 text-gray-600">
-                <span>Delivery fee</span>
+                <span>{order.deliveryType === "pickup" ? "Pickup" : tx("Delivery fee", "Delivery")}</span>
                 <span>{formatPrice(order.deliveryFee)}</span>
               </div>
               <div className="flex justify-between border-t border-gray-100 pt-2 font-bold">
@@ -374,16 +400,16 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
                   : (PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod)}{" "}
                 ·{" "}
                 {order.paymentState === "paid"
-                  ? "Paid"
+                  ? tx("Paid", "Bayad na")
                   : order.paymentState === "refunded"
-                    ? "Refunded"
+                    ? tx("Refunded", "Na-refund")
                     : order.paymentState === "cod_due"
                       ? order.deliveryType === "pickup"
-                        ? "Pay when you pick up"
-                        : "Pay on delivery"
+                        ? tx("Pay when you pick up", "Magbayad pag-pickup")
+                        : tx("Pay on delivery", "Magbayad pagdating")
                       : order.paymentState === "pending_verification"
-                        ? "Being checked by the shop"
-                        : "Payment pending"}
+                        ? tx("Being checked by the shop", "Chine-check ng shop")
+                        : tx("Payment pending", "Hindi pa bayad")}
               </p>
             </div>
           </Card>
@@ -391,7 +417,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
 
         {order && Array.isArray(order.history) && order.history.length > 0 && (
           <Card>
-            <h2 className="font-semibold">History</h2>
+            <h2 className="font-semibold">{tx("History", "Mga update")}</h2>
             <ul className="mt-3 space-y-2 text-sm">
               {[...order.history].reverse().map((entry, index) => (
                 <li key={index} className="flex justify-between gap-3">
@@ -420,10 +446,12 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
 
         {order && storeSettings && !isCancelled ? (
           <Card className="space-y-2">
-            <h2 className="font-semibold">Need help with this order?</h2>
+            <h2 className="font-semibold">{tx("Need help with this order?", "May tanong sa order mo?")}</h2>
             <p className="text-sm text-gray-500">
-              Message the shop about payment proof, changes, or delivery — they reply in this
-              chat.
+              {tx(
+                "Message the shop about payment proof, changes, or delivery — they reply in this chat.",
+                "I-message ang shop tungkol sa bayad, pagbabago, o delivery — dito sila sasagot."
+              )}
             </p>
             <MessageSellerButton
               tenantSlug={tenantSlug}
@@ -439,30 +467,40 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
               }
               orderNumber={order.orderNumber}
               whatsapp={storeSettings.whatsapp}
+              label={tx("Message seller", "I-message ang seller")}
               className="w-full justify-center rounded-xl border border-neutral-200 bg-white py-3 text-sm font-semibold"
             />
           </Card>
         ) : null}
 
-        {backToChat && awaitingPayment ? (
-          <a
-            href={backToChat.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center rounded-xl border border-neutral-300 bg-white py-3 text-sm font-semibold"
-            data-testid="back-to-chat"
-          >
-            {backToChat.label}
-          </a>
-        ) : null}
-
-        {!fromLink && (
-          <Link href={`/${tenantSlug}`}>
-            <Button variant="secondary" className="w-full">
-              Continue Shopping
-            </Button>
-          </Link>
-        )}
+        {/* Ways back (bottom). Paying comes first, so while unpaid the main way back lives here. */}
+        <div className="space-y-2" data-testid="ways-back">
+          {primaryBack && awaitingPayment ? (
+            <a
+              href={primaryBack.href}
+              {...(primaryBack.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              className="flex w-full items-center justify-center rounded-xl border border-neutral-300 bg-white py-3 text-sm font-semibold"
+              data-testid="back-to-chat"
+            >
+              {primaryBack.label}
+            </a>
+          ) : null}
+          {fromLink && backToChat && orderFormHref ? (
+            <Link
+              href={orderFormHref}
+              className="flex w-full items-center justify-center rounded-xl border border-neutral-300 bg-white py-3 text-sm font-semibold"
+            >
+              Bumalik sa order form
+            </Link>
+          ) : null}
+          {(!fromLink || storeBuilt) && (
+            <Link href={`/${tenantSlug}`}>
+              <Button variant="secondary" className="w-full">
+                {fromLink ? `Tingnan ang shop ng ${order?.tenantName ?? "seller"}` : "Continue Shopping"}
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );
