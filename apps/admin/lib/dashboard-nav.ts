@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BadgePercent,
+  Blocks,
+  Code2,
   BarChart3,
   Megaphone,
   Boxes,
@@ -203,6 +205,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         icon: Store,
         description: "Optional: a full shop page with your look and products.",
       },
+      {
+        id: "integrations",
+        label: "Apps & integrations",
+        href: "/integrations",
+        icon: Blocks,
+        badge: "new",
+        description: "Payments, chats, Shopee/Lazada, couriers, pixels, Zapier and more — what's on and what to set up.",
+      },
     ],
   },
   {
@@ -263,6 +273,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         href: "/settings/pos",
         icon: Users,
         description: "Cashier PINs, VAT, and shift history.",
+      },
+      {
+        id: "developers",
+        label: "API & webhooks",
+        href: "/developers",
+        icon: Code2,
+        badge: "new",
+        description: "API keys and webhooks for your own tools (owner only).",
       },
       {
         id: "settings-subscription",

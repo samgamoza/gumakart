@@ -41,10 +41,12 @@ export const PERMISSIONS = [
   "activity.view",
   /** Phase 14: sales/profit reports and exports (owner + manager). */
   "reports.view",
+  /** Phase 15: API keys and webhooks — they reach all shop data, so owner only. */
+  "developers.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const OWNER_ONLY: Permission[] = ["settings.payments", "billing.manage", "staff.manage"];
+const OWNER_ONLY: Permission[] = ["settings.payments", "billing.manage", "staff.manage", "developers.manage"];
 
 export const ROLE_PERMISSIONS: Record<ShopRole, ReadonlySet<Permission>> = {
   owner: new Set(PERMISSIONS),
@@ -162,6 +164,8 @@ export const API_RULES: ApiRule[] = [
   // Phase 14
   { pattern: /^\/api\/reports(\/|$)/, permission: "reports.view" },
   { pattern: /^\/api\/(discounts|campaigns)(\/|$)/, permission: "marketing.manage" },
+  { pattern: /^\/api\/developers(\/|$)/, permission: "developers.manage" },
+  { pattern: /^\/api\/integrations(\/|$)/, permission: "settings.shop" },
 
   // Shop setup
   { pattern: /^\/api\/onboarding\/payments$/, permission: "settings.payments" },
@@ -221,6 +225,8 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/reports", permission: "reports.view" },
   { prefix: "/discounts", permission: "marketing.manage" },
   { prefix: "/campaigns", permission: "marketing.manage" },
+  { prefix: "/developers", permission: "developers.manage" },
+  { prefix: "/integrations", permission: "settings.shop" },
   { prefix: "/agents", permission: "marketing.manage" },
   { prefix: "/ai-studio", permission: "marketing.manage" },
   { prefix: "/workspace", permission: "marketing.manage" },

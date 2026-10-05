@@ -34,6 +34,9 @@ const PUBLIC_API_PREFIXES = [
   "/api/invite",
   // Phase 13: Meta webhook — signed with META_APP_SECRET (checked in the route).
   "/api/webhooks/meta",
+  // Phase 15: public REST API — a shop API key (Bearer gk_live_…) checked in each route
+  // (lib/public-api withApi). Never a session cookie.
+  "/api/v1/",
 ];
 
 const SHOP_SETUP_PATHS = ["/signup/shop", "/api/auth/google/complete-shop", "/api/auth/logout"];

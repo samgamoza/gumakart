@@ -95,3 +95,10 @@ say "This is not an official receipt". Guma Kart is not a BIR-accredited POS pro
 Needs **Semaphore** (section 1) — the code is sent by SMS. Until both are set, Guma ID shows
 "Malapit na" and checkout works as before. After: open kart.guma.one/account, sign in with your
 own number, place a test order from a checkout link and check it appears under "Mga order".
+
+## 7. Public API & webhooks (Phase 15 — no new secrets)
+
+Works as soon as migration 0033 is on Neon. Webhook signing secrets are sealed with
+`CHANNEL_TOKEN_KEY` (else `AUTH_SECRET`) — rotating that key makes stored webhook secrets unreadable,
+so shops would rotate their webhook secrets. Optional: `UPSTASH_REDIS_REST_URL` /
+`UPSTASH_REDIS_REST_TOKEN` (admin) make the API rate limit hold across Worker instances.

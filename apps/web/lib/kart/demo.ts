@@ -70,7 +70,7 @@ export const PAYMENT_METHODS: { id: PaymentMethod; label: string; note: string }
 ];
 
 export function peso(n: number): string {
-  return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
 }
 
 /** Demo BayanGo quote by PSGC region code. Replace with the live quote API. */

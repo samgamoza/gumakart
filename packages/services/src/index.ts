@@ -145,4 +145,5 @@ export {
 } from "./config/integrations";
 export * from "./channels/meta";
 export * from "./crypto/token-box";
+export * from "./webhooks/sign";
 export * from "./channels/marketplaces";

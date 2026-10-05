@@ -2038,6 +2038,100 @@ export const smsCampaignRecipients = pgTable(
   (table) => [uniqueIndex("sms_campaign_recipients_phone_idx").on(table.campaignId, table.phone), index("sms_campaign_recipients_queue_idx").on(table.campaignId, table.status)]
 );
 
+// ─── Phase 15: platform (API keys, webhooks) ────────────────────────────────
+
+/** A shop's API key. Only the SHA-256 of the key is stored; the key is shown once. */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 80 }).notNull(),
+    tokenPrefix: varchar("token_prefix", { length: 20 }).notNull(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    scopes: text("scopes").array().notNull(),
+    createdByName: varchar("created_by_name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("api_tokens_hash_idx").on(table.tokenHash), index("api_tokens_tenant_idx").on(table.tenantId, table.createdAt)]
+);
+
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    url: varchar("url", { length: 500 }).notNull(),
+    description: varchar("description", { length: 120 }),
+    events: text("events").array().notNull(),
+    /** Signing secret, sealed with token-box (AES-GCM). */
+    secretSealed: varchar("secret_sealed", { length: 300 }).notNull(),
+    active: boolean("active").default(true).notNull(),
+    consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    disabledReason: varchar("disabled_reason", { length: 200 }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+    createdByName: varchar("created_by_name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("webhook_endpoints_tenant_idx").on(table.tenantId)]
+);
+
+/** Written by DB triggers (migration 0033) in the same transaction as the change. */
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    event: varchar("event", { length: 40 }).notNull(),
+    entityType: varchar("entity_type", { length: 20 }).notNull(),
+    entityId: uuid("entity_id").notNull(),
+    /** Frozen when the event is fanned out, so every endpoint and retry gets the same body. */
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    fannedOutAt: timestamp("fanned_out_at", { withTimezone: true }),
+  },
+  (table) => [index("webhook_events_tenant_idx").on(table.tenantId, table.createdAt), index("webhook_events_created_idx").on(table.createdAt)]
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    endpointId: uuid("endpoint_id")
+      .references(() => webhookEndpoints.id, { onDelete: "cascade" })
+      .notNull(),
+    eventId: uuid("event_id")
+      .references(() => webhookEvents.id, { onDelete: "cascade" })
+      .notNull(),
+    status: varchar("status", { length: 12 }).$type<"pending" | "succeeded" | "failed">().default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow(),
+    lastStatusCode: integer("last_status_code"),
+    lastError: varchar("last_error", { length: 300 }),
+    responseMs: integer("response_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("webhook_deliveries_unique_idx").on(table.endpointId, table.eventId),
+    index("webhook_deliveries_endpoint_idx").on(table.endpointId, table.createdAt),
+  ]
+);
+
 // ─── Phase 12: Guma ID ───────────────────────────────────────────────────────
 
 export const buyerAccounts = pgTable(

@@ -30,6 +30,8 @@ export const CRON_JOBS: Job[] = [
   { path: "/api/cron/marketplaces", due: () => true },
   // Phase 14: SMS campaigns (quiet hours respected inside). Every tick.
   { path: "/api/cron/campaigns", due: () => true },
+  // Phase 15: webhooks — fan out new events, send due deliveries with retries. Every tick.
+  { path: "/api/cron/webhooks", due: () => true },
   // Unpaid orders past each shop's window (1–72 h) → cancelled + restocked. Hourly.
   { path: "/api/cron/expire-orders", due: (t) => t.getUTCMinutes() === 20 },
   // Wallet: release cleared earnings / payouts (no-op while WALLET_PAYOUTS_ENABLED=false). Hourly.
