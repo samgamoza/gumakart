@@ -11,6 +11,7 @@ import {
 } from "@gumakart/db";
 import { resolvePaymentsMode } from "@gumakart/services";
 import { ApiAuthError, assertCan, requireTenantSession } from "@/lib/api-auth";
+import { birMissing } from "@gumakart/db";
 import { recordActivity } from "@/lib/activity";
 
 const patchSchema = z.object({
@@ -154,6 +155,23 @@ const patchSchema = z.object({
           vatRegistered: z.boolean().optional(),
           vatInclusive: z.boolean().optional(),
           vatRate: z.number().min(0).max(0.3).optional(),
+          bir: z
+            .object({
+              enabled: z.boolean().optional(),
+              registeredName: z.string().trim().max(120).optional(),
+              tradeName: z.string().trim().max(120).optional(),
+              tin: z.string().trim().regex(/^[0-9-]{0,20}$/, "TIN: digits and dashes only.").optional(),
+              branchCode: z.string().trim().max(10).optional(),
+              address: z.string().trim().max(240).optional(),
+              min: z.string().trim().max(40).optional(),
+              serialNo: z.string().trim().max(40).optional(),
+              ptuNo: z.string().trim().max(60).optional(),
+              ptuDate: z.string().trim().max(20).optional(),
+              accreditationNo: z.string().trim().max(60).optional(),
+              invoicePrefix: z.string().trim().regex(/^[A-Za-z0-9-]{0,6}$/, "Prefix: up to 6 letters/numbers.").optional(),
+            })
+            .strict()
+            .optional(),
         })
         .strict()
         .optional(),
@@ -240,6 +258,17 @@ export async function PATCH(request: Request) {
     }
     const body = patchSchema.parse(raw);
     if (body.settings?.payments) assertCan(session, "settings.payments");
+    // Phase 11: BIR numbering is the owner's legal call — owner only, and only complete.
+    if (body.settings?.pos?.bir) {
+      assertCan(session, "settings.payments");
+      if (body.settings.pos.bir.enabled) {
+        const current = (await getTenantSettings(session.tenantId))?.settings.pos?.bir ?? {};
+        const missing = birMissing({ ...current, ...body.settings.pos.bir });
+        if (missing.length) {
+          return NextResponse.json({ ok: false, error: `Fill in first: ${missing.join(", ")}.` }, { status: 400 });
+        }
+      }
+    }
     if (body.settings?.wallet) assertCan(session, "billing.manage");
     const updated = await updateTenantSettings(session.tenantId, body);
     if (!updated) {

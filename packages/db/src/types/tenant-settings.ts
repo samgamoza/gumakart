@@ -112,6 +112,25 @@ export interface TenantPosSettings {
   vatRegistered?: boolean;
   vatInclusive?: boolean;
   vatRate?: number;
+  /** Phase 11: BIR-ready POS (off until the owner turns it on with the shop's PTU details). */
+  bir?: TenantBirSettings;
+}
+
+export interface TenantBirSettings {
+  enabled?: boolean;
+  registeredName?: string;
+  tradeName?: string;
+  tin?: string;
+  branchCode?: string;
+  address?: string;
+  /** Machine Identification Number (MIN) from the PTU. */
+  min?: string;
+  serialNo?: string;
+  ptuNo?: string;
+  ptuDate?: string;
+  /** CAS/POS accreditation number of the software provider, when issued. */
+  accreditationNo?: string;
+  invoicePrefix?: string;
 }
 
 /** Phase 9: stock alerts. A variant at or below the threshold counts as low. */

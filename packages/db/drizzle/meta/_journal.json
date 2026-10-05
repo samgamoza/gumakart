@@ -197,6 +197,13 @@
       "when": 1785800000000,
       "tag": "0027_staff",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785900000000,
+      "tag": "0028_after_sale",
+      "breakpoints": true
     }
   ]
 }

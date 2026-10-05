@@ -719,6 +719,13 @@ export interface TenantOrderListItem {
   sourceChannel: string;
   /** Checkout link the order came from: its seller-side name and where it was shared. */
   checkoutLink: { title: string; shareChannel: string | null } | null;
+  /** Phase 11: seller-only note/tags, money given back, edits/voids. */
+  staffNote: string | null;
+  tags: string[];
+  refundedAmount: string;
+  edited: boolean;
+  voided: boolean;
+  invoiceNumber: string | null;
 }
 
 export async function listOrdersForTenant(tenantId: string): Promise<TenantOrderListItem[]> {
@@ -845,8 +852,87 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       deliveryProvider: providerByOrder.get(row.id) ?? null,
       sourceChannel: row.sourceChannel ?? "storefront",
       checkoutLink: row.checkoutLinkId ? linkById.get(row.checkoutLinkId) ?? null : null,
+      staffNote: row.staffNote,
+      tags: row.tagsJson ?? [],
+      refundedAmount: row.refundedAmount ?? "0",
+      edited: Boolean(row.editedAt),
+      voided: Boolean(row.voidedAt),
+      invoiceNumber: row.invoiceNumber,
     };
   });
+}
+
+export interface PackingSlip {
+  id: string;
+  orderNumber: string;
+  createdAt: Date;
+  customerName: string;
+  customerPhone: string;
+  deliveryType: string;
+  address: string | null;
+  notes: string | null;
+  staffNote: string | null;
+  paymentMethod: string;
+  /** Cash the rider/shop must collect (COD not yet paid). */
+  collect: number;
+  total: number;
+  items: Array<{ title: string; quantity: number; sku: string | null }>;
+}
+
+function addressText(json: unknown): string | null {
+  if (!json || typeof json !== "object") return null;
+  const a = json as Record<string, unknown>;
+  if (typeof a.full === "string" && a.full.trim()) return a.full;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const parts = [str(a.line1), str(a.line2)].filter((p): p is string => Boolean(p));
+  const head = parts.join(", ").toLowerCase();
+  // line1 often already carries the barangay/city — don't repeat them.
+  for (const extra of [str(a.barangay), str(a.city), str(a.province), str(a.postalCode)]) {
+    if (extra && !head.includes(extra.toLowerCase())) parts.push(extra);
+  }
+  return parts.length ? parts.join(", ") : str(a.text);
+}
+
+/** Packing slips for up to 50 of the shop's orders, in the order given. */
+export async function getPackingSlips(tenantId: string, orderIds: string[]): Promise<PackingSlip[]> {
+  const ids = [...new Set(orderIds)].slice(0, 50);
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const rows = await db.select().from(orders).where(and(eq(orders.tenantId, tenantId), inArray(orders.id, ids)));
+  const lines = await db
+    .select({ orderId: orderItems.orderId, title: orderItems.titleSnapshot, quantity: orderItems.quantity, returned: orderItems.returnedQty, sku: productVariants.sku })
+    .from(orderItems)
+    .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+    .where(inArray(orderItems.orderId, ids))
+    .orderBy(asc(orderItems.id));
+  const byOrder = new Map<string, PackingSlip["items"]>();
+  for (const l of lines) {
+    const list = byOrder.get(l.orderId) ?? [];
+    list.push({ title: l.title, quantity: l.quantity - (l.returned ?? 0), sku: l.sku });
+    byOrder.set(l.orderId, list);
+  }
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((r): r is NonNullable<typeof r> => Boolean(r))
+    .map((r) => {
+      const facts = factsOf(r);
+      return {
+        id: r.id,
+        orderNumber: r.orderNumber,
+        createdAt: r.createdAt,
+        customerName: r.guestName ?? "Customer",
+        customerPhone: r.guestPhone ?? "",
+        deliveryType: r.deliveryType ?? "delivery",
+        address: addressText(r.deliveryAddressJson),
+        notes: r.notes,
+        staffNote: r.staffNote,
+        paymentMethod: r.paymentMethod ?? "",
+        collect: facts.paymentState === "cod_due" || (r.paymentMethod === "cod" && facts.paymentState !== "paid") ? Number(r.total) : 0,
+        total: Number(r.total),
+        items: (byOrder.get(r.id) ?? []).filter((i) => i.quantity > 0),
+      };
+    });
 }
 
 export interface OrderRefundInfo {

@@ -144,6 +144,31 @@ interface Receipt {
   change: number;
   customer: { name: string | null; phone: string | null };
   duplicate?: boolean;
+  /** Phase 11 */
+  invoiceNumber?: string | null;
+  bir?: {
+    registeredName?: string;
+    tradeName?: string;
+    tin?: string;
+    branchCode?: string;
+    address?: string;
+    min?: string;
+    serialNo?: string;
+    ptuNo?: string;
+    ptuDate?: string;
+    accreditationNo?: string;
+    vatRegistered: boolean;
+  } | null;
+  voided?: boolean;
+  refunded?: number;
+}
+
+interface ReturnLine {
+  orderItemId: string;
+  title: string;
+  quantity: number;
+  returnedQty: number;
+  unitPrice: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -221,8 +246,26 @@ function MoneyInput({ value, onChange, autoFocus, label }: { value: string; onCh
 function ReceiptView({ r, vat }: { r: Receipt; vat: VatConfig }) {
   const when = new Date(r.createdAt).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
   return (
-    <div id="pos-receipt" className="mx-auto w-full max-w-[320px] rounded-xl bg-white p-4 font-mono text-[12px] leading-5 text-black">
-      <p className="text-center text-sm font-bold">{r.shopName}</p>
+    <div id="pos-receipt" className="relative mx-auto w-full max-w-[320px] rounded-xl bg-white p-4 font-mono text-[12px] leading-5 text-black">
+      {r.voided && (
+        <p className="pointer-events-none absolute inset-x-0 top-1/3 rotate-[-18deg] text-center text-4xl font-black tracking-widest text-red-600/40">VOIDED</p>
+      )}
+      {r.bir ? (
+        <>
+          <p className="text-center text-sm font-bold">{r.bir.tradeName || r.shopName}</p>
+          <p className="text-center">{r.bir.registeredName}</p>
+          <p className="text-center text-[11px]">{r.bir.address}</p>
+          <p className="text-center text-[11px]">
+            {r.bir.vatRegistered ? "VAT REG TIN" : "NON-VAT REG TIN"} {r.bir.tin}
+            {r.bir.branchCode ? `-${r.bir.branchCode}` : ""}
+          </p>
+          <p className="text-center text-[11px]">MIN {r.bir.min} · SN {r.bir.serialNo}</p>
+          <p className="mt-1 text-center font-bold">SALES INVOICE</p>
+          <p className="text-center">No. {r.invoiceNumber}</p>
+        </>
+      ) : (
+        <p className="text-center text-sm font-bold">{r.shopName}</p>
+      )}
       <p className="text-center">Sale #{r.orderNumber}</p>
       <p className="text-center">{when}</p>
       <p className="text-center">Cashier: {r.cashierName}</p>
@@ -293,8 +336,17 @@ function ReceiptView({ r, vat }: { r: Receipt; vat: VatConfig }) {
         </p>
       )}
       <hr className="my-2 border-dashed border-black/40" />
+      {(r.refunded ?? 0) > 0 && !r.voided && <p className="text-center text-[11px]">Refunded: {peso(r.refunded ?? 0)}</p>}
       <p className="text-center">Salamat po!</p>
-      <p className="text-center text-[10px]">This is not an official receipt.</p>
+      {r.bir ? (
+        <>
+          <p className="text-center text-[10px]">PTU No. {r.bir.ptuNo}{r.bir.ptuDate ? ` · ${r.bir.ptuDate}` : ""}</p>
+          {r.bir.accreditationNo && <p className="text-center text-[10px]">Accreditation No. {r.bir.accreditationNo}</p>}
+          {!r.bir.vatRegistered && <p className="text-center text-[10px]">THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX.</p>}
+        </>
+      ) : (
+        <p className="text-center text-[10px]">This is not an official receipt.</p>
+      )}
     </div>
   );
 }
@@ -314,6 +366,7 @@ export function PosRegister() {
   const [notice, setNotice] = useState<string | null>(null);
   const [modal, setModal] = useState<null | "pay" | "receipt" | "close" | "sales" | "cart">(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [receiptFromHistory, setReceiptFromHistory] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -716,7 +769,21 @@ export function PosRegister() {
         <Modal title={receipt.duplicate ? "Sale already saved" : "Sale complete"} wide>
           <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
             <ReceiptView r={receipt} vat={state.vat} />
-            <ReceiptActions receipt={receipt} onNewSale={resetSale} />
+            <div className="space-y-4">
+              <ReceiptActions receipt={receipt} onNewSale={resetSale} />
+              {receiptFromHistory && (state.actor.role === "owner" || state.actor.role === "manager") && !receipt.voided && (
+                <SaleManage
+                  receipt={receipt}
+                  onDone={async (msg) => {
+                    setNotice(msg);
+                    setReceiptFromHistory(false);
+                    setModal(null);
+                    await load();
+                    await loadProducts();
+                  }}
+                />
+              )}
+            </div>
           </div>
         </Modal>
       )}
@@ -730,6 +797,7 @@ export function PosRegister() {
             const r = await api<{ receipt: Receipt }>(`/api/pos/sales/${id}`);
             if (r.ok) {
               setReceipt({ ...r.receipt, duplicate: false });
+              setReceiptFromHistory(true);
               setModal("receipt");
             }
           }}
@@ -1082,6 +1150,123 @@ function ReceiptActions({ receipt, onNewSale }: { receipt: Receipt; onNewSale: (
       <button type="button" className={`${btnPrimary} w-full py-3`} onClick={onNewSale} autoFocus data-testid="pos-new-sale">
         New sale
       </button>
+    </div>
+  );
+}
+
+/** Phase 11: manager tools on a past sale — void (same shift) or return items with a refund from the drawer. */
+function SaleManage({ receipt, onDone }: { receipt: Receipt; onDone: (msg: string) => void | Promise<void> }) {
+  const [mode, setMode] = useState<null | "void" | "return">(null);
+  const [reason, setReason] = useState("");
+  const [lines, setLines] = useState<ReturnLine[] | null>(null);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [restock, setRestock] = useState(true);
+  const [method, setMethod] = useState<PosTenderMethod>("cash");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "return" || lines) return;
+    void api<{ view: { lines: ReturnLine[] } }>(`/api/pos/sales/${receipt.orderId}/lines`).then((d) => {
+      if (d.ok) setLines(d.view.lines);
+      else setErr(d.error ?? "Could not load the items.");
+    });
+  }, [mode, lines, receipt.orderId]);
+
+  const suggested = (lines ?? []).reduce((n, l) => n + l.unitPrice * (qty[l.orderItemId] ?? 0), 0);
+  useEffect(() => setAmount(suggested ? suggested.toFixed(2) : ""), [suggested]);
+
+  async function submitVoid() {
+    setBusy(true);
+    setErr(null);
+    const r = await api<{ result: { summary: string } }>(`/api/pos/sales/${receipt.orderId}/void`, { method: "POST", body: JSON.stringify({ reason }) });
+    setBusy(false);
+    if (!r.ok) return setErr(r.error ?? "Could not void.");
+    await onDone(r.result.summary);
+  }
+
+  async function submitReturn() {
+    setBusy(true);
+    setErr(null);
+    const items = (lines ?? []).filter((l) => (qty[l.orderItemId] ?? 0) > 0).map((l) => ({ orderItemId: l.orderItemId, qty: qty[l.orderItemId]!, restock }));
+    const refundAmount = Number(amount || 0);
+    const r = await api<{ result: { summary: string } }>(`/api/pos/sales/${receipt.orderId}/return`, {
+      method: "POST",
+      body: JSON.stringify({ items, refundAmount, refundMethod: refundAmount > 0 ? method : "none", note: reason || null }),
+    });
+    setBusy(false);
+    if (!r.ok) return setErr(r.error ?? "Could not save the return.");
+    await onDone(r.result.summary);
+  }
+
+  if (!mode) {
+    return (
+      <div className="flex gap-2 border-t border-white/10 pt-3">
+        <button type="button" className={`${btnGhost} flex-1`} onClick={() => setMode("return")} data-testid="pos-return">
+          Return items
+        </button>
+        <button type="button" className={`${btnGhost} flex-1 text-red-300`} onClick={() => setMode("void")} data-testid="pos-void">
+          Void sale
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 border-t border-white/10 pt-3 text-sm">
+      {err && <p className="text-xs text-amber-300">{err}</p>}
+      {mode === "void" ? (
+        <>
+          <p className="text-xs text-slate-400">Voids work for sales from this shift. Stock goes back and the sale leaves the drawer total.</p>
+          <input className="guma-field h-10" placeholder="Reason (e.g. wrong item rung)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} />
+          <button type="button" className={`${btnPrimary} w-full bg-red-600`} disabled={busy || !reason.trim()} onClick={() => void submitVoid()} data-testid="pos-void-confirm">
+            {busy ? "Voiding…" : `Void ${peso(receipt.totals.total)}`}
+          </button>
+        </>
+      ) : (
+        <>
+          {!lines ? (
+            <p className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading items…</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {lines.map((l) => {
+                const left = l.quantity - l.returnedQty;
+                const q = qty[l.orderItemId] ?? 0;
+                return (
+                  <li key={l.orderItemId} className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs">{l.title}</span>
+                    {left > 0 ? (
+                      <span className="flex items-center gap-1">
+                        <button type="button" className="rounded border border-white/15 p-1" onClick={() => setQty({ ...qty, [l.orderItemId]: Math.max(0, q - 1) })} aria-label="Less"><Minus className="h-3 w-3" /></button>
+                        <span className="w-5 text-center text-xs font-semibold">{q}</span>
+                        <button type="button" className="rounded border border-white/15 p-1" onClick={() => setQty({ ...qty, [l.orderItemId]: Math.min(left, q + 1) })} aria-label="More"><Plus className="h-3 w-3" /></button>
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-500">returned</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={restock} onChange={(e) => setRestock(e.target.checked)} /> Put back in stock
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <input className="guma-field h-10" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Refund ₱" aria-label="Refund amount" />
+            <select className="guma-field h-10" value={method} onChange={(e) => setMethod(e.target.value as PosTenderMethod)} aria-label="Refund by">
+              {(["cash", "gcash", "maya", "card"] as const).map((m) => (
+                <option key={m} value={m}>{METHOD_LABEL[m]}</option>
+              ))}
+            </select>
+          </div>
+          <input className="guma-field h-10" placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+          <button type="button" className={`${btnPrimary} w-full`} disabled={busy || (!Object.values(qty).some((n) => n > 0) && !Number(amount))} onClick={() => void submitReturn()} data-testid="pos-return-confirm">
+            {busy ? "Saving…" : Number(amount) > 0 ? `Refund ${peso(Number(amount))}` : "Record return"}
+          </button>
+        </>
+      )}
+      <button type="button" className="w-full text-xs text-slate-400 hover:text-white" onClick={() => setMode(null)}>Cancel</button>
     </div>
   );
 }

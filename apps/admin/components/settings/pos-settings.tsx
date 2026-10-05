@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Calculator, KeyRound, Loader2, UserPlus } from "lucide-react";
 import { SettingsShell } from "@/components/settings/settings-shell";
 import { SettingsCard, useTenantSettings } from "@/components/settings/settings-forms";
+import { BirSettingsCard, XReadingButton } from "@/components/settings/bir-settings";
 
 interface Staff {
   id: string;
@@ -219,8 +220,10 @@ export function PosSettingsPage() {
               </span>
             </label>
           )}
-          <p className="text-xs text-muted-foreground">Receipts say &ldquo;This is not an official receipt.&rdquo; BIR OR/SI numbering comes later.</p>
+          <p className="text-xs text-muted-foreground">Receipts say &ldquo;This is not an official receipt.&rdquo; until you turn on BIR sales invoices below.</p>
         </SettingsCard>
+
+        <BirSettingsCard />
 
         <SettingsCard title="Recent shifts">
           {shifts.length === 0 ? (
@@ -239,6 +242,7 @@ export function PosSettingsPage() {
                         {s.closedBy ? ` · closed by ${s.closedBy}` : ""}
                       </span>
                     </span>
+                    <XReadingButton shiftId={s.id} />
                     {s.status === "open" ? (
                       <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600">Open now</span>
                     ) : variance === 0 ? (

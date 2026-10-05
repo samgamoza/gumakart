@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   integer,
+  bigint,
   decimal,
   jsonb,
   pgEnum,
@@ -666,6 +667,16 @@ export const orders = pgTable(
     posIdempotencyKey: varchar("pos_idempotency_key", { length: 64 }),
     /** Tenders, change, VAT breakdown, senior/PWD details, cashier name — what the receipt shows. */
     posMetaJson: jsonb("pos_meta_json"),
+    /** Phase 11: seller-only note and tags (never shown to the buyer). */
+    staffNote: text("staff_note"),
+    tagsJson: jsonb("tags_json").$type<string[]>(),
+    /** Sum of partial/whole refunds recorded through returns (pesos). */
+    refundedAmount: decimal("refunded_amount", { precision: 12, scale: 2 }).default("0").notNull(),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    /** POS: voided within its shift (sale reversed). */
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    /** POS with BIR numbering on: the sales invoice number printed on the receipt. */
+    invoiceNumber: varchar("invoice_number", { length: 32 }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -699,6 +710,8 @@ export const orderItems = pgTable(
     unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
     lineTotal: decimal("line_total", { precision: 12, scale: 2 }).notNull(),
     customizationsJson: jsonb("customizations_json"),
+    /** Phase 11: units returned so far (≤ quantity). */
+    returnedQty: integer("returned_qty").default(0).notNull(),
   },
   (table) => [
     index("order_items_order_idx").on(table.orderId),
@@ -733,6 +746,10 @@ export const stockMovementReasonEnum = pgEnum("stock_movement_reason", [
   "restock_refund",
   "restock_expiry",
   "adjustment",
+  // Phase 11: order edits, returns and exchanges (may repeat per order).
+  "order_edit",
+  "return_restock",
+  "exchange_out",
 ]);
 
 /**
@@ -1688,4 +1705,83 @@ export const activityLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("activity_log_tenant_idx").on(table.tenantId, table.createdAt)]
+);
+
+// ─── Phase 11: after-sale & BIR-ready POS ────────────────────────────────────
+
+export interface OrderReturnItem {
+  orderItemId: string;
+  variantId: string | null;
+  title: string;
+  qty: number;
+  unitPrice: number;
+  restock: boolean;
+  /** Exchange: the replacement variant handed to the buyer. */
+  replacementVariantId?: string | null;
+  replacementTitle?: string | null;
+  replacementUnitPrice?: number | null;
+}
+
+export const orderReturns = pgTable(
+  "order_returns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id")
+      .references(() => orders.id, { onDelete: "cascade" })
+      .notNull(),
+    kind: varchar("kind", { length: 16 }).$type<"return" | "exchange" | "void" | "edit">().notNull(),
+    itemsJson: jsonb("items_json").$type<OrderReturnItem[]>().notNull(),
+    refundAmount: decimal("refund_amount", { precision: 12, scale: 2 }).default("0").notNull(),
+    collectedAmount: decimal("collected_amount", { precision: 12, scale: 2 }).default("0").notNull(),
+    refundMethod: varchar("refund_method", { length: 16 }).notNull(),
+    gatewayRefundId: varchar("gateway_refund_id", { length: 255 }),
+    note: varchar("note", { length: 300 }),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    actorName: varchar("actor_name", { length: 80 }).notNull(),
+    posStaffId: uuid("pos_staff_id").references(() => posStaff.id, { onDelete: "set null" }),
+    registerSessionId: uuid("register_session_id").references(() => registerSessions.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("order_returns_order_idx").on(table.tenantId, table.orderId)]
+);
+
+export const posInvoiceCounters = pgTable("pos_invoice_counters", {
+  registerId: uuid("register_id")
+    .primaryKey()
+    .references(() => registers.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  prefix: varchar("prefix", { length: 12 }).default("").notNull(),
+  nextInvoice: bigint("next_invoice", { mode: "number" }).default(1).notNull(),
+  nextZ: integer("next_z").default(1).notNull(),
+  grandTotal: decimal("grand_total", { precision: 16, scale: 2 }).default("0").notNull(),
+  lastZAt: timestamp("last_z_at", { withTimezone: true }),
+});
+
+export const posZReadings = pgTable(
+  "pos_z_readings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    registerId: uuid("register_id")
+      .references(() => registers.id, { onDelete: "cascade" })
+      .notNull(),
+    zNumber: integer("z_number").notNull(),
+    fromAt: timestamp("from_at", { withTimezone: true }),
+    toAt: timestamp("to_at", { withTimezone: true }).notNull(),
+    fromInvoice: varchar("from_invoice", { length: 32 }),
+    toInvoice: varchar("to_invoice", { length: 32 }),
+    totalsJson: jsonb("totals_json").$type<Record<string, number>>().notNull(),
+    grandTotalBefore: decimal("grand_total_before", { precision: 16, scale: 2 }).notNull(),
+    grandTotalAfter: decimal("grand_total_after", { precision: 16, scale: 2 }).notNull(),
+    createdByName: varchar("created_by_name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("pos_z_readings_number_idx").on(table.registerId, table.zNumber)]
 );

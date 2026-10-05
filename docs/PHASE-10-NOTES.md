@@ -2,7 +2,7 @@
 
 Roadmap: project doc `claude/gumakart-roadmap.md` (Phase 10). Migration **0027_staff** must run on
 Neon **before pushing** (`pnpm db:migrate` with the Neon `DATABASE_URL`, like 0025/0026). Additive
-only. Pending Phase 2 constraints are renumbered to `drizzle-pending/0028_phase2_constrain.sql`.
+only. Pending Phase 2 constraints are renumbered to `drizzle-pending/0028_phase2_constrain.sql` at the time (now 0029).
 No new secrets. Invite emails use Resend when `RESEND_API_KEY` is set; until then the owner gets the
 link to send by Messenger/Viber/SMS (ready to hook up, never a fake "sent").
 

@@ -51,6 +51,16 @@ describe("API guard", () => {
     assert.ok(canUseApi("manager", `/api/orders/${ID}/refund`, "POST"));
   });
 
+  it("after-sale: staff add notes and print slips; edits and returns are manager work", () => {
+    assert.ok(canUseApi("staff", `/api/orders/${ID}/notes`, "PATCH"));
+    assert.ok(canUseApi("staff", "/api/orders/slips", "GET"));
+    assert.ok(!canUseApi("staff", `/api/orders/${ID}/edit`, "POST"));
+    assert.ok(!canUseApi("staff", `/api/orders/${ID}/returns`, "POST"));
+    assert.ok(canUseApi("manager", `/api/orders/${ID}/edit`, "POST"));
+    assert.ok(canUseApi("manager", "/api/bir/z", "POST"));
+    assert.ok(!canUseApi("staff", "/api/bir/status", "GET"));
+  });
+
   it("staff can read products but not change them", () => {
     assert.ok(canUseApi("staff", "/api/products", "GET"));
     assert.ok(!canUseApi("staff", "/api/products", "POST"));

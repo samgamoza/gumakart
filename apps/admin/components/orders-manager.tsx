@@ -1,6 +1,7 @@
 "use client";
 
 import { useShopRole } from "@/lib/use-shop-role";
+import { OrderTools } from "@/components/order-tools";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, formatPrice } from "@gumakart/ui";
 
@@ -54,6 +55,12 @@ interface OrderRow {
   deliveryProvider: string | null;
   sourceChannel?: string;
   checkoutLink?: { title: string; shareChannel: string | null } | null;
+  staffNote?: string | null;
+  tags?: string[];
+  refundedAmount?: string;
+  edited?: boolean;
+  voided?: boolean;
+  invoiceNumber?: string | null;
 }
 
 const SHARE_CHANNEL_LABEL: Record<string, string> = {
@@ -199,6 +206,8 @@ export function OrdersManager() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabId>("all");
+  const [tagFilter, setTagFilter] = useState("");
+  const [toolsFor, setToolsFor] = useState<string | null>(null);
   // Dashboard to-do tiles link here as /orders?tab=to_confirm etc.
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("tab");
@@ -394,10 +403,15 @@ export function OrdersManager() {
     return map;
   }, [orders]);
 
+  const allTags = useMemo(() => [...new Set(orders.flatMap((o) => o.tags ?? []))].sort(), [orders]);
   const visible = useMemo(
-    () => (tab === "all" ? orders : orders.filter((order) => order.bucket === tab)),
-    [orders, tab]
+    () =>
+      (tab === "all" ? orders : orders.filter((order) => order.bucket === tab)).filter(
+        (order) => !tagFilter || (order.tags ?? []).includes(tagFilter)
+      ),
+    [orders, tab, tagFilter]
   );
+  const slipIds = visible.filter((o) => o.orderState !== "cancelled").slice(0, 50).map((o) => o.id);
 
   return (
     <>
@@ -423,6 +437,47 @@ export function OrdersManager() {
           );
         })}
       </div>
+
+      {(allTags.length > 0 || (tab === "to_pack" && slipIds.length > 0)) && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {allTags.length > 0 && (
+            <select
+              className="h-9 rounded-lg border border-border bg-card px-2 text-sm"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              aria-label="Filter by tag"
+            >
+              <option value="">All tags</option>
+              {allTags.map((t) => (
+                <option key={t} value={t}>
+                  #{t}
+                </option>
+              ))}
+            </select>
+          )}
+          {slipIds.length > 0 && (tab === "to_pack" || tab === "to_ship") && (
+            <a
+              href={`/orders/slips?ids=${slipIds.join(",")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+            >
+              🖨️ Print packing slips ({slipIds.length})
+            </a>
+          )}
+        </div>
+      )}
+
+      {toolsFor && (
+        <OrderTools
+          orderId={toolsFor}
+          onClose={() => setToolsFor(null)}
+          onChanged={(msg) => {
+            setNotice(msg);
+            void load();
+          }}
+        />
+      )}
 
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -490,6 +545,33 @@ export function OrdersManager() {
                       {order.paymentState === "cod_due" ? " (collect on delivery)" : ""}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-muted-foreground">{order.itemsSummary}</p>
+                    {((order.tags?.length ?? 0) > 0 || order.staffNote || order.edited || order.voided || Number(order.refundedAmount ?? 0) > 0 || order.invoiceNumber) && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        {(order.tags ?? []).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTagFilter(t)}
+                            className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800 ring-1 ring-emerald-200"
+                          >
+                            #{t}
+                          </button>
+                        ))}
+                        {order.voided && <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 ring-1 ring-red-200">Voided</span>}
+                        {!order.voided && Number(order.refundedAmount ?? 0) > 0 && (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800 ring-1 ring-amber-200">
+                            Refunded {formatPrice(Number(order.refundedAmount))}
+                          </span>
+                        )}
+                        {order.edited && <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">Edited</span>}
+                        {order.invoiceNumber && <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-muted-foreground">SI {order.invoiceNumber}</span>}
+                        {order.staffNote && (
+                          <span className="max-w-[16rem] truncate rounded-full bg-sky-50 px-2 py-0.5 text-sky-800 ring-1 ring-sky-200" title={order.staffNote}>
+                            📝 {order.staffNote}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {sourceLabel(order) ? (
                       <p className="mt-1 inline-flex max-w-full items-center truncate rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                         {sourceLabel(order)}
@@ -611,6 +693,13 @@ export function OrdersManager() {
                         Refund
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setToolsFor(order.id)}
+                      className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted"
+                    >
+                      More
+                    </button>
                     {action && (
                       <Button size="sm" onClick={() => runAction(order, action.action)} disabled={busy}>
                         {busy ? "Saving..." : action.label}

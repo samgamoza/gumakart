@@ -609,7 +609,8 @@ export async function refundOrder(params: {
         const res = await params.refundAtGateway({
           gateway,
           gatewayPaymentId: txn.gatewayPaymentId,
-          totalCentavos: Math.round(Number(order.total) * 100),
+          // Phase 11: only what's left after partial refunds (returns).
+          totalCentavos: Math.round(Number(order.total) * 100) - Math.round(Number(order.refundedAmount ?? 0) * 100),
           orderNumber: order.orderNumber,
         });
         gatewayRefundId = res.refundId;
@@ -629,6 +630,7 @@ export async function refundOrder(params: {
         note: gatewayRefundId ? `${baseNote} (${gatewayRefundId})` : baseNote,
         payment: { refundId: gatewayRefundId ?? null, viaRefundFlow: true },
       });
+      await tx.update(orders).set({ refundedAmount: order.total }).where(eq(orders.id, order.id));
       return {
         applied,
         refund: { gateway, refundId: gatewayRefundId, restocked: applied.restocked, refundedOutsidePlatform },

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import {
   customers,
@@ -19,6 +19,9 @@ import { insertOutboxEvent } from "./outbox";
 import { describeStates, legacyStatusOf } from "./order-state";
 import { OrderError } from "./order-status";
 import { recordStockMovement } from "./stock-ledger";
+import { shiftRefundsByMethod } from "./after-sale";
+import { birActive, getBirReceiptHeader, nextInvoiceNumberInTx } from "./bir";
+import type { TenantBirSettings } from "../types/tenant-settings";
 import {
   checkTenders,
   computeSaleTotals,
@@ -314,7 +317,9 @@ export interface ShiftSummary {
   vat: number;
   /** Money received per method (cash already net of change). */
   byMethod: TenderTotals;
-  /** Opening cash + cash kept from sales; e-wallet/card = what was recorded. */
+  /** Phase 11: refunds paid out during this shift (POS returns), per method. */
+  refunds: TenderTotals;
+  /** Opening cash + cash kept from sales − refunds; e-wallet/card = what was recorded. */
   expected: TenderTotals;
 }
 
@@ -333,7 +338,10 @@ export async function getShiftSummary(tenantId: string, shiftId: string): Promis
       and(
         eq(orders.tenantId, tenantId),
         eq(orders.registerSessionId, shiftId),
-        sql`coalesce(${orders.orderState}::text, 'open') <> 'cancelled'`
+        // Phase 11: voids drop out; a sale later refunded through a return still counts
+        // as a sale here and the refund comes off the shift it was paid out in.
+        isNull(orders.voidedAt),
+        sql`(coalesce(${orders.orderState}::text, 'open') <> 'cancelled' or ${orders.refundedAmount} > 0)`
       )
     );
   const byMethod: TenderTotals = { ...ZERO_TENDERS };
@@ -353,6 +361,17 @@ export async function getShiftSummary(tenantId: string, shiftId: string): Promis
   }
   const round = (n: number) => Math.round(n * 100) / 100;
   for (const m of Object.keys(byMethod) as PosTenderMethod[]) byMethod[m] = round(byMethod[m]);
+  // Phase 11: refunds paid out of this drawer (returns at the register), net of any
+  // difference collected on exchanges. "original" means back the way it was paid → cash.
+  const refundsRaw = await shiftRefundsByMethod(tenantId, shiftId);
+  const refunds: TenderTotals = { ...ZERO_TENDERS };
+  for (const [method, amount] of Object.entries(refundsRaw)) {
+    const m = (method in refunds ? method : "cash") as PosTenderMethod;
+    refunds[m] = round(refunds[m] + amount);
+  }
+  const expected: TenderTotals = { ...ZERO_TENDERS };
+  for (const m of Object.keys(byMethod) as PosTenderMethod[]) expected[m] = round(byMethod[m] - refunds[m]);
+  expected.cash = round(Number(shift.openingCash) + expected.cash);
   return {
     sales: rows.length,
     salesTotal: round(salesTotal),
@@ -360,7 +379,8 @@ export async function getShiftSummary(tenantId: string, shiftId: string): Promis
     seniorPwdSales,
     vat: round(vat),
     byMethod,
-    expected: { ...byMethod, cash: round(Number(shift.openingCash) + byMethod.cash) },
+    refunds,
+    expected,
   };
 }
 
@@ -547,6 +567,11 @@ export interface PosReceipt {
   change: number;
   customer: { name: string | null; phone: string | null };
   duplicate?: boolean;
+  /** Phase 11: BIR sales invoice number and header, when the shop turned BIR on. */
+  invoiceNumber: string | null;
+  bir: (TenantBirSettings & { vatRegistered: boolean }) | null;
+  voided: boolean;
+  refunded: number;
 }
 
 export interface PosMeta {
@@ -591,6 +616,10 @@ export async function getPosReceipt(tenantId: string, orderId: string): Promise<
       name: row.order.guestName && row.order.guestName !== "Walk-in" ? row.order.guestName : null,
       phone: row.order.guestPhone,
     },
+    invoiceNumber: row.order.invoiceNumber,
+    bir: row.order.invoiceNumber ? await getBirReceiptHeader(tenantId) : null,
+    voided: Boolean(row.order.voidedAt),
+    refunded: Number(row.order.refundedAmount ?? 0),
   };
 }
 
@@ -717,6 +746,10 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       const tenderCheck = checkTenders(totals.total, input.tenders);
       if (!tenderCheck.ok) throw new PosError(tenderCheck.error, "BAD_TENDER");
 
+      // Phase 11: BIR numbering (only when the shop turned it on with its PTU details).
+      const bir = birActive(tenant.settingsJson as import("../types/tenant-settings").TenantSettingsJson | null);
+      const invoiceNumber = bir ? await nextInvoiceNumberInTx(tx, input.tenantId, shift.registerId, bir.invoicePrefix) : null;
+
       const now = new Date();
       const facts = { orderState: "completed" as const, paymentState: "paid" as const, fulfillmentState: "delivered" as const, accepted: true };
       const locationId = await getDefaultLocationId(tx, input.tenantId);
@@ -793,6 +826,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           posStaffId: input.staffId,
           posIdempotencyKey: key,
           posMetaJson: meta,
+          invoiceNumber,
         })
         .returning({ id: orders.id });
       if (!order) throw new Error("Failed to save the sale.");

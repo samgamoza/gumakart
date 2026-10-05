@@ -24,6 +24,7 @@ export const PERMISSIONS = [
   "orders.payments",
   "orders.cancel",
   "orders.refund",
+  "orders.edit",
   "products.view",
   "products.edit",
   "stock.adjust",
@@ -118,6 +119,12 @@ export const API_RULES: ApiRule[] = [
   { pattern: new RegExp(`^/api/orders/${ID}/confirm-payment$`), permission: "orders.payments" },
   { pattern: new RegExp(`^/api/orders/${ID}/refund$`), permission: "orders.refund" },
   { pattern: new RegExp(`^/api/orders/${ID}/(assign-rider|book-delivery)$`), permission: "orders.fulfil" },
+  // Phase 11: notes/tags are packing work; edits change money; returns refund.
+  { pattern: new RegExp(`^/api/orders/${ID}/notes$`), permission: "orders.fulfil" },
+  { pattern: new RegExp(`^/api/orders/${ID}/after-sale$`), methods: READ, permission: "orders.view" },
+  { pattern: new RegExp(`^/api/orders/${ID}/edit$`), permission: "orders.edit" },
+  { pattern: new RegExp(`^/api/orders/${ID}/returns$`), permission: "orders.refund" },
+  { pattern: /^\/api\/orders\/(tags|slips)$/, methods: READ, permission: "orders.view" },
   // PATCH actions: cancel / reject_payment are checked again inside the route.
   { pattern: new RegExp(`^/api/orders/${ID}$`), methods: ["PATCH"], permission: "orders.fulfil" },
   { pattern: /^\/api\/orders(\/[^/]+)?$/, methods: READ, permission: "orders.view" },
@@ -139,6 +146,7 @@ export const API_RULES: ApiRule[] = [
 
   // POS (the register itself also accepts a cashier PIN cookie; see lib/pos-auth)
   { pattern: /^\/api\/pos-staff(\/|$)/, permission: "pos.manage" },
+  { pattern: /^\/api\/bir(\/|$)/, permission: "pos.manage" },
   { pattern: /^\/api\/pos\/device$/, permission: "pos.manage" },
   { pattern: /^\/api\/pos\//, permission: "pos.use" },
 

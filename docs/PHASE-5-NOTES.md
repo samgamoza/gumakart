@@ -12,7 +12,7 @@ picked up in one transaction, so in-store and online sales share stock, customer
   counted / variance per tender (JSON); who opened / closed; note
 - `orders` + `register_session_id`, `pos_staff_id`, `pos_idempotency_key` (unique per shop),
   `pos_meta_json` (tenders, change, VAT breakdown, senior/PWD name + last 4 of ID, cashier)
-- Pending Phase 2 constraint file renumbered (now **0028** after Phase 10) (`drizzle-pending/0028_phase2_constrain.sql`);
+- Pending Phase 2 constraint file renumbered (now **0029** after Phase 11) (`drizzle-pending/0029_phase2_constrain.sql`);
   its one-live-charge index and verify query V4 now skip POS tender rows (`pos_<order>_<n>`), since a
   split sale has two paid rows. Dry-run on local DB: clean.
 
