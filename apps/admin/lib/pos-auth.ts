@@ -35,12 +35,14 @@ export async function getPosActor(): Promise<PosActor | null> {
   }
   try {
     const session = await requireTenantSession();
+    // Phase 10: staff accounts use the register under their own name and role.
+    const role = session.shopRole === "owner" ? "owner" : session.shopRole === "manager" ? "manager" : "cashier";
     return {
       tenantId: session.tenantId,
       staffId: null,
       userId: session.userId,
-      name: session.displayName?.split(" ")[0] || "Owner",
-      role: "owner",
+      name: session.displayName?.split(" ")[0] || (role === "owner" ? "Owner" : "Staff"),
+      role,
     };
   } catch {
     return null;
@@ -53,7 +55,10 @@ export async function requirePosActor(): Promise<PosActor> {
   return actor;
 }
 
-/** The owner's seller session only (staff setup, registering a device). */
+/**
+ * Staff setup and registering a device. The API guard limits these routes to
+ * pos.manage (owner or manager).
+ */
 export async function requirePosOwner(): Promise<PosActor & { role: "owner" }> {
   const session = await requireTenantSession();
   return {

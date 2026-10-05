@@ -368,6 +368,8 @@ export const users = pgTable(
     phone: varchar("phone", { length: 20 }),
     passwordHash: text("password_hash"),
     role: userRoleEnum("role").default("customer").notNull(),
+    /** Phase 10: for role = seller_staff — what they may do in the shop. */
+    staffRole: varchar("staff_role", { length: 16 }).$type<"manager" | "staff" | "cashier">(),
     status: varchar("status", { length: 20 }).default("active").notNull(),
     tenantId: uuid("tenant_id").references(() => tenants.id),
     profileJson: jsonb("profile_json").$type<{
@@ -1593,6 +1595,8 @@ export const posStaff = pgTable("pos_staff", {
     .notNull(),
   name: varchar("name", { length: 60 }).notNull(),
   role: varchar("role", { length: 16 }).$type<"cashier" | "manager">().default("cashier").notNull(),
+  /** Phase 10: the staff account this PIN unlocks for (quick unlock). Null = PIN-only cashier. */
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
   pinHash: varchar("pin_hash", { length: 255 }).notNull(),
   /** Bumped on PIN reset / deactivation so open cashier sessions stop working. */
   pinVersion: integer("pin_version").default(1).notNull(),
@@ -1637,3 +1641,51 @@ export const registerSessions = pgTable("register_sessions", {
   varianceJson: jsonb("variance_json"),
   closeNote: text("close_note"),
 });
+
+// ─── Phase 10: staff & activity ──────────────────────────────────────────────
+
+export const staffInvites = pgTable(
+  "staff_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    name: varchar("name", { length: 80 }),
+    staffRole: varchar("staff_role", { length: 16 }).$type<"manager" | "staff" | "cashier">().notNull(),
+    /** sha256 of the invite token; the token itself is only shown once. */
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedUserId: uuid("accepted_user_id").references(() => users.id, { onDelete: "set null" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("staff_invites_token_idx").on(table.tokenHash),
+    index("staff_invites_tenant_idx").on(table.tenantId, table.createdAt),
+  ]
+);
+
+/** Who did what in a shop (payments confirmed, prices/stock changed, refunds, staff changes…). */
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    actorName: varchar("actor_name", { length: 80 }).notNull(),
+    actorRole: varchar("actor_role", { length: 16 }),
+    action: varchar("action", { length: 48 }).notNull(),
+    entityType: varchar("entity_type", { length: 24 }),
+    entityId: varchar("entity_id", { length: 64 }),
+    summary: varchar("summary", { length: 300 }).notNull(),
+    metaJson: jsonb("meta_json").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("activity_log_tenant_idx").on(table.tenantId, table.createdAt)]
+);

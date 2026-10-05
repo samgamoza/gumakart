@@ -12,6 +12,7 @@ import {
   tryAutoActivateTenant,
 } from "@gumakart/db";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { recordActivity } from "@/lib/activity";
 import { storefrontBaseUrl } from "@/lib/utils";
 
 export async function GET() {
@@ -78,6 +79,12 @@ export async function POST(request: Request) {
     await tryAutoActivateTenant(session.tenantId).catch((error) =>
       console.error("[checkout-links POST] auto-activate failed:", error)
     );
+    await recordActivity(session, {
+      action: "link.created",
+      entityType: "checkout_link",
+      entityId: link.id,
+      summary: `Made checkout link "${link.title}" (/c/${link.code})`,
+    });
     return NextResponse.json({ ok: true, link }, { status: 201 });
   } catch (error) {
     return errorResponse(error, "[checkout-links POST]");

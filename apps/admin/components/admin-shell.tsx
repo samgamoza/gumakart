@@ -20,6 +20,7 @@ import { UpgradeGateModal } from "@/components/plan/upgrade-gate-modal";
 import { PlanTierBadge } from "@/components/plan/plan-tier-badge";
 import { useTenantPlan } from "@/components/plan/use-tenant-plan";
 import { DASHBOARD_NAV, type DashboardNavItem } from "@/lib/dashboard-nav";
+import { canOpenPage, ROLE_LABELS, shopRoleOf } from "@gumakart/db/staff-permissions";
 import { SETTINGS_SECTIONS } from "@/lib/settings-nav";
 import { planAtLeast, upgradeHref, type SubscriptionPlan } from "@/lib/plan-access";
 import { SuspendedShopNotice } from "@/components/suspended-shop-notice";
@@ -27,6 +28,8 @@ import { SupportAccessBanner } from "@/components/support-access-banner";
 import { storefrontBaseUrl } from "@/lib/utils";
 
 interface SessionUser {
+  role: string;
+  staffRole?: string | null;
   tenantName: string;
   tenantSlug: string;
   displayName: string;
@@ -93,14 +96,22 @@ export function AdminShell({
     });
   }, [tenant?.status]);
 
+  // Phase 10: staff only see what their role can open (the API enforces it too).
+  const shopRole = user ? shopRoleOf({ role: user.role, staffRole: user.staffRole ?? null }) : "owner";
   const filteredNav = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return DASHBOARD_NAV;
-    return DASHBOARD_NAV.map((group) => ({
+    const allowed = DASHBOARD_NAV.map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.label.toLowerCase().includes(q)),
+      items: group.items.filter((item) => canOpenPage(shopRole, item.href.split("?")[0]!)),
     })).filter((group) => group.items.length > 0);
-  }, [search]);
+    if (!q) return allowed;
+    return allowed
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => item.label.toLowerCase().includes(q)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [search, shopRole]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -126,7 +137,9 @@ export function AdminShell({
 
   const storefrontBase = storefrontBaseUrl;
   const slug = user?.tenantSlug ?? tenant?.slug;
-  const showUpgrade = plan !== "pro";
+  const showUpgrade = plan !== "pro" && shopRole === "owner";
+  const settingsSections = SETTINGS_SECTIONS.filter((section) => canOpenPage(shopRole, section.href));
+  const roleBadge = shopRole && shopRole !== "owner" ? ROLE_LABELS[shopRole].label : null;
   const tenantStatus = user?.tenantStatus ?? tenant?.status;
   const isSuspended = tenantStatus === "suspended";
   const supportAccess = Boolean(user?.supportAccess);
@@ -286,7 +299,7 @@ export function AdminShell({
               onClick={() => {
                 setSettingsOpen((o) => !o);
                 if (!settingsOpen && !pathname.startsWith("/settings")) {
-                  router.push("/settings/shop");
+                  router.push(settingsSections[0]?.href ?? "/settings/account");
                 }
               }}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
@@ -305,7 +318,7 @@ export function AdminShell({
             </button>
             {settingsOpen ? (
               <div className="ml-3 mt-0.5 space-y-0.5 border-l border-white/10 pl-2">
-                {SETTINGS_SECTIONS.map((section) => (
+                {settingsSections.map((section) => (
                   <Link
                     key={section.href}
                     href={section.href}
@@ -356,7 +369,10 @@ export function AdminShell({
               </span>
               <div className="min-w-0 text-xs">
                 <p className="truncate font-semibold text-white">{user.displayName}</p>
-                <p className="truncate text-slate-400">{user.email}</p>
+                <p className="truncate text-slate-400">
+                  {roleBadge ? <span className="mr-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-200">{roleBadge}</span> : null}
+                  {user.email}
+                </p>
               </div>
             </div>
           ) : null}

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { OrderError, refundOrder } from "@gumakart/db";
 import { createLogger, createPayMongoClient } from "@gumakart/services";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { recordActivity } from "@/lib/activity";
+import { orderNumberFor } from "@gumakart/db";
 
 const log = createLogger("orders:refund");
 
@@ -44,6 +46,12 @@ export async function POST(
       },
     });
 
+    await recordActivity(session, {
+      action: "order.refunded",
+      entityType: "order",
+      entityId: orderId,
+      summary: `Refunded ${(await orderNumberFor(session.tenantId, orderId)) ?? "an order"}${result.refundedOutsidePlatform ? " (paid outside Guma — refund sent by the shop)" : ""}${result.restocked ? ", items restocked" : ""}`,
+    });
     return NextResponse.json({
       ok: true,
       status: "refunded",

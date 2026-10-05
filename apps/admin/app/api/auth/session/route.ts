@@ -53,6 +53,7 @@ export async function GET(request: Request) {
       userId: user.userId,
       email: user.email,
       role: user.role,
+      staffRole: "staffRole" in user ? (user.staffRole ?? null) : null,
       tenantId: user.tenantId,
       tenantSlug: user.tenantSlug,
       tenantName: user.tenantName,

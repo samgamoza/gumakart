@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { confirmManualOrderPayment } from "@gumakart/db";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { recordActivity } from "@/lib/activity";
 
 const bodySchema = z.object({
   note: z.string().trim().max(500).optional(),
@@ -29,6 +30,14 @@ export async function POST(
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
     }
 
+    if (result.transitioned) {
+      await recordActivity(session, {
+        action: "order.payment_confirmed",
+        entityType: "order",
+        entityId: orderId,
+        summary: `Confirmed payment for ${result.orderNumber}`,
+      });
+    }
     return NextResponse.json({
       ok: true,
       orderNumber: result.orderNumber,

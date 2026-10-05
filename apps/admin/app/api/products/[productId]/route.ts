@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { deleteProductForTenant, markChangeRequestPublished, updateProductForTenant } from "@gumakart/db";
+import { deleteProductForTenant, markChangeRequestPublished, productSnapshot, updateProductForTenant } from "@gumakart/db";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { peso, recordActivity } from "@/lib/activity";
 
 const patchSchema = z.object({
   title: z.string().min(2).max(255).optional(),
@@ -35,6 +36,7 @@ export async function PATCH(
     const id = idSchema.parse(productId);
     const body = patchSchema.parse(await request.json());
 
+    const before = await productSnapshot(session.tenantId, id);
     const updated = await updateProductForTenant(session.tenantId, id, {
       title: body.title,
       descriptionHtml: body.descriptionHtml,
@@ -54,6 +56,24 @@ export async function PATCH(
 
     if (!updated) {
       return NextResponse.json({ ok: false, error: "Product not found." }, { status: 404 });
+    }
+
+    // Phase 10: price, stock and status changes go to the activity log.
+    const after = before ? await productSnapshot(session.tenantId, id) : null;
+    if (before && after) {
+      const changes: string[] = [];
+      if (after.price !== before.price) changes.push(`price ${peso(before.price)} → ${peso(after.price)}`);
+      if (after.stock !== before.stock) changes.push(`stock ${before.stock} → ${after.stock}`);
+      if (after.status !== before.status) changes.push(`${before.status} → ${after.status}`);
+      if (after.title !== before.title) changes.push(`renamed from "${before.title}"`);
+      if (changes.length) {
+        await recordActivity(session, {
+          action: changes.some((c) => c.startsWith("price")) ? "product.price_changed" : changes.some((c) => c.startsWith("stock")) ? "product.stock_changed" : "product.updated",
+          entityType: "product",
+          entityId: id,
+          summary: `${after.title}: ${changes.join(", ")}`,
+        });
+      }
     }
 
     if (body.changeRequestId) {
@@ -108,10 +128,17 @@ export async function DELETE(
     const { productId } = await params;
     const id = idSchema.parse(productId);
 
+    const before = await productSnapshot(session.tenantId, id);
     const result = await deleteProductForTenant(session.tenantId, id);
     if (result === "not_found") {
       return NextResponse.json({ ok: false, error: "Product not found." }, { status: 404 });
     }
+    await recordActivity(session, {
+      action: "product.deleted",
+      entityType: "product",
+      entityId: id,
+      summary: `${result === "archived" ? "Archived" : "Deleted"} ${before?.title ?? "a product"}`,
+    });
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     if (error instanceof ApiAuthError) {

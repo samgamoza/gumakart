@@ -45,6 +45,27 @@ export {
   type CsvImportPlan,
 } from "./queries/inventory";
 export {
+  listTeam,
+  createStaffInvite,
+  revokeStaffInvite,
+  getStaffInvite,
+  acceptStaffInvite,
+  changeStaffRole,
+  removeStaff,
+  setStaffPin,
+  getInviteAccount,
+  posStaffIdForUser,
+  countOpenInvites,
+  StaffError,
+  INVITE_TTL_DAYS,
+  MAX_STAFF,
+  STAFF_ROLE_VALUES,
+  type TeamMember,
+  type PendingInvite,
+  type InviteView,
+} from "./queries/staff";
+export { logActivity, listActivity, orderNumberFor, productSnapshot, type ActivityActor, type ActivityInput, type ActivityRow } from "./queries/activity";
+export {
   classifyTenantPublicAccess,
   isTenantAcceptingOrders,
   isTenantSellerWritable,

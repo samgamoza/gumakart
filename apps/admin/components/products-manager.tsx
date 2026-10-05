@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, formatPrice } from "@gumakart/ui";
 import { ProductVariantsEditor } from "@/components/product-variants-editor";
+import { useShopRole } from "@/lib/use-shop-role";
 import {
   formatProductPriceLine,
   productPricingKindForCategory,
@@ -145,6 +146,8 @@ export function ProductsManager() {
   const [suggestingPrice, setSuggestingPrice] = useState(false);
   const [descriptionNote, setDescriptionNote] = useState<string | null>(null);
   const [variantsFor, setVariantsFor] = useState<ProductRow | null>(null);
+  const perms = useShopRole();
+  const canEdit = perms.can("products.edit");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -630,10 +633,12 @@ export function ProductsManager() {
           <Button type="button" variant="secondary" onClick={closeCreateForm}>
             Cancel
           </Button>
-        ) : (
+        ) : canEdit ? (
           <Button type="button" onClick={openCreateForm}>
             + Add product
           </Button>
+        ) : (
+          <span className="text-xs text-slate-400">View only — ask a manager to change products.</span>
         )}
       </div>
 
@@ -1151,7 +1156,7 @@ export function ProductsManager() {
                               Checkout link
                             </a>
                           )}
-                          {pricingKind !== "service" && (
+                          {pricingKind !== "service" && canEdit && (
                             <button
                               type="button"
                               onClick={() => setVariantsFor(main)}
@@ -1160,13 +1165,15 @@ export function ProductsManager() {
                               {main.hasOptions ? "Sizes & colours" : "Add sizes"}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => startEdit(main)}
-                            className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
-                          >
-                            Edit
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => startEdit(main)}
+                              className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                            >
+                              Edit
+                            </button>
+                          )}
                         </div>
                       </div>
                     </Card>
@@ -1241,14 +1248,16 @@ export function ProductsManager() {
                                 Checkout link
                               </a>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => void setAsMainProduct(product)}
-                              className="rounded-xl border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/10"
-                            >
-                              Set as main
-                            </button>
-                            {pricingKind !== "service" && (
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => void setAsMainProduct(product)}
+                                className="rounded-xl border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/10"
+                              >
+                                Set as main
+                              </button>
+                            )}
+                            {pricingKind !== "service" && canEdit && (
                               <button
                                 type="button"
                                 onClick={() => setVariantsFor(product)}
@@ -1257,21 +1266,25 @@ export function ProductsManager() {
                                 {product.hasOptions ? "Sizes & colours" : "Add sizes"}
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => startEdit(product)}
-                              className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(product)}
-                              disabled={deletingId === product.id}
-                              className="rounded-xl px-3 py-1.5 text-sm text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
-                            >
-                              {deletingId === product.id ? "Deleting…" : "Delete"}
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => startEdit(product)}
+                                className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                              >
+                                Edit
+                              </button>
+                            )}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(product)}
+                                disabled={deletingId === product.id}
+                                className="rounded-xl px-3 py-1.5 text-sm text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+                              >
+                                {deletingId === product.id ? "Deleting…" : "Delete"}
+                              </button>
+                            )}
                           </div>
                         </Card>
                       ))}

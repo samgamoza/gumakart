@@ -43,6 +43,7 @@ export async function createSessionToken(
   return new SignJWT({
     email: user.email,
     role: user.role,
+    ...(user.staffRole ? { sr: user.staffRole } : {}),
     tenantId: user.tenantId,
     tenantSlug: user.tenantSlug,
     tenantName: user.tenantName,
@@ -157,6 +158,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       userId,
       email,
       role,
+      staffRole: typeof payload.sr === "string" ? payload.sr : null,
       tenantId: resolvedTenantId,
       tenantSlug: resolvedTenantSlug,
       tenantName: resolvedTenantName,

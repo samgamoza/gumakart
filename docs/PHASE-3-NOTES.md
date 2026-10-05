@@ -19,7 +19,7 @@ Plan: `docs/GUMA-KART-V1-PLAN-REVISED.md` §5. Built in slices; each slice ends 
 - `checkout_link_items`: product + variant (the same default variant checkout charges) + quantity.
 - `orders.checkout_link_id` (nullable, `ON DELETE SET NULL`).
 - Prices are never stored on a link; checkout reads the variant price at order time.
-- The pending Phase 2 constraint SQL is now `drizzle-pending/0027_phase2_constrain.sql` (journal idx 27).
+- The pending Phase 2 constraint SQL is now `drizzle-pending/0028_phase2_constrain.sql` (journal idx 28).
 
 **Rules** (`packages/db/src/queries/checkout-links.ts`)
 - Only the shop's own **active** products; duplicates merged; 1–10 products; qty 1–99.

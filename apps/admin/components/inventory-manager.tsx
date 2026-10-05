@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Loader2, Search, Upload, X } from "lucide-react";
 import { Button, Card } from "@gumakart/ui";
+import { useShopRole } from "@/lib/use-shop-role";
 
 /**
  * Phase 9 — Stock page. One row per sellable item (product, or each size/colour).
@@ -53,6 +54,7 @@ export function InventoryManager() {
   const [csvText, setCsvText] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const canAdjust = useShopRole().can("stock.adjust");
 
   const load = useCallback(async () => {
     try {
@@ -194,13 +196,13 @@ export function InventoryManager() {
           >
             <Download className="h-4 w-4" /> Export CSV
           </a>
-          <button
+          {canAdjust && <button
             type="button"
             onClick={() => fileRef.current?.click()}
             className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.05]"
           >
             <Upload className="h-4 w-4" /> Import CSV
-          </button>
+          </button>}
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => void onFile(e)} />
         </div>
       </div>
@@ -361,6 +363,7 @@ export function InventoryManager() {
                             min="0"
                             inputMode="numeric"
                             placeholder={String(r.stockQty)}
+                            disabled={!canAdjust}
                             aria-label={`Counted stock for ${r.productTitle}${r.variantTitle ? ` ${r.variantTitle}` : ""}`}
                             className="h-9 w-24 rounded-lg border border-border bg-card px-2"
                           />
@@ -387,7 +390,7 @@ export function InventoryManager() {
         )}
       </Card>
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0A0F1D]/95 px-4 py-3 backdrop-blur">
+      {canAdjust && <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0A0F1D]/95 px-4 py-3 backdrop-blur">
         <label className="flex items-center gap-2 text-sm text-slate-300">
           Low-stock alert at
           <input
@@ -415,7 +418,7 @@ export function InventoryManager() {
             {saving ? "Saving…" : pending.length ? `Save count (${pending.length})` : "Save count"}
           </Button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -10,6 +10,8 @@ export interface SessionUser {
   userId: string;
   email: string;
   role: string;
+  /** Phase 10: manager | staff | cashier for role = seller_staff; null otherwise. */
+  staffRole?: string | null;
   tenantId: string | null;
   tenantSlug: string | null;
   tenantName: string | null;
@@ -82,6 +84,7 @@ export class AuthError extends Error {
       | "USE_GOOGLE"
       | "SHOP_ALREADY_SETUP"
       | "ACCOUNT_SUSPENDED"
+      | "ACCOUNT_REMOVED"
       | "CODE_COOLDOWN"
       | "CODE_EXPIRED"
       | "CODE_INVALID"

@@ -73,6 +73,7 @@ function toSessionUser(
     userId: user.id,
     email: user.email ?? "",
     role: user.role,
+    staffRole: user.role === "seller_staff" ? (user.staffRole ?? null) : null,
     tenantId: tenant?.id ?? null,
     tenantSlug: tenant?.slug ?? null,
     tenantName: tenant?.name ?? null,
@@ -279,6 +280,10 @@ export async function loginUser(input: LoginInput): Promise<{
       "This account is suspended. Contact support for help.",
       "ACCOUNT_SUSPENDED"
     );
+  }
+  // Phase 10: a staff member the owner removed keeps their row (activity history) but can't sign in.
+  if (row.user.status === "removed" || (row.user.role === "seller_staff" && (!row.user.tenantId || !row.user.staffRole))) {
+    throw new AuthError("This staff account was removed from the shop. Ask the owner for a new invite.", "ACCOUNT_REMOVED");
   }
 
   const sessionUser = toSessionUser(row.user, row.tenant);

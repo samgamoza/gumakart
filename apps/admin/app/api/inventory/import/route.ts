@@ -3,6 +3,7 @@ import { z } from "zod";
 import { applyStockChanges, planInventoryCsvImport } from "@gumakart/db";
 import { requireTenantSession } from "@/lib/api-auth";
 import { inventoryFail } from "../_errors";
+import { recordActivity } from "@/lib/activity";
 
 const schema = z.object({
   csv: z.string().min(1, "Choose a CSV file.").max(1_000_000, "The file is too big (1 MB max)."),
@@ -27,6 +28,12 @@ export async function POST(request: Request) {
       plan.changes.map(({ variantId, stockQty, price }) => ({ variantId, stockQty, price })),
       { note: "CSV import", actorId: session.userId ?? null }
     );
+    await recordActivity(session, {
+      action: "stock.imported",
+      entityType: "stock",
+      summary: `CSV import — ${result.changed} item${result.changed === 1 ? "" : "s"} updated (price/stock)`,
+      meta: { changes: plan.changes.slice(0, 200).map(({ label, fromStock, stockQty, fromPrice, price }) => ({ label, fromStock, stockQty, fromPrice, price })) },
+    });
     return NextResponse.json({ ok: true, applied: true, ...plan, ...result });
   } catch (error) {
     return inventoryFail(error, "import");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProductVariantsForTenant, saveProductVariants, VariantError } from "@gumakart/db";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { recordActivity } from "@/lib/activity";
 
 /** Phase 9 — a product's options (Size, Color…) and its variants. */
 
@@ -60,6 +61,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ prod
     z.string().uuid().parse(productId);
     const body = putSchema.parse(await request.json());
     const view = await saveProductVariants(session.tenantId, productId, body, session.userId ?? null);
+    const active = view.variants.filter((v) => v.active);
+    await recordActivity(session, {
+      action: "product.variants_saved",
+      entityType: "product",
+      entityId: productId,
+      summary: view.options.length
+        ? `${view.title}: saved ${active.length} sizes/colours (stock ${active.reduce((n, v) => n + v.stockQty, 0)})`
+        : `${view.title}: removed sizes/colours`,
+    });
     return NextResponse.json({ ok: true, ...view, variants: view.variants.filter((v) => v.active) });
   } catch (error) {
     return fail(error, "PUT");

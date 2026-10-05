@@ -25,7 +25,7 @@ export async function GET() {
     const receiving = record?.settings.payments?.receiving ?? {};
     return NextResponse.json({
       ok: true,
-      actor: { name: actor.name, role: actor.role, isStaff: Boolean(actor.staffId) },
+      actor: { name: actor.name, role: actor.role, isStaff: Boolean(actor.staffId) || actor.role !== "owner" },
       shop: { name: record?.name ?? "", slug: record?.slug ?? "" },
       register,
       shift,

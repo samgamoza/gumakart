@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createProductForTenant, listProductsForTenant, markChangeRequestPublished, tryAutoActivateTenant } from "@gumakart/db";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { peso, recordActivity } from "@/lib/activity";
 
 export async function GET() {
   try {
@@ -82,6 +83,12 @@ export async function POST(request: Request) {
       });
     }
 
+    await recordActivity(session, {
+      action: "product.created",
+      entityType: "product",
+      entityId: product.id,
+      summary: `Added ${product.title} at ${peso(product.basePrice)}`,
+    });
     return NextResponse.json({ ok: true, product });
   } catch (error) {
     if (error instanceof ApiAuthError) {

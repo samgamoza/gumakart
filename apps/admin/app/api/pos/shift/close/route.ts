@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { closeShift, ensureRegister, getOpenShift, getShiftSummary, PosError } from "@gumakart/db";
+import { closeShift, ensureRegister, getOpenShift, getShiftSummary, logActivity, PosError } from "@gumakart/db";
 import { posErrorResponse, requirePosActor } from "@/lib/pos-auth";
 
 const amount = z.number().min(0).max(10_000_000);
@@ -27,6 +27,19 @@ export async function POST(request: Request) {
       staffId: actor.staffId,
       userId: actor.userId,
     });
+    const s = shift as unknown as { variance?: Record<string, number> } | null;
+    const over = s?.variance ? Object.values(s.variance).reduce((a, b) => a + Number(b || 0), 0) : null;
+    await logActivity(
+      actor.tenantId,
+      { userId: actor.userId, name: actor.name, role: actor.staffId ? `pos_${actor.role}` : actor.role },
+      {
+        action: "pos.shift_closed",
+        entityType: "shift",
+        entityId: body.shiftId,
+        summary: `Closed the POS shift${over != null && Math.abs(over) >= 0.01 ? ` (${over > 0 ? "over" : "short"} ₱${Math.abs(over).toFixed(2)})` : ""}`,
+        meta: { counted: body.counted },
+      }
+    );
     return NextResponse.json({ ok: true, shift, summary });
   } catch (error) {
     return posErrorResponse(error, "close shift");

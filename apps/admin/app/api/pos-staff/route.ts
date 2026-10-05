@@ -3,6 +3,7 @@ import { z } from "zod";
 import { hashPassword, validatePosPin } from "@gumakart/auth";
 import { createPosStaff, listPosStaff, listRecentShifts } from "@gumakart/db";
 import { posErrorResponse, requirePosOwner } from "@/lib/pos-auth";
+import { logActivity } from "@gumakart/db";
 
 /** Owner only: the shop's POS team and recent shifts. */
 export async function GET() {
@@ -32,6 +33,12 @@ export async function POST(request: Request) {
       name: body.name,
       role: body.role,
       pinHash: await hashPassword(body.pin),
+    });
+    await logActivity(owner.tenantId, { userId: owner.userId, name: owner.name, role: null }, {
+      action: "pos.staff_added",
+      entityType: "pos_staff",
+      entityId: staff.id,
+      summary: `Added POS cashier ${staff.name} (${staff.role})`,
     });
     return NextResponse.json({ ok: true, staff });
   } catch (error) {

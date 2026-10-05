@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, loginUser, sessionCookieHeader } from "@gumakart/auth";
 import { resolveSellerHomePath } from "@gumakart/db";
+import { homeFor, shopRoleOf } from "@gumakart/db/staff-permissions";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
 
 const loginSchema = z.object({
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
     const body = loginSchema.parse(await request.json());
     const { user, sessionToken } = await loginUser(body);
 
-    const redirectTo = await resolveSellerHomePath({
+    const shopRole = shopRoleOf(user);
+    const redirectTo = shopRole && shopRole !== "owner" ? homeFor(shopRole) : await resolveSellerHomePath({
       tenantId: user.tenantId,
       emailVerified: user.emailVerified,
       preferLaunchWhenUnverified: true,

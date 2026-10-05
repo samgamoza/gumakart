@@ -6,7 +6,9 @@ import {
   orderBucketOf,
   rejectManualPaymentProof,
 } from "@gumakart/db";
-import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { ApiAuthError, assertCan, requireTenantSession } from "@/lib/api-auth";
+import { recordActivity } from "@/lib/activity";
+import { orderNumberFor } from "@gumakart/db";
 
 /**
  * Seller order actions (Phase 2: actions, not statuses). Payment confirmation
@@ -37,6 +39,9 @@ export async function PATCH(
     const { orderId } = await params;
     z.string().uuid().parse(orderId);
     const body = patchSchema.parse(await request.json());
+    // Phase 10: packing/shipping is staff work; money and cancellations aren't.
+    if (body.action === "reject_payment") assertCan(session, "orders.payments");
+    if (body.action === "cancel") assertCan(session, "orders.cancel");
 
     if (body.action === "reject_payment") {
       const rejected = await rejectManualPaymentProof({
@@ -48,6 +53,12 @@ export async function PATCH(
       if (!rejected.ok) {
         return NextResponse.json({ ok: false, error: rejected.error }, { status: 400 });
       }
+      await recordActivity(session, {
+        action: "order.payment_rejected",
+        entityType: "order",
+        entityId: orderId,
+        summary: `Rejected the payment proof for ${(await orderNumberFor(session.tenantId, orderId)) ?? "an order"}${body.note ? `: ${body.note}` : ""}`,
+      });
       return NextResponse.json({ ok: true });
     }
 
@@ -80,6 +91,23 @@ export async function PATCH(
       cancelReason: body.reason,
     });
 
+    if (result.changed) {
+      const labels: Record<string, string> = {
+        accept: "Accepted",
+        mark_ready: "Marked packed",
+        cancel: "Cancelled",
+        mark_out_for_delivery: "Marked out for delivery",
+        mark_delivered: "Marked delivered",
+        mark_failed_delivery: "Marked delivery failed",
+        mark_returned: "Marked returned",
+      };
+      await recordActivity(session, {
+        action: `order.${body.action}`,
+        entityType: "order",
+        entityId: orderId,
+        summary: `${labels[body.action] ?? body.action} ${(await orderNumberFor(session.tenantId, orderId)) ?? "an order"}${body.action === "cancel" && body.reason ? ` — ${body.reason}` : ""}`,
+      });
+    }
     return NextResponse.json({
       ok: true,
       changed: result.changed,

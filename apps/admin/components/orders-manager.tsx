@@ -1,5 +1,6 @@
 "use client";
 
+import { useShopRole } from "@/lib/use-shop-role";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, formatPrice } from "@gumakart/ui";
 
@@ -194,6 +195,7 @@ function relativeTime(iso: string): string {
 }
 
 export function OrdersManager() {
+  const perms = useShopRole();
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabId>("all");
@@ -517,7 +519,7 @@ export function OrdersManager() {
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    {canConfirm && (
+                    {canConfirm && perms.can("orders.payments") && (
                       <button
                         onClick={() => confirmPayment(order)}
                         disabled={busy}
@@ -526,7 +528,7 @@ export function OrdersManager() {
                         {busy ? "Confirming…" : order.paymentMethod === "cod" ? "Cash received" : "Confirm payment"}
                       </button>
                     )}
-                    {order.paymentState === "pending_verification" && order.orderState === "open" && (
+                    {order.paymentState === "pending_verification" && order.orderState === "open" && perms.can("orders.payments") && (
                       <button
                         onClick={() => {
                           if (window.confirm(`You didn't receive the payment for ${order.orderNumber}? The buyer will be asked to pay again.`)) {
@@ -587,7 +589,7 @@ export function OrdersManager() {
                         Item is back
                       </button>
                     )}
-                    {canCancel(order) && (
+                    {canCancel(order) && perms.can("orders.cancel") && (
                       <button
                         onClick={() => {
                           if (window.confirm(`Cancel order ${order.orderNumber}?`)) {
@@ -600,7 +602,7 @@ export function OrdersManager() {
                         Cancel
                       </button>
                     )}
-                    {canRefund(order) && (
+                    {canRefund(order) && perms.can("orders.refund") && (
                       <button
                         onClick={() => refundOrder(order)}
                         disabled={busy}

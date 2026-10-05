@@ -10,7 +10,8 @@ import {
   updateTenantSettings,
 } from "@gumakart/db";
 import { resolvePaymentsMode } from "@gumakart/services";
-import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { ApiAuthError, assertCan, requireTenantSession } from "@/lib/api-auth";
+import { recordActivity } from "@/lib/activity";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -200,9 +201,14 @@ export async function GET() {
       settingsMode: payments.mode,
       envMode: platformMode,
     });
+    // Phase 10: payout details are for the owner only.
+    const visible =
+      session.shopRole === "owner"
+        ? settings
+        : { ...settings, settings: { ...settings.settings, wallet: undefined } };
     return NextResponse.json({
       ok: true,
-      settings,
+      settings: visible,
       effectivePaymentsMode,
       /** True when this shop has an explicit Platform override (not just env/global). */
       paymentsModeSetByPlatform: Boolean(payments.mode),
@@ -233,9 +239,22 @@ export async function PATCH(request: Request) {
       );
     }
     const body = patchSchema.parse(raw);
+    if (body.settings?.payments) assertCan(session, "settings.payments");
+    if (body.settings?.wallet) assertCan(session, "billing.manage");
     const updated = await updateTenantSettings(session.tenantId, body);
     if (!updated) {
       return NextResponse.json({ ok: false, error: "Shop not found." }, { status: 404 });
+    }
+    const sections = [
+      ...Object.keys(body).filter((k) => k !== "settings"),
+      ...Object.keys(body.settings ?? {}),
+    ];
+    if (sections.length) {
+      await recordActivity(session, {
+        action: body.settings?.payments ? "settings.payments_changed" : "settings.changed",
+        entityType: "settings",
+        summary: `Changed shop settings: ${sections.slice(0, 6).join(", ")}`,
+      });
     }
     return NextResponse.json({ ok: true, settings: updated });
   } catch (error) {
