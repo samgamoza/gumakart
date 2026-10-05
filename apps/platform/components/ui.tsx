@@ -18,14 +18,19 @@ export function Panel({
 
 export function SectionHeader({
   title,
+  description,
   action,
 }: {
   title: string;
+  description?: string;
   action?: ReactNode;
 }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-3">
-      <h2 className="font-display text-base font-bold tracking-tight">{title}</h2>
+      <div>
+        <h2 className="font-display text-base font-bold tracking-tight">{title}</h2>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+      </div>
       {action}
     </div>
   );

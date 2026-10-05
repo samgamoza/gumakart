@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "../client";
-import { categories, productVariants, products, tenants } from "../schema/index";
+import { categories, productImages, productVariants, products, tenants } from "../schema/index";
 
 export interface StorefrontTenantRecord {
   id: string;
@@ -113,6 +113,25 @@ export async function getTenantStorefrontPreviewBySlug(
   return mapStorefrontTenant(tenant, { preferDraft: true });
 }
 
+async function firstShopPhoto(
+  tenantId: string,
+  catalog: Array<{ id: string; status: string | null; imageUrl: string | null }>
+): Promise<string | null> {
+  const active = catalog.filter((p) => p.status === "active");
+  const withVariantImage = active.find((p) => p.imageUrl);
+  if (withVariantImage?.imageUrl) return withVariantImage.imageUrl;
+  if (active.length === 0) return null;
+  const db = getDb();
+  const [img] = await db
+    .select({ url: productImages.url })
+    .from(productImages)
+    .innerJoin(products, eq(productImages.productId, products.id))
+    .where(and(eq(products.tenantId, tenantId), eq(products.status, "active")))
+    .orderBy(desc(products.isMain), asc(productImages.sortOrder))
+    .limit(1);
+  return img?.url ?? null;
+}
+
 async function mapStorefrontTenant(
   tenant: typeof tenants.$inferSelect,
   options?: { preferDraft?: boolean }
@@ -165,7 +184,10 @@ async function mapStorefrontTenant(
     slug: tenant.slug,
     name: tenant.name,
     category: tenant.category,
-    coverUrl: tenant.coverUrl,
+    // Template heroes use coverUrl first. Without a cover photo, show the shop's own
+    // product photo instead of the template's stock image (a beauty shop on a
+    // fashion template used to get a clothing banner).
+    coverUrl: tenant.coverUrl || (await firstShopPhoto(tenant.id, catalog)),
     logoUrl: tenant.logoUrl,
     themeJson,
     currency: tenant.currency,

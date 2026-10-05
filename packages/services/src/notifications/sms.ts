@@ -46,6 +46,8 @@ export class SemaphoreClient {
       apikey: this.apiKey,
       number: input.to.replace(/^\+63/, "0").replace(/\D/g, ""),
       message: input.message,
+      // Registered sender name (e.g. GUMAKART). Without one Semaphore uses its default.
+      ...(process.env.SEMAPHORE_SENDER_NAME?.trim() ? { sendername: process.env.SEMAPHORE_SENDER_NAME.trim() } : {}),
       ...(input.priority ? { priority: "true" } : {}),
     });
 

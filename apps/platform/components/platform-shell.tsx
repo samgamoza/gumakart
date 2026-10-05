@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ComponentType } from "react";
 import {
+  BarChart3,
   CreditCard,
   Headphones,
   LayoutDashboard,
@@ -36,7 +37,10 @@ type NavSection = {
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Overview",
-    items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/metrics", label: "Metrics", icon: BarChart3 },
+    ],
   },
   {
     label: "Shops & people",

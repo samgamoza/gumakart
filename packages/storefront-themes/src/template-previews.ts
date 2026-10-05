@@ -79,6 +79,23 @@ export const CATEGORY_PREVIEW_IMAGES: Record<string, string> = {
   "Professional & Consulting":
     "https://images.unsplash.com/photo-1497366216548-37526070297c?w=960&q=80",
   General: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=960&q=80",
+  // Reuse photos already curated above so a category never borrows another
+  // industry's look (Beauty used to fall back to the fashion template still).
+  "Beauty & Skincare":
+    "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=960&q=80",
+  Catering: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=960&q=80",
+  "Shoes & Footwear":
+    "https://images.unsplash.com/photo-1445205170230-053b83016050?w=960&q=80",
+  "Grocery & Supermarket":
+    "https://images.unsplash.com/photo-1542838132-92c53300491e?w=960&q=80",
+  "Organic & Farm Produce":
+    "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=960&q=80",
+  "Pet Supplies & Lovers":
+    "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=960&q=80",
+  "Furniture & Home":
+    "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=960&q=80",
+  "Hotels & Resorts":
+    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=960&q=80",
 };
 
 export function previewImageForTemplate(id: ShopTemplateId): string {

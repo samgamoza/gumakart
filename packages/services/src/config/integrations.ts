@@ -241,7 +241,7 @@ export function getIntegrationChecks(): IntegrationCheck[] {
         : mocks
           ? "Semaphore not configured — mock SMS allowed in this runtime."
           : "Semaphore not configured — SMS must report failure (not sent).",
-      envVars: ["SEMAPHORE_API_KEY"],
+      envVars: ["SEMAPHORE_API_KEY", "SEMAPHORE_SENDER_NAME"],
     }),
     buildCheck({
       id: "google_oauth",

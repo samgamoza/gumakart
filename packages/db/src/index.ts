@@ -578,3 +578,4 @@ export {
   type TenderTotals,
 } from "./queries/pos";
 export * from "./types/pos-tax";
+export { getPlatformMetrics, type PlatformMetrics } from "./queries/platform-metrics";
