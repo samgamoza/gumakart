@@ -4,8 +4,8 @@ import {
   authenticateGoogleUser,
   getGoogleProfileFromCode,
   isGoogleAuthConfigured,
-  sessionCookieHeader,
 } from "@gumakart/auth";
+import { signInRedirect } from "@/lib/two-factor-sign-in";
 import {
   clearGoogleOAuthStateCookieHeader,
   parseGoogleOAuthState,
@@ -38,10 +38,10 @@ export async function GET(request: Request) {
 
   try {
     const profile = await getGoogleProfileFromCode(code);
-    const { sessionToken, redirectTo } = await authenticateGoogleUser(profile);
+    const { user, sessionToken, redirectTo } = await authenticateGoogleUser(profile);
 
-    const response = NextResponse.redirect(new URL(redirectTo, request.url));
-    response.headers.set("Set-Cookie", sessionCookieHeader(sessionToken));
+    // Phase 21: Google proves the first step only; two-step accounts still need their code.
+    const response = await signInRedirect(request, user, sessionToken, redirectTo);
     response.headers.append("Set-Cookie", clearGoogleOAuthStateCookieHeader());
     return response;
   } catch (err) {

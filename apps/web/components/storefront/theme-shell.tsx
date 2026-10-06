@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { ResolvedShopTheme } from "@gumakart/storefront-themes";
+import { sizedImageUrl } from "@/lib/image-sizes";
 
 /**
  * Storefront components use Tailwind's `font-display` (var(--font-bricolage)).
@@ -53,7 +54,7 @@ export function StorefrontThemeShell({
 export function heroBackground(theme: ResolvedShopTheme, coverUrl?: string): CSSProperties {
   if (coverUrl && (theme.hero === "photo" || theme.layout === "editorial")) {
     return {
-      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.55)), url(${coverUrl})`,
+      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.55)), url(${sizedImageUrl(coverUrl, 600)})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };

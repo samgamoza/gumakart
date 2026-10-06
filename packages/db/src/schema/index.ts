@@ -389,6 +389,13 @@ export const users = pgTable(
     phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
     // Bumping this invalidates every JWT issued before the bump (logout-all).
     sessionVersion: integer("session_version").default(0).notNull(),
+    // Phase 21: two-step sign-in (TOTP). The secret is AES-GCM sealed; backup codes are HMAC hashes.
+    // totpSecretSealed with no totpEnabledAt = enrollment started but not confirmed.
+    totpSecretSealed: text("totp_secret_sealed"),
+    totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
+    // Last accepted 30-second step, so a code can't be used twice.
+    totpLastStep: bigint("totp_last_step", { mode: "number" }),
+    totpBackupCodes: jsonb("totp_backup_codes").$type<string[]>().default([]).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

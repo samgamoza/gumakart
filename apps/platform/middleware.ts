@@ -7,7 +7,7 @@ import {
 } from "@gumakart/auth/session";
 
 const PUBLIC_PATHS = ["/login"];
-const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/session"];
+const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/session", "/api/auth/2fa/"];
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
@@ -30,7 +30,9 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value ?? readSessionCookie(request);
   const session = token ? await verifySessionToken(token) : null;
-  const isSuperAdmin = session?.role === "super_admin";
+  // Phase 21: an ops session must have passed the two-step check. Pages and actions also check
+  // the session version against the database (lib/session.ts); this is the cheap edge filter.
+  const isSuperAdmin = session?.role === "super_admin" && session.mfa === true;
   const isPublic = isPublicPath(pathname);
 
   if (isPublic) {

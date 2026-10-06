@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, Handshake, Loader2, LogOut, Store } from "lucide-react";
 import { GumaLogo } from "@gumakart/ui";
 import { adminUrl } from "@/lib/utils";
+import { TwoFactorCard } from "@/components/settings/two-factor-card";
 
 type Shop = {
   tenantId: string;
@@ -241,6 +242,9 @@ export function PartnerDashboard() {
             )}
           </>
         )}
+        <section aria-label="Sign-in security">
+          <TwoFactorCard />
+        </section>
       </main>
     </div>
   );

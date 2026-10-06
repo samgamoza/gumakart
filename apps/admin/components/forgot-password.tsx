@@ -34,7 +34,8 @@ export function ForgotPassword() {
       } else {
         const d = await post("/api/auth/password/reset", { email, code, password });
         if (!d.ok) return setError(d.error ?? "Could not reset the password.");
-        window.location.href = d.redirectTo ?? "/";
+        // Phase 21: the password is changed; two-step accounts still enter their code to sign in.
+        window.location.href = d.twoFactor ? "/login?step=2fa&reset=1" : (d.redirectTo ?? "/");
       }
     } catch {
       setError("Something went wrong. Please try again.");

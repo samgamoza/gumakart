@@ -10,8 +10,8 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/google.test.ts src/pos-token.test.ts",
-    "test:integration": "tsx --test src/password-reset.test.ts"
+    "test": "tsx --test src/google.test.ts src/pos-token.test.ts src/totp.test.ts",
+    "test:integration": "tsx --test src/password-reset.test.ts src/two-factor.test.ts"
   },
   "dependencies": {
     "@gumakart/db": "workspace:*",

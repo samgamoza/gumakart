@@ -42,12 +42,13 @@ const PUBLIC_API_PREFIXES = [
   "/api/partners/code",
   // Phase 19: forgot password (the emailed code is the credential).
   "/api/auth/password/",
+  "/api/auth/2fa/",
   // Phase 19: schema check for the CI pre-deploy guard (booleans only).
   "/api/health/schema",
 ];
 
 /** Phase 18: what a partner's own session (no shop) may open. */
-const PARTNER_PATHS = ["/partner", "/api/partner", "/api/auth/logout", "/api/auth/session"];
+const PARTNER_PATHS = ["/partner", "/api/partner", "/api/auth/logout", "/api/auth/session", "/api/account/two-factor"];
 
 function isPartnerPath(pathname: string): boolean {
   return PARTNER_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

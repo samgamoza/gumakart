@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AuthError, resetPasswordWithCode, sessionCookieHeader } from "@gumakart/auth";
+import { AuthError, resetPasswordWithCode } from "@gumakart/auth";
+import { signInJson } from "@/lib/two-factor-sign-in";
 import { homeFor, shopRoleOf } from "@gumakart/db/staff-permissions";
 import { clientIpFrom, isEmailConfigured, rateLimit, sendTransactionalEmail } from "@gumakart/services";
 
@@ -36,9 +37,9 @@ export async function POST(request: Request) {
     }
     const role = shopRoleOf(user);
     const redirectTo = user.role === "partner" ? "/partner" : role && role !== "owner" ? homeFor(role) : "/";
-    const response = NextResponse.json({ ok: true, redirectTo });
-    response.headers.set("Set-Cookie", sessionCookieHeader(sessionToken));
-    return response;
+    // Phase 21: the reset changes the password, but an emailed code is not a second factor —
+    // accounts with two-step sign-in still enter their authenticator code before a session.
+    return signInJson(user, sessionToken, { redirectTo, passwordChanged: true });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ ok: false, error: error.message, code: error.code }, { status: 400 });
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: error.errors[0]?.message ?? "Invalid input" }, { status: 400 });

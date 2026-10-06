@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { AuthError, loginUser, sessionCookieHeader } from "@gumakart/auth";
+import { AuthError, loginUser } from "@gumakart/auth";
 import { resolveSellerHomePath } from "@gumakart/db";
 import { homeFor, shopRoleOf } from "@gumakart/db/staff-permissions";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
+import { signInJson } from "@/lib/two-factor-sign-in";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -33,14 +34,8 @@ export async function POST(request: Request) {
       preferLaunchWhenUnverified: true,
     });
 
-    const response = NextResponse.json({
-      ok: true,
-      user,
-      redirectTo,
-    });
-
-    response.headers.set("Set-Cookie", sessionCookieHeader(sessionToken));
-    return response;
+    // Phase 21: accounts with two-step sign-in get a code prompt instead of a session.
+    return signInJson(user, sessionToken, { user, redirectTo });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ ok: false, error: error.message, code: error.code }, { status: 401 });

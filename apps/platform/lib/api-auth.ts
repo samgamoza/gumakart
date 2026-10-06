@@ -14,11 +14,9 @@ export class ApiAuthError extends Error {
 /** Route-handler / server-action guard: throws unless caller is a super_admin. */
 export async function requireSuperAdminApi(): Promise<SessionPayload> {
   const session = await getSession();
+  // getSession() only returns two-step-verified, current super-admin sessions (Phase 21).
   if (!session) {
     throw new ApiAuthError("Not signed in.", 401);
-  }
-  if (session.role !== "super_admin") {
-    throw new ApiAuthError("Super-admin access required.", 403);
   }
   return session;
 }

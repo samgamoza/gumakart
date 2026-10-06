@@ -56,6 +56,7 @@ export async function createSessionToken(
     sv: user.sessionVersion,
     ...(user.supportAccess ? { sa: true } : {}),
     ...(user.partnerAccess ? { pa: user.partnerAccess } : {}),
+    ...(user.mfa ? { mf: true } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.userId)
@@ -128,6 +129,8 @@ export async function verifySupportAccessGrantToken(
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getAuthSecret());
+    // Purpose tokens (email verify, support grant, 2FA ticket) are never sessions.
+    if (payload.purpose !== undefined) return null;
     const userId = payload.sub;
     if (!userId || typeof userId !== "string") return null;
 
@@ -172,6 +175,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       sessionVersion: typeof payload.sv === "number" ? payload.sv : 0,
       supportAccess: payload.sa === true,
       partnerAccess: typeof payload.pa === "string" ? payload.pa : null,
+      mfa: payload.mf === true,
       iat: payload.iat ?? 0,
       exp: payload.exp ?? 0,
     };

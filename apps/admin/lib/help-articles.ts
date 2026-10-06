@@ -215,6 +215,20 @@ export const HELP_ARTICLES: HelpArticle[] = [
     tags: ["api", "webhook", "zapier", "make", "sheets", "developer"],
   },
   {
+    id: "two-step-sign-in",
+    title: "Two-step sign-in (2FA)",
+    summary: "Kahit manakaw ang password mo, hindi mabubuksan ang shop nang wala ang phone mo.",
+    steps: [
+      "Mag-install ng authenticator app (Google Authenticator, Microsoft Authenticator o 1Password).",
+      "Settings → Account → Turn on two-step sign-in, i-scan ang QR, at i-type ang 6-digit code.",
+      "I-save ang 10 backup codes — bawat isa ay isang beses lang gumagana kung mawala ang phone mo.",
+      "Nawala ang phone at backup codes? Mag-file ng ticket sa Settings → Support.",
+    ],
+    href: "/settings/account",
+    linkLabel: "Password & security",
+    tags: ["2fa", "two-step", "security", "password", "authenticator", "otp", "seguridad"],
+  },
+  {
     id: "problem",
     title: "May problema? Status page at support",
     summary: "Alamin kung sa amin ang problema, at paano kami kontakin.",

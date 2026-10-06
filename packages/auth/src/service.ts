@@ -619,3 +619,36 @@ export async function sendVerificationEmail(
 }
 
 export { normalizeSlug, slugFromShopName, validateSlug };
+
+/**
+ * Phase 21: change the password from Settings (needs the current one). Signs out every other
+ * device (session version bump) and returns a fresh session for this one.
+ */
+export async function changePassword(input: { userId: string; currentPassword: string; newPassword: string }): Promise<{ user: SessionUser; sessionToken: string }> {
+  const [u] = await getDb().select().from(users).where(eq(users.id, input.userId)).limit(1);
+  if (!u) throw new AuthError("Account not found.", "USER_NOT_FOUND");
+  if (!u.passwordHash) {
+    throw new AuthError("This account signs in with Google. Use \"Forgot password?\" on the sign-in page to add a password.", "USE_GOOGLE");
+  }
+  if (!(await verifyPassword(input.currentPassword, u.passwordHash))) {
+    throw new AuthError("Your current password is wrong.", "INVALID_CREDENTIALS");
+  }
+  const strength = validatePasswordStrength(input.newPassword);
+  if (!strength.ok) throw new AuthError(strength.reason, "WEAK_PASSWORD");
+  if (await verifyPassword(input.newPassword, u.passwordHash)) {
+    throw new AuthError("Choose a password you haven't used here.", "WEAK_PASSWORD");
+  }
+  await getDb()
+    .update(users)
+    .set({ passwordHash: await hashPassword(input.newPassword), sessionVersion: sql`${users.sessionVersion} + 1` })
+    .where(eq(users.id, u.id));
+  const fresh = await sessionTokenForUser(u.id);
+  if (!fresh) throw new Error("Could not start a session after the change.");
+  return fresh;
+}
+
+/** Phase 21: sign out every other device; returns a fresh session for this one. */
+export async function signOutOtherDevices(userId: string): Promise<{ user: SessionUser; sessionToken: string } | null> {
+  await revokeAllSessions(userId);
+  return sessionTokenForUser(userId);
+}

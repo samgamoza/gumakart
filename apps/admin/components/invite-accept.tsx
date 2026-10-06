@@ -51,9 +51,10 @@ export function InviteAccept({ token }: { token: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, name, password }),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string; redirectTo?: string };
+      const data = (await res.json()) as { ok: boolean; error?: string; redirectTo?: string; twoFactor?: boolean };
       if (!data.ok) throw new Error(data.error ?? "Couldn't join the shop.");
-      window.location.assign(data.redirectTo ?? "/");
+      // Phase 21: two-step accounts finish on the sign-in page with their code.
+      window.location.assign(data.twoFactor ? "/login?step=2fa" : (data.redirectTo ?? "/"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't join the shop.");
       setLoading(false);

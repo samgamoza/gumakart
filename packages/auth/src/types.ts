@@ -31,9 +31,13 @@ export interface SessionUser {
    * database on every API call (requireTenantSession), so an owner's revoke is immediate.
    */
   partnerAccess?: string | null;
+  /** Phase 21: this session passed a second step (authenticator or backup code). JWT claim `mf`. */
+  mfa?: boolean;
 }
 
 /** Phase 18: partner sessions in a client shop are short, like support access. */
+/** Phase 21: the window between the password and the authenticator code. */
+export const MFA_TICKET_MAX_AGE_SECONDS = 5 * 60;
 export const PARTNER_ACCESS_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
 
 export interface SessionPayload extends SessionUser {
@@ -98,6 +102,10 @@ export class AuthError extends Error {
       | "CODE_EXPIRED"
       | "CODE_INVALID"
       | "CODE_LOCKED"
+    | "BAD_CODE"
+    | "TWO_FACTOR_ON"
+    | "TWO_FACTOR_OFF"
+    | "TWO_FACTOR_NOT_STARTED"
   ) {
     super(message);
     this.name = "AuthError";

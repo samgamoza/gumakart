@@ -4,6 +4,7 @@ import {
   createEmailVerificationToken,
   createSessionToken,
   getUserSessionById,
+  hasTwoFactor,
   sendVerificationEmail,
   sessionCookieHeader,
   verifyUserEmail,
@@ -29,6 +30,10 @@ export async function POST(request: Request) {
         );
       }
 
+      // Phase 21: an email link is not a second factor — two-step accounts sign in normally.
+      if (await hasTwoFactor(user.userId)) {
+        return NextResponse.json({ ok: true, user, redirectTo: "/login" });
+      }
       const sessionToken = await createSessionToken(user);
       const redirectTo = await resolveSellerHomePath({
         tenantId: user.tenantId,

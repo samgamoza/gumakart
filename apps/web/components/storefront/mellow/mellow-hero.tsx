@@ -3,6 +3,7 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { DemoTenant } from "@/lib/demo-data";
+import { sizedImageUrl } from "@/lib/image-sizes";
 
 export function MellowHero({ tenant }: { tenant: DemoTenant }) {
   const heroImage =
@@ -12,7 +13,7 @@ export function MellowHero({ tenant }: { tenant: DemoTenant }) {
   return (
     <section className="mellow-hero">
       <div className="mellow-container-fluid">
-        <div className="mellow-hero-panel" style={{ backgroundImage: `url(${heroImage})` }}>
+        <div className="mellow-hero-panel" style={{ backgroundImage: `url(${sizedImageUrl(heroImage, 600)})` }}>
           <div className="mellow-hero-grid">
             <div className="mellow-hero-copy">
               <h1>{tenant.shopTheme.promoTitle}</h1>

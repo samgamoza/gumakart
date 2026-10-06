@@ -44,6 +44,8 @@ export {
   canResetPassword,
   resetPasswordWithCode,
   sessionTokenForUser,
+  changePassword,
+  signOutOtherDevices,
   revokeAllSessions,
   isSessionCurrent,
   normalizeSlug,
@@ -74,3 +76,28 @@ export {
 } from "./email-code";
 export * from "./pos-token";
 export * from "./buyer-token";
+
+// Phase 21: two-step sign-in.
+export { MFA_TICKET_MAX_AGE_SECONDS } from "./types";
+export {
+  MFA_TICKET_COOKIE,
+  createMfaTicket,
+  readMfaTicket,
+  readMfaTicketCookie,
+  mfaTicketCookieHeader,
+  clearMfaTicketCookieHeader,
+  getTwoFactorStatus,
+  hasTwoFactor,
+  beginTwoFactorEnrollment,
+  confirmTwoFactorEnrollment,
+  verifySecondFactor,
+  regenerateBackupCodes,
+  disableTwoFactor,
+  resetTwoFactor,
+  ticketUserIsCurrent,
+  type MfaApp,
+  type MfaTicket,
+  type MfaTicketKind,
+  type TwoFactorStatus,
+} from "./two-factor";
+export { generateTotpSecret, totpCodeAt, totpStep, matchTotp, otpauthUri } from "./totp";

@@ -128,6 +128,7 @@ const ADMIN_PUBLIC = {
   "apps/admin/app/api/auth/support-access/route.ts": "exchanges a signed 5-minute ops grant token",
   "apps/admin/app/api/auth/password/forgot/route.ts": "emails a reset code; same answer for every email",
   "apps/admin/app/api/auth/password/reset/route.ts": "the emailed reset code is the credential",
+  "apps/admin/app/api/auth/2fa/verify/route.ts": "the signed 5-minute 2FA ticket cookie + code is the credential (attempt-limited)",
   "apps/admin/app/api/partners/signup/route.ts": "partner signup — needs the emailed-code ticket",
   "apps/admin/app/api/partners/code/route.ts": "agency name for a partner code (rate limited)",
   "apps/admin/app/api/invite/route.ts": "staff invite — the token in the link is the credential",
@@ -203,6 +204,20 @@ describe("ops console is super-admin only", () => {
     const pages = walk(path.join(root, "apps/platform/app"), (n) => n === "page.tsx").filter((p) => !rel(p).endsWith("app/login/page.tsx"));
     const open = pages.filter((p) => !/\brequireSuperAdmin\s*\(/.test(stripComments(readFileSync(p, "utf8")))).map(rel);
     assert.deepEqual(open, [], `ops pages without requireSuperAdmin:\n  ${open.join("\n  ")}`);
+  });
+  // Phase 21: a correct password alone must never mint an ops session.
+  it("ops sign-in: only the 2FA routes create a session, and only after a code", () => {
+    const routes = walk(path.join(root, "apps/platform/app/api"), (n) => n === "route.ts");
+    const minting = routes.filter((f) => /\b(createSessionToken|sessionCookieHeader|opsSessionResponse)\s*\(/.test(stripComments(readFileSync(f, "utf8")))).map(rel).sort();
+    assert.deepEqual(minting, ["apps/platform/app/api/auth/2fa/enroll/route.ts", "apps/platform/app/api/auth/2fa/verify/route.ts"]);
+    for (const f of minting) {
+      const src = stripComments(readFileSync(path.join(root, f), "utf8"));
+      assert.match(src, /\bcurrentOpsTicket\s*\(/, `${f} must check the 2FA ticket`);
+      assert.match(src, /\b(verifySecondFactor|confirmTwoFactorEnrollment)\s*\(/, `${f} must check a code`);
+    }
+    const guard = stripComments(readFileSync(path.join(root, "apps/platform/lib/session.ts"), "utf8"));
+    assert.match(guard, /session\.mfa/, "the ops guard requires a two-step session");
+    assert.match(guard, /isSessionCurrent\s*\(/, "the ops guard checks the session version");
   });
 });
 

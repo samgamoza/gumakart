@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Leaf, RefreshCw, Truck } from "lucide-react";
 import type { DemoTenant } from "@/lib/demo-data";
+import { sizedImageUrl } from "@/lib/image-sizes";
 
 export function OrganicHero({ tenant }: { tenant: DemoTenant }) {
   const heroImage =
@@ -8,7 +9,7 @@ export function OrganicHero({ tenant }: { tenant: DemoTenant }) {
   const shopHref = `/${tenant.slug}#products`;
 
   return (
-    <section className="organic-hero" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.92)), url(${heroImage})` }}>
+    <section className="organic-hero" style={{ backgroundImage: `linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.92)), url(${sizedImageUrl(heroImage, 600)})` }}>
       <div className="organic-container-lg">
         <div className="organic-hero-copy">
           <h1>

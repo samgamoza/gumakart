@@ -27,6 +27,7 @@ import {
   studioPhone,
   type StudioPackageTabId,
 } from "./studio-utils";
+import { sizedImageUrl } from "@/lib/image-sizes";
 
 const SERVICE_ICONS = {
   camera: Camera,
@@ -135,7 +136,7 @@ export function StudioHero({ tenant }: { tenant: DemoTenant }) {
         <div
           key={slide.image}
           className={`st-hero-slide ${index === active ? "active" : ""}`}
-          style={{ backgroundImage: `url(${slide.image})` }}
+          style={{ backgroundImage: `url(${sizedImageUrl(slide.image, 600)})` }}
           aria-hidden={index !== active}
         />
       ))}
@@ -165,7 +166,7 @@ export function StudioHero({ tenant }: { tenant: DemoTenant }) {
             aria-selected={index === active}
             aria-label={`Slide ${index + 1}`}
             className={`st-hero-indicator ${index === active ? "active" : ""}`}
-            style={{ backgroundImage: `url(${slide.image})` }}
+            style={{ backgroundImage: `url(${sizedImageUrl(slide.image, 600)})` }}
             onClick={() => setActive(index)}
           />
         ))}

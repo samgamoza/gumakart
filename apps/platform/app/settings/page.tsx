@@ -1,8 +1,10 @@
 import { getPlatformOpsSettings } from "@gumakart/db";
+import { getTwoFactorStatus } from "@gumakart/auth";
 import { getIntegrationReport } from "@gumakart/services";
 import { requireSuperAdmin } from "@/lib/session";
 import { PlatformShell } from "@/components/platform-shell";
 import { SettingsPanel } from "@/components/settings-panel";
+import { OpsSecurityCard } from "@/components/ops-security-card";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,7 @@ export default async function SettingsPage() {
   const session = await requireSuperAdmin();
   const ops = await getPlatformOpsSettings();
   const report = getIntegrationReport();
+  const twoFactor = await getTwoFactorStatus(session.userId);
 
   const publicUrls = {
     storefront:
@@ -62,6 +65,9 @@ export default async function SettingsPage() {
       subtitle="Soft-launch flags, payments mode, support contacts, and provider status"
       user={{ displayName: session.displayName, email: session.email }}
     >
+      <div className="mb-6">
+        <OpsSecurityCard enabledAt={twoFactor.enabledAt?.toISOString() ?? null} backupCodesLeft={twoFactor.backupCodesLeft} />
+      </div>
       <SettingsPanel
         initial={ops}
         envFlags={{

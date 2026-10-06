@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
+import { signInJson } from "@/lib/two-factor-sign-in";
 import { z } from "zod";
 import {
   createSessionToken,
   getUserSessionById,
   hashPassword,
-  sessionCookieHeader,
   validatePasswordStrength,
   verifyPassword,
 } from "@gumakart/auth";
@@ -60,9 +60,8 @@ export async function POST(request: Request) {
       { userId: accepted.userId, name: body.name, role: accepted.role },
       { action: "staff.joined", entityType: "staff", entityId: accepted.userId, summary: `${body.name} joined as ${ROLE_LABELS[accepted.role].label}` }
     );
-    const response = NextResponse.json({ ok: true, redirectTo: homeFor(accepted.role) });
-    response.headers.set("Set-Cookie", sessionCookieHeader(await createSessionToken(user)));
-    return response;
+    // Phase 21: an existing account with two-step sign-in still enters its code.
+    return signInJson(user, await createSessionToken(user), { redirectTo: homeFor(accepted.role) });
   } catch (error) {
     if (error instanceof StaffError) {
       return NextResponse.json({ ok: false, error: error.message, code: error.code }, { status: 400 });

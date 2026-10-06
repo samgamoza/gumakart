@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import type { DemoTenant } from "@/lib/demo-data";
+import { sizedImageUrl } from "@/lib/image-sizes";
 
 const QUOTE_BG =
   "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1400&q=80";
@@ -10,7 +11,7 @@ export function FurnishTestimonial() {
   return (
     <section
       className="furnish-quote"
-      style={{ backgroundImage: `url(${QUOTE_BG})` }}
+      style={{ backgroundImage: `url(${sizedImageUrl(QUOTE_BG, 600)})` }}
       aria-label="Customer testimonial"
     >
       <div className="furnish-container">

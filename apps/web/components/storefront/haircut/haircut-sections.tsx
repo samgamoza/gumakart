@@ -24,6 +24,7 @@ import {
   HAIRCUT_HERO_SLIDES,
   serviceIconForProduct,
 } from "./haircut-utils";
+import { sizedImageUrl } from "@/lib/image-sizes";
 
 const ICONS = {
   scissors: Scissors,
@@ -134,7 +135,7 @@ export function HaircutHero({ tenant }: { tenant: DemoTenant }) {
         <div
           key={`${slide.image}-${index}`}
           className={`hc-hero-slide ${index === active ? "active" : ""}`}
-          style={{ backgroundImage: `url(${slide.image})` }}
+          style={{ backgroundImage: `url(${sizedImageUrl(slide.image, 600)})` }}
           aria-hidden={index !== active}
         />
       ))}
