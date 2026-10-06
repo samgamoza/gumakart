@@ -161,6 +161,7 @@ export const API_RULES: ApiRule[] = [
 
   // Phase 26: AI assistant — restock list (no money) and "Ask Guma" (uses sales numbers).
   { pattern: /^\/api\/insights\/restock$/, methods: READ, permission: "products.view" },
+  { pattern: /^\/api\/insights\/supplier-note$/, permission: "stock.adjust" },
   { pattern: /^\/api\/insights\/advisor$/, permission: "reports.view" },
 
   // Phase 27: Suki loyalty — converting points issues store credit (money), viewing is customer info.

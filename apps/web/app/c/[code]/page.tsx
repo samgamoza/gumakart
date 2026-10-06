@@ -88,7 +88,12 @@ export default async function CheckoutLinkPage({ params, searchParams }: PagePro
     .filter((m) => m !== "cod" || settings.codEnabled)
     .filter((m) => !allowed || allowed.includes(m))
     .filter((m) => (m === "qrph" || m === "card" ? settings.payments.mode !== "manual_ewallet" : true))
-    .map((id) => ({ id, ...PAYMENT_LABELS[id]! }));
+    .map((id) => {
+      const base = { id, ...PAYMENT_LABELS[id]! };
+      // Harvest H6: name the bank (e.g. GoTyme, BPI) so buyers know where they're sending.
+      const bank = settings.payments.receiving.bankName.trim();
+      return id === "bank" && bank ? { ...base, label: `Bank transfer · ${bank.slice(0, 40)}` } : base;
+    });
 
   const pickupAllowed = settings.delivery.pickupEnabled && link.deliveryMode !== "delivery";
   const deliveryAllowed = link.deliveryMode !== "pickup";

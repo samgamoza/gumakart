@@ -32,8 +32,8 @@ were verified on 2026-10-06 and can go stale.
 | 20 | Storefront speed (images, fonts, code split) | Approved (LIVE badge: leave as is) |
 | 21 | Two-step sign-in (required for ops, optional for sellers), Change password, last theme images | Live (deploy #20, `df6d24c`) |
 | 21b | Third homepage "Palenke AI" (ops → Frontends), seller dashboard installable as an app | Approved (`5e50563`) |
-| **26** | **AI seller assistant: Ask Guma, restock card, captions, suggested replies** — `docs/PHASE-26-NOTES.md` | **Built, in review** |
-| **27** | **Suki loyalty tiers: points → store credit, Bronze–Platinum** — `docs/PHASE-27-NOTES.md`, migration `0038_loyalty` | **Built, in review** |
+| 26, 27 | AI seller assistant; Suki loyalty tiers (migration `0038_loyalty`) | Approved (`fb2c3ca`) |
+| **31** | **palenkeAi harvest quick wins: supplier message, new-order chime, POS beep/full screen/58mm, GoTyme label** — `docs/PHASE-31-NOTES.md` | **Built, in review** |
 
 ## The launch track (not code: Sam's to-dos)
 
@@ -248,16 +248,16 @@ numbers.**
 | Omnichannel messenger CRM | **Suggest replies** in Chats, from real prices and stock | 26 |
 | Suki loyalty tiers + redemption | **Suki loyalty**: server ledger, refunds take points back, store credit only | 27 |
 
-**Next candidates, best value first:**
+**Next candidates, best value first** (✅ = built in Phase 31, `docs/PHASE-31-NOTES.md`):
 
 | # | Idea (palenkeAi source) | What we'd build | Size | Needs |
 |---|---|---|---|---|
-| H1 | Supplier reorder note (StockNotificationCenter) | On the restock card: "Draft a message to my supplier" in Taglish with the quantities, copy or share to Messenger/Viber | S | AI key |
+| H1 ✅ | Supplier reorder note (StockNotificationCenter) | On the restock card: "Draft a message to my supplier" in Taglish with the quantities, copy or share to Messenger/Viber | S | AI key |
 | H2 | Photo → product listing (`analyze-catalog-product`) | Snap a photo → title, Taglish description, category and tags filled in for review | M | Vision-capable AI key |
-| H3 | New-order sound + browser alert (notificationService) | A chime and a browser notification when an order arrives while the dashboard or POS is open | S | — |
-| H4 | POS barcode beep + full-screen kiosk (PosSystem) | Scanner beep on add or not-found, a full-screen register button, 58/80 mm receipt width setting | S | — |
+| H3 ✅ | New-order sound + browser alert (notificationService) | A chime and a browser notification when an order arrives while the dashboard or POS is open | S | — |
+| H4 ✅ | POS barcode beep + full-screen kiosk (PosSystem) | Scanner beep on add or not-found, a full-screen register button, 58/80 mm receipt width setting | S | — |
 | H5 | Win-back for Suki (CrmLoyaltyManager) | "Miss ka na namin" campaign preset: lapsed Silver+ buyers with consent, optional store-credit bonus | S | Semaphore |
-| H6 | GoTyme / bank transfer (PaymentMethods) | Extra manual payment option with account details and proof upload (same flow as GCash/Maya) | S | — |
+| H6 ✅ | GoTyme / bank transfer (PaymentMethods) | Extra manual payment option with account details and proof upload (same flow as GCash/Maya) | S | — |
 | H7 | Courier price comparison (DeliveryRiderEstimator) | Show quotes from every connected courier side by side when booking | M | Courier keys |
 | H8 | Buyer referral codes | "Give ₱50, get ₱50" as store credit, with self-referral blocks | M | — |
 | H9 | AI product photo backgrounds (AiLabs image gen) | Clean white or lifestyle background for a product photo, per-plan monthly cap | M–L | Image model key and cost check |

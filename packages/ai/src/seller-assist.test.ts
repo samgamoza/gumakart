@@ -50,4 +50,13 @@ describe("seller assist", () => {
     const c = mockAssist("captions", { shopName: "T", productTitle: "Bag", price: 499, link }) as { facebook: string };
     assert.ok(c.facebook.includes(link) && c.facebook.includes("₱499"));
   });
+
+  it("supplier note keeps the exact quantities, adding the list if the model drops any", () => {
+    const items = [{ title: "Canvas Backpack — Sand", qty: 20, stock: 0 }, { title: "Mug", qty: 8, stock: 2 }];
+    const o = parseAssistOutput("supplier", JSON.stringify({ message: "Hi po! Order po kami ng Canvas Backpack — Sand 20 pcs." }), { shopName: "Tess", items });
+    assert.match(o.message, /• Mug — 8 pcs/);
+    const m = mockAssist("supplier", { shopName: "Tess", supplierName: "Kuya Ben", items }) as { message: string };
+    assert.match(m.message, /Kuya Ben/);
+    assert.match(m.message, /Canvas Backpack — Sand — 20 pcs/);
+  });
 });

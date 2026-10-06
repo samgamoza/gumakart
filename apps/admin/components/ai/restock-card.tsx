@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PackageSearch } from "lucide-react";
+import { Check, Copy, Loader2, PackageSearch, Send, Sparkles } from "lucide-react";
 import { Card } from "@gumakart/ui";
 
 interface Item {
@@ -22,6 +22,28 @@ interface Item {
  */
 export function RestockCard() {
   const [items, setItems] = useState<Item[] | null>(null);
+  // Harvest H1: supplier reorder message.
+  const [note, setNote] = useState<string | null>(null);
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [supplier, setSupplier] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function draftNote() {
+    setNoteBusy(true);
+    setNoteError(null);
+    const r = await fetch("/api/insights/supplier-note", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ supplierName: supplier.trim() || undefined }),
+    })
+      .then((x) => x.json())
+      .catch(() => ({ ok: false, error: "No connection." }));
+    setNoteBusy(false);
+    if (!r.ok) return setNoteError(r.error ?? "Couldn't draft the message.");
+    setNote(r.message);
+    setCopied(false);
+  }
 
   useEffect(() => {
     fetch("/api/insights/restock", { cache: "no-store" })
@@ -60,6 +82,55 @@ export function RestockCard() {
           </li>
         ))}
       </ul>
+      {note === null ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            value={supplier}
+            onChange={(e) => setSupplier(e.target.value)}
+            placeholder="Supplier name (optional)"
+            maxLength={60}
+            className="h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-xs text-white placeholder:text-slate-500"
+          />
+          <button
+            type="button"
+            onClick={() => void draftNote()}
+            disabled={noteBusy || !items.some((i) => i.suggestedQty > 0)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 disabled:opacity-50"
+            data-testid="supplier-draft"
+          >
+            {noteBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Draft supplier message
+          </button>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2" data-testid="supplier-note">
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={7} className="w-full rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-white" aria-label="Supplier message" />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                await navigator.clipboard?.writeText(note).catch(() => null);
+                setCopied(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
+            </button>
+            {typeof navigator !== "undefined" && "share" in navigator && (
+              <button
+                type="button"
+                onClick={() => void navigator.share({ text: note }).catch(() => undefined)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200"
+              >
+                <Send className="h-3.5 w-3.5" /> Send via Messenger / Viber
+              </button>
+            )}
+            <button type="button" onClick={() => setNote(null)} className="rounded-lg px-3 py-2 text-xs text-slate-400 hover:text-white">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {noteError && <p role="alert" className="mt-1 text-xs text-rose-300">{noteError}</p>}
       <Link href="/inventory" className="mt-2 inline-block text-xs text-slate-400 hover:text-white">
         Update stock →
       </Link>

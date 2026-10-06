@@ -26,7 +26,10 @@ import {
   X,
   RefreshCw,
   AlertTriangle,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
+import { PRINT_WIDTH_MM, posBeep, readPaperWidth, savePaperWidth, type PaperWidth } from "@/lib/pos-beep";
 import { computeStorePromotion, type TenantCheckoutJson } from "@gumakart/db/checkout";
 import {
   checkTenders,
@@ -536,6 +539,15 @@ export function PosRegister() {
   const [holder, setHolder] = useState({ name: "", idNumber: "" });
   const [notice, setNotice] = useState<string | null>(null);
   const [modal, setModal] = useState<null | "pay" | "receipt" | "close" | "sales" | "cart" | "issues">(null);
+  // Harvest H4: receipt paper width (per device) and full-screen register.
+  const [paper, setPaper] = useState<PaperWidth>("80");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    setPaper(readPaperWidth());
+    const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [receiptFromHistory, setReceiptFromHistory] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -737,6 +749,7 @@ export function PosRegister() {
       const v = (p.variants ?? []).find((x) => (x.barcode ?? "").toLowerCase() === q || (x.sku ?? "").toLowerCase() === q);
       if (v && p.hasOptions) {
         add(sellableOf(p, v));
+        posBeep(true);
         setQuery("");
         return;
       }
@@ -744,8 +757,10 @@ export function PosRegister() {
     const exact = products.find((p) => (p.sku ?? "").toLowerCase() === q) ?? (filtered.length === 1 ? filtered[0] : undefined);
     if (exact) {
       tap(exact);
+      posBeep(true);
       setQuery("");
     } else {
+      posBeep(false);
       setNotice(`No product with code "${query.trim()}".`);
     }
   }
@@ -869,7 +884,7 @@ export function PosRegister() {
         @media print {
           body * { visibility: hidden !important; }
           #pos-receipt, #pos-receipt * { visibility: visible !important; }
-          #pos-receipt { position: absolute; left: 0; top: 0; width: 72mm; max-width: 72mm; border-radius: 0; padding: 0; }
+          #pos-receipt { position: absolute; left: 0; top: 0; width: ${PRINT_WIDTH_MM[paper]}mm; max-width: ${PRINT_WIDTH_MM[paper]}mm; border-radius: 0; padding: 0; ${paper === "58" ? "font-size: 10px !important;" : ""} }
           @page { margin: 4mm; }
         }
       `}</style>
@@ -934,6 +949,34 @@ export function PosRegister() {
             </button>
           </>
         )}
+        <select
+          className="rounded-md border border-white/15 bg-transparent px-1.5 py-1 text-xs text-slate-300"
+          value={paper}
+          onChange={(e) => {
+            const w = e.target.value === "58" ? "58" : "80";
+            setPaper(w);
+            savePaperWidth(w);
+          }}
+          aria-label="Receipt paper width"
+          title="Receipt paper width"
+          data-testid="pos-paper"
+        >
+          <option value="80" className="bg-slate-900">80mm</option>
+          <option value="58" className="bg-slate-900">58mm</option>
+        </select>
+        <button
+          type="button"
+          className={`${btnGhost} px-3`}
+          onClick={() => {
+            if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+            else void document.documentElement.requestFullscreen?.().catch(() => undefined);
+          }}
+          aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+          title={isFullscreen ? "Exit full screen" : "Full-screen register"}
+          data-testid="pos-fullscreen"
+        >
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
         {(state.actor.isStaff || state.deviceRegistered) && (
           <button type="button" className={`${btnGhost} px-3`} onClick={() => void lock()} aria-label="Lock register" disabled={!online} title={online ? undefined : "Locking needs internet (unlocking checks the PIN)"}>
             <Lock className="h-4 w-4" />

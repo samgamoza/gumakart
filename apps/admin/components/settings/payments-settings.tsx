@@ -193,6 +193,7 @@ export function PaymentsSettingsPage() {
             <input
               className="mt-1 h-10 w-full rounded-lg border px-3"
               value={receiving.bankName}
+              placeholder="e.g. GoTyme, BPI, BDO, UnionBank"
               onChange={(e) => setReceiving((r) => ({ ...r, bankName: e.target.value }))}
             />
           </label>

@@ -26,6 +26,7 @@ import { planAtLeast, upgradeHref, type SubscriptionPlan } from "@/lib/plan-acce
 import { SuspendedShopNotice } from "@/components/suspended-shop-notice";
 import { SupportAccessBanner } from "@/components/support-access-banner";
 import { PartnerAccessBanner } from "@/components/partner-access-banner";
+import { NewOrderAlerts } from "@/components/new-order-alerts";
 import { PlanNoticeBanner } from "@/components/plan-notice-banner";
 import { storefrontBaseUrl } from "@/lib/utils";
 
@@ -171,6 +172,7 @@ export function AdminShell({
         />
       )}
       {user?.partnerAccess && <PartnerAccessBanner partnerName={user.partnerAccess.partnerName} shopName={user.partnerAccess.shopName} />}
+      <NewOrderAlerts />
       {shopRole === "owner" && !supportAccess && <PlanNoticeBanner />}
       <div className="relative min-h-screen lg:flex">
       {/* Soft ambient — keep noise low so content stays readable */}

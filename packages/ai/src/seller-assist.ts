@@ -12,7 +12,7 @@ import { z } from "zod";
 import { callLlm, resolveEffectiveModel } from "./providers/llm";
 import { normalizePlan, resolveBudgetAwareModel, type AiTaskType } from "./plan-limits";
 
-export type AssistTask = "captions" | "replies" | "advisor";
+export type AssistTask = "captions" | "replies" | "advisor" | "supplier";
 
 export interface CaptionsInput {
   shopName: string;
@@ -48,7 +48,14 @@ export interface AdvisorInput {
   facts: AdvisorFacts;
 }
 
-export type AssistInput = CaptionsInput | RepliesInput | AdvisorInput;
+/** Harvest H1: a reorder message to the seller's supplier (from the restock list). */
+export interface SupplierInput {
+  shopName: string;
+  supplierName?: string | null;
+  items: Array<{ title: string; qty: number; stock: number }>;
+}
+
+export type AssistInput = CaptionsInput | RepliesInput | AdvisorInput | SupplierInput;
 
 export const captionsOutput = z.object({
   facebook: z.string().min(1),
@@ -58,13 +65,15 @@ export const captionsOutput = z.object({
 });
 export const repliesOutput = z.object({ replies: z.array(z.string().min(1)).min(1) });
 export const advisorOutput = z.object({ answer: z.string().min(1), actions: z.array(z.string()).default([]) });
+export const supplierOutput = z.object({ message: z.string().min(1) });
 
 export type CaptionsOutput = z.infer<typeof captionsOutput>;
 export type RepliesOutput = z.infer<typeof repliesOutput>;
 export type AdvisorOutput = z.infer<typeof advisorOutput>;
+export type SupplierOutput = z.infer<typeof supplierOutput>;
 
-const TASK_TYPE: Record<AssistTask, AiTaskType> = { captions: "generation", replies: "chat", advisor: "chat" };
-const MAX_TOKENS: Record<AssistTask, number> = { captions: 700, replies: 300, advisor: 600 };
+const TASK_TYPE: Record<AssistTask, AiTaskType> = { captions: "generation", replies: "chat", advisor: "chat", supplier: "chat" };
+const MAX_TOKENS: Record<AssistTask, number> = { captions: 700, replies: 300, advisor: 600, supplier: 350 };
 
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -109,6 +118,20 @@ export function buildAssistPrompt(task: AssistTask, input: AssistInput): { syste
         .join("\n"),
     };
   }
+  if (task === "supplier") {
+    const i = input as SupplierInput;
+    return {
+      system: SYSTEM,
+      maxTokens: MAX_TOKENS.supplier,
+      user: [
+        `Write a short, polite Taglish reorder message from shop "${i.shopName}" to their supplier${i.supplierName ? ` (${i.supplierName})` : ""}.`,
+        `Items and quantities to order (use EXACTLY these, one per line as "• item — qty pcs"):`,
+        ...i.items.slice(0, 15).map((x) => `- ${clip(x.title, 120)}: ${x.qty} pcs`),
+        "Ask them to confirm availability, price and the earliest delivery date. No prices or dates of your own.",
+        'Return {"message": string (max 900 chars)}.',
+      ].join("\n"),
+    };
+  }
   const i = input as AdvisorInput;
   return {
     system: `${SYSTEM} You are "Guma", a business advisor. Base every number on the SHOP FACTS. Give practical next steps a micro-seller can do this week.`,
@@ -126,7 +149,8 @@ function ensureLink(text: string, link: string): string {
 export function parseAssistOutput(task: "captions", raw: string, input: CaptionsInput): CaptionsOutput;
 export function parseAssistOutput(task: "replies", raw: string, input: RepliesInput): RepliesOutput;
 export function parseAssistOutput(task: "advisor", raw: string, input: AdvisorInput): AdvisorOutput;
-export function parseAssistOutput(task: AssistTask, raw: string, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput;
+export function parseAssistOutput(task: "supplier", raw: string, input: SupplierInput): SupplierOutput;
+export function parseAssistOutput(task: AssistTask, raw: string, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput;
 export function parseAssistOutput(task: AssistTask, raw: string, input: AssistInput) {
   const json = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ""));
   if (task === "captions") {
@@ -146,13 +170,21 @@ export function parseAssistOutput(task: AssistTask, raw: string, input: AssistIn
     const o = repliesOutput.parse(json);
     return { replies: [...new Set(o.replies.map((r) => clip(clean(r), 400)).filter(Boolean))].slice(0, 3) };
   }
+  if (task === "supplier") {
+    const i = input as SupplierInput;
+    let message = clip(clean(supplierOutput.parse(json).message), 1200);
+    // The quantities are the point of the message — if the model dropped any, append the exact list.
+    const missing = i.items.filter((x) => !message.includes(String(x.qty)) || !message.toLowerCase().includes(x.title.toLowerCase().slice(0, 12)));
+    if (missing.length) message += `\n\n${i.items.map((x) => `• ${x.title} — ${x.qty} pcs`).join("\n")}`;
+    return { message };
+  }
   const o = advisorOutput.parse(json);
   return { answer: clip(clean(o.answer), 1200), actions: o.actions.map((a) => clip(clean(a), 200)).filter(Boolean).slice(0, 3) };
 }
 
 // ─── no-key fallback (dev/test only; production refuses mocks in resolveEffectiveModel) ───
 
-export function mockAssist(task: AssistTask, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput {
+export function mockAssist(task: AssistTask, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput {
   if (task === "captions") {
     const i = input as CaptionsInput;
     const price = i.price != null ? ` — ${peso(i.price)} lang!` : "";
@@ -172,6 +204,18 @@ export function mockAssist(task: AssistTask, input: AssistInput): CaptionsOutput
         `Hello po! Ano pong size/variant at ilang piraso ang kailangan ninyo? Para ma-check ko agad.`,
         `Hi po! Para sa shipping fee, saan po ang delivery address ninyo (city/barangay)?`,
       ],
+    };
+  }
+  if (task === "supplier") {
+    const i = input as SupplierInput;
+    return {
+      message: [
+        `Hi${i.supplierName ? ` ${i.supplierName}` : ""}! Si ${i.shopName} po ito. Gusto po sana naming mag-order ulit:`,
+        "",
+        ...i.items.map((x) => `• ${x.title} — ${x.qty} pcs`),
+        "",
+        "Pa-confirm po kung available, magkano, at kailan pinakamaagang ma-deliver. Salamat po! 🙏",
+      ].join("\n"),
     };
   }
   const f = (input as AdvisorInput).facts;
@@ -207,7 +251,7 @@ export async function runSellerAssist(
   task: AssistTask,
   input: AssistInput,
   opts: { plan?: string | null; tokensUsedThisMonth?: number } = {}
-): Promise<AssistRunResult<CaptionsOutput | RepliesOutput | AdvisorOutput>> {
+): Promise<AssistRunResult<CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput>> {
   const requested = resolveBudgetAwareModel(normalizePlan(opts.plan ?? "free"), TASK_TYPE[task], opts.tokensUsedThisMonth);
   const model = resolveEffectiveModel(requested);
   if (model === "mock") return { output: mockAssist(task, input), tokensUsed: 0, model: "mock", provider: "mock" };

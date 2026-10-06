@@ -1,13 +1,14 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–27 partly: 21b, 26, 27 built; 26 + 27 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–21, 21b, 26, 27, 31 built; 31 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (Phases 26 + 27 in review)
+## ▶ Resume here — 2026-10-06 (Phase 31 in review)
 
 **Status.** Phases 8–21 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- Phases 26 + 27 (one commit): AI seller assistant (Ask Guma, restock card, captions, suggested replies) and Suki loyalty tiers (migration 0038_loyalty). In review. Built ahead of 22–25 at Sam's request.
+- Phase 31 palenkeAi harvest quick wins (H1 supplier message, H3 new-order chime, H4 POS beep/full screen/58mm, H6 GoTyme label). No migration. In review.
+- `fb2c3ca` Phases 26 + 27: AI seller assistant and Suki loyalty tiers (migration 0038_loyalty). Approved. Built ahead of 22–25 at Sam's request.
 - `5e50563` Phase 21b: third homepage "Palenke AI" (ops → Frontends) + installable seller dashboard. Approved.
 - `2562889` Phase 21 security (2FA etc.). Live (deploy #20 `df6d24c`).
 - `9687508` Phase 20 storefront speed: Cloudflare IMAGES binding, resized photos, self-hosted fonts, per-theme code split. Approved (LIVE badge: leave as is).
@@ -40,7 +41,7 @@ Pushing also switches the admin Worker cron to **every minute**. Check first wit
 - admin → Gift cards, Settings → Branches, Stock → By branch, POS (deal line, Gift card tender).
 - admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27/31-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
 Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**

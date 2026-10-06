@@ -54,4 +54,6 @@ export { callLlm, resolveEffectiveModel } from "./providers/llm";export {
   type CaptionsOutput,
   type RepliesOutput,
   type AdvisorOutput,
+  type SupplierInput,
+  type SupplierOutput,
 } from "./seller-assist";
