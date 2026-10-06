@@ -5,10 +5,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { config } from "dotenv";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb } from "./client";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// Same .env as `pnpm db:migrate` (drizzle.config.ts) — the repo root. Variables already set win.
+config({ path: path.join(here, "../../../.env") });
 const journal = JSON.parse(readFileSync(path.join(here, "../drizzle/meta/_journal.json"), "utf8")) as {
   entries: Array<{ idx: number; when: number; tag: string }>;
 };
@@ -16,7 +19,7 @@ const journal = JSON.parse(readFileSync(path.join(here, "../drizzle/meta/_journa
 async function main() {
   const host = (() => {
     try {
-      return new URL(process.env.DATABASE_URL ?? "").host || "(not set)";
+      return new URL(process.env.DATABASE_URL_POOLED ?? process.env.DATABASE_URL ?? "").host || "(not set)";
     } catch {
       return "(unreadable DATABASE_URL)";
     }
