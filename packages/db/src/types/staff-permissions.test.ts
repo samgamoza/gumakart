@@ -127,3 +127,13 @@ describe("pages", () => {
     assert.ok(!canOpenPage("staff", "/somewhere-new"));
   });
 });
+
+describe("Phase 18: partner access settings are owner-only", () => {
+  it("managers (incl. partners working as manager) can't open or call it", () => {
+    assert.equal(canOpenPage("manager", "/settings/partner"), false);
+    assert.equal(canOpenPage("owner", "/settings/partner"), true);
+    assert.equal(canUseApi("manager", "/api/shop-partner", "POST"), false);
+    assert.equal(canUseApi("manager", "/api/shop-partner", "GET"), false);
+    assert.equal(canUseApi("staff", "/api/shop-partner", "DELETE"), false);
+  });
+});

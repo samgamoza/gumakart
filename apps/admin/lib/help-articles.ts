@@ -14,6 +14,34 @@ export interface HelpArticle {
 
 export const HELP_ARTICLES: HelpArticle[] = [
   {
+    id: "partner-access",
+    title: "Agency o VA na tutulong sa shop mo",
+    summary: "Bigyan ng access ang partner mo nang hindi ibinibigay ang password mo — at tanggalin kahit kailan.",
+    steps: [
+      "Hingin sa agency ang partner code nila (hal. P-ABC234).",
+      "Settings → Partner, ilagay ang code, piliin ang Manager o Staff, tapos Give access.",
+      "Hindi nila makikita o mababago ang payment details, plan, staff at API keys mo.",
+      "Lahat ng ginagawa nila ay nasa Settings → Activity, may tatak na partner. Remove access para tanggalin agad.",
+    ],
+    href: "/settings/partner",
+    linkLabel: "Buksan ang Settings → Partner",
+    tags: ["partner", "agency", "va", "access", "tulong"],
+  },
+  {
+    id: "zapier-make",
+    title: "Ikonekta sa Google Sheets, Slack o Telegram (Zapier / Make)",
+    summary: "Bawat bagong order sa Sheets, alert kapag paubos na ang stock, presyo galing sa Sheet — walang coding.",
+    steps: [
+      "API & webhooks → Add endpoint: i-paste ang URL mula sa Zapier (Catch Hook) o Make (Custom webhook), piliin ang events (hal. order.created).",
+      "Sa Zapier/Make, idugtong sa Google Sheets, Slack, Telegram o email.",
+      "Para mag-update ng presyo o stock mula sa Sheet: gumawa ng API key na may Update products / Update stock, at gamitin ang HTTP step.",
+      "Huwag i-share ang API key o ang webhook URL sa iba.",
+    ],
+    href: "/developers",
+    linkLabel: "Buksan ang API & webhooks",
+    tags: ["zapier", "make", "sheets", "integration", "api", "webhook", "slack", "telegram"],
+  },
+  {
     id: "first-order",
     title: "Unang order sa loob ng 10 minuto",
     summary: "Mula sign-up hanggang may order ka na galing sa FB post o chat.",

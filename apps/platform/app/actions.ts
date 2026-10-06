@@ -72,6 +72,33 @@ function fail(error: unknown): ActionResult {
   return { ok: false, error: message };
 }
 
+// ─── Partners (Phase 18) ─────────────────────────────────────────────────────
+
+export async function setPartnerStatusAction(
+  partnerId: string,
+  status: "active" | "suspended" | "pending",
+  label: string,
+  note?: string | null
+): Promise<ActionResult> {
+  try {
+    const session = await guard();
+    const { setPartnerStatus } = await import("@gumakart/db");
+    await setPartnerStatus(partnerId, status, note ?? null, session.userId);
+    await writeAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: `partner_${status}`,
+      entityType: "partner",
+      entityId: partnerId,
+      entityLabel: label,
+    });
+    revalidatePath("/partners");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 // ─── Tenants ─────────────────────────────────────────────────────────────────
 
 export async function updateTenantStatusAction(

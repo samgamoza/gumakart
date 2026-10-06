@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, normalizeCodeEmail, readSignupTicket, registerSeller, sessionCookieHeader } from "@gumakart/auth";
-import { saveBusinessProfile } from "@gumakart/db";
+import { recordPartnerReferral, saveBusinessProfile } from "@gumakart/db";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
 import { businessProfileFields } from "@/lib/business-profile";
 
@@ -14,6 +14,8 @@ const signupSchema = z.object({
   category: z.string().optional(),
   vibe: z.string().max(32).optional(),
   ...businessProfileFields,
+  /** Phase 18: an agency partner's referral code (ignored when unknown). */
+  partnerCode: z.string().max(16).optional(),
   /** From /api/auth/signup/verify — proof this email passed the emailed code. */
   ticket: z.string({ required_error: "Confirm your email first." }).min(20, "Confirm your email first."),
 });
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { ticket, mobile, sellChannels, chatUrl, ...body } = signupSchema.parse(await request.json());
+    const { ticket, mobile, sellChannels, chatUrl, partnerCode, ...body } = signupSchema.parse(await request.json());
     const ticketEmail = await readSignupTicket(ticket);
     if (!ticketEmail || ticketEmail !== normalizeCodeEmail(body.email)) {
       return NextResponse.json(
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
     }
     const { user, sessionToken } = await registerSeller({ ...body, emailVerified: true });
     if (user.tenantId) await saveBusinessProfile(user.tenantId, { mobile, sellChannels, chatUrl });
+    if (user.tenantId && partnerCode) await recordPartnerReferral(user.tenantId, partnerCode).catch(() => false);
 
     if (user.tenantId && user.tenantSlug) {
       const { ensureEventsWired } = await import("@/lib/events-bootstrap");

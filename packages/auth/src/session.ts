@@ -5,6 +5,7 @@ import {
   SESSION_MAX_AGE_SECONDS,
   SUPPORT_ACCESS_GRANT_MAX_AGE_SECONDS,
   SUPPORT_ACCESS_SESSION_MAX_AGE_SECONDS,
+  PARTNER_ACCESS_SESSION_MAX_AGE_SECONDS,
   type SessionPayload,
   type SessionUser,
 } from "./types";
@@ -38,7 +39,9 @@ export async function createSessionToken(
 ): Promise<string> {
   const age = user.supportAccess
     ? Math.min(maxAgeSeconds, SUPPORT_ACCESS_SESSION_MAX_AGE_SECONDS)
-    : maxAgeSeconds;
+    : user.partnerAccess
+      ? Math.min(maxAgeSeconds, PARTNER_ACCESS_SESSION_MAX_AGE_SECONDS)
+      : maxAgeSeconds;
 
   return new SignJWT({
     email: user.email,
@@ -52,6 +55,7 @@ export async function createSessionToken(
     needsShopSetup: user.needsShopSetup,
     sv: user.sessionVersion,
     ...(user.supportAccess ? { sa: true } : {}),
+    ...(user.partnerAccess ? { pa: user.partnerAccess } : {}),
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.userId)
@@ -167,6 +171,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       needsShopSetup: resolvedNeedsShopSetup,
       sessionVersion: typeof payload.sv === "number" ? payload.sv : 0,
       supportAccess: payload.sa === true,
+      partnerAccess: typeof payload.pa === "string" ? payload.pa : null,
       iat: payload.iat ?? 0,
       exp: payload.exp ?? 0,
     };

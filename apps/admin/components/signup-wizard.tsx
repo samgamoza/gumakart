@@ -13,6 +13,7 @@ import {
 import { PasswordInput } from "@/components/password-input";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { BusinessFields, EMPTY_BUSINESS, validateBusiness, type BusinessForm } from "@/components/business-step";
+import { capturePartnerRef, clearPartnerRef } from "@/lib/partner-ref";
 
 export function SignupWizard() {
   const router = useRouter();
@@ -25,6 +26,17 @@ export function SignupWizard() {
   const [ticket, setTicket] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
+
+  // Phase 18: signed up through an agency partner's link (?partner=P-XXXXXX).
+  const [partnerRef, setPartnerRef] = useState<{ code: string; name: string } | null>(null);
+  useEffect(() => {
+    const code = capturePartnerRef();
+    if (!code) return;
+    fetch(`/api/partners/code?code=${encodeURIComponent(code)}`)
+      .then((r) => r.json())
+      .then((d) => (d.ok ? setPartnerRef({ code: d.partner.code, name: d.partner.name }) : clearPartnerRef()))
+      .catch(() => null);
+  }, []);
 
   const [form, setForm] = useState({
     displayName: "",
@@ -132,7 +144,7 @@ export function SignupWizard() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, ...business, chatUrl: business.chatUrl || undefined, ticket }),
+        body: JSON.stringify({ ...form, ...business, chatUrl: business.chatUrl || undefined, ticket, partnerCode: partnerRef?.code }),
       });
       const data = await res.json();
 
@@ -145,6 +157,7 @@ export function SignupWizard() {
         return;
       }
 
+      clearPartnerRef();
       router.push(data.redirectTo ?? "/onboarding");
       router.refresh();
     } catch {
@@ -165,6 +178,11 @@ export function SignupWizard() {
             : "Step 1 of 4 — Your business"
       }
     >
+      {partnerRef && (
+        <p className="mb-4 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-sm text-sky-100" data-testid="partner-ref">
+          Invited by <strong>{partnerRef.name}</strong>, a Guma Kart partner. You can give them access to help with your shop later, in Settings → Partner.
+        </p>
+      )}
       {step === 1 && (
         <>
           <GoogleSignInButton intent="signup" label="Sign up with Google" />

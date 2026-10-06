@@ -22,6 +22,7 @@ import {
   Store,
   Users,
   X,
+  Handshake,
 } from "lucide-react";
 import { GumaLogo } from "@gumakart/ui";
 
@@ -50,6 +51,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/tenants", label: "Tenants", icon: Store },
       { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
       { href: "/users", label: "Users", icon: Users },
+      { href: "/partners", label: "Partners", icon: Handshake },
     ],
   },
   {

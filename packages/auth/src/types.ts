@@ -25,7 +25,16 @@ export interface SessionUser {
    * Cookie is host-scoped to admin.*; platform cookie on ops.* stays separate.
    */
   supportAccess?: boolean;
+  /**
+   * Phase 18: an agency partner working inside a client's shop — the partner's id. The JWT then
+   * carries role seller_staff + the granted staffRole + the shop; the grant is re-checked in the
+   * database on every API call (requireTenantSession), so an owner's revoke is immediate.
+   */
+  partnerAccess?: string | null;
 }
+
+/** Phase 18: partner sessions in a client shop are short, like support access. */
+export const PARTNER_ACCESS_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
 
 export interface SessionPayload extends SessionUser {
   iat: number;

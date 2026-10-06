@@ -7,6 +7,7 @@ export const API_SCOPES = [
   "orders:read",
   "orders:write",
   "products:read",
+  "products:write",
   "inventory:read",
   "inventory:write",
   "customers:read",
@@ -17,6 +18,7 @@ export const API_SCOPE_LABELS: Record<ApiScope, { label: string; description: st
   "orders:read": { label: "Read orders", description: "Orders with items, buyer name, phone and delivery address." },
   "orders:write": { label: "Update orders", description: "Accept, pack and update delivery status. Never payments, cancels or refunds." },
   "products:read": { label: "Read products", description: "Products, variants, prices and photos." },
+  "products:write": { label: "Update products", description: "Add simple products; edit titles, descriptions, prices, SKUs and status. Never deletes." },
   "inventory:read": { label: "Read stock", description: "Stock per variant, by SKU or barcode." },
   "inventory:write": { label: "Update stock", description: "Set counted stock per variant (logged in the activity log)." },
   "customers:read": { label: "Read customers", description: "Buyer list with phone, email, order count and SMS consent." },
@@ -31,6 +33,7 @@ export function normalizeScopes(raw: readonly string[]): ApiScope[] {
   const set = new Set(raw.filter(isApiScope));
   if (set.has("orders:write")) set.add("orders:read");
   if (set.has("inventory:write")) set.add("inventory:read");
+  if (set.has("products:write")) set.add("products:read");
   return API_SCOPES.filter((s) => set.has(s));
 }
 
@@ -47,6 +50,8 @@ export const WEBHOOK_EVENTS = [
   "order.refunded",
   "inventory.updated",
   "customer.created",
+  "product.created",
+  "product.updated",
 ] as const;
 export type WebhookEventName = (typeof WEBHOOK_EVENTS)[number];
 
@@ -59,6 +64,8 @@ export const WEBHOOK_EVENT_LABELS: Record<WebhookEventName, string> = {
   "order.refunded": "A full or partial refund was recorded.",
   "inventory.updated": "A variant's stock changed (sale, count, return, restock, import).",
   "customer.created": "A new buyer appeared in your customer list.",
+  "product.created": "A product was added (dashboard, import or API).",
+  "product.updated": "A product's title, price, description, category or status changed.",
 };
 
 export function isWebhookEvent(value: unknown): value is WebhookEventName {

@@ -525,3 +525,140 @@ export async function apiGetCustomer(tenantId: string, id: string): Promise<ApiC
   if (!UUID.test(id)) return null;
   return (await apiCustomersByIds(tenantId, [id])).get(id) ?? null;
 }
+
+// ─── Platform v1.1 (Phase 18): product writes + product webhook payloads ─────
+
+export async function apiProductsByIds(tenantId: string, ids: string[]): Promise<Map<string, ApiProduct>> {
+  const uniq = [...new Set(ids)].filter((i) => UUID.test(i));
+  if (uniq.length === 0) return new Map();
+  const rows = await getDb()
+    .select()
+    .from(products)
+    .where(and(eq(products.tenantId, tenantId), inArray(products.id, uniq)));
+  return new Map((await attachVariants(rows)).map((p) => [p.id, p]));
+}
+
+export interface ApiProductCreate {
+  title: string;
+  price: number;
+  compare_at_price?: number | null;
+  description_html?: string | null;
+  status?: "draft" | "active";
+  stock?: number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  image_url?: string | null;
+}
+
+const money2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+
+/** POST /api/v1/products — a simple product (one variant). Options/variants stay in the dashboard. */
+export async function apiCreateProduct(tenantId: string, input: ApiProductCreate): Promise<ApiProduct> {
+  if (input.compare_at_price != null && input.compare_at_price <= input.price) {
+    throw new ApiInputError("compare_at_price must be higher than price.");
+  }
+  const { createProductForTenant } = await import("./products");
+  const created = await createProductForTenant(tenantId, {
+    title: input.title,
+    slug: input.title,
+    descriptionHtml: input.description_html ?? undefined,
+    basePrice: money2(input.price),
+    compareAtPrice: input.compare_at_price != null ? money2(input.compare_at_price) : undefined,
+    status: input.status ?? "draft",
+    stockQty: input.stock ?? undefined,
+    imageUrl: input.image_url ?? undefined,
+  });
+  if (input.sku || input.barcode) {
+    await getDb()
+      .update(productVariants)
+      .set({ ...(input.sku ? { sku: input.sku } : {}), ...(input.barcode ? { barcode: input.barcode } : {}) })
+      .where(eq(productVariants.productId, created.id));
+  }
+  return (await apiGetProduct(tenantId, created.id))!;
+}
+
+export interface ApiProductPatch {
+  title?: string;
+  description_html?: string | null;
+  price?: number;
+  compare_at_price?: number | null;
+  status?: "draft" | "active" | "archived";
+}
+
+/** PATCH /api/v1/products/{id}. Price on a product with options is set per variant instead. */
+export async function apiUpdateProduct(tenantId: string, id: string, patch: ApiProductPatch): Promise<ApiProduct | null> {
+  const current = await apiGetProduct(tenantId, id);
+  if (!current) return null;
+  if (patch.price !== undefined && current.options.length > 0) {
+    throw new ApiInputError("This product has options — set prices per variant with PATCH /api/v1/variants/{id}.");
+  }
+  const price = patch.price ?? Number(current.price);
+  const compare = patch.compare_at_price === undefined ? (current.compare_at_price != null ? Number(current.compare_at_price) : null) : patch.compare_at_price;
+  if (compare != null && compare <= price) throw new ApiInputError("compare_at_price must be higher than price.");
+  const { updateProductForTenant } = await import("./products");
+  await updateProductForTenant(tenantId, id, {
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.description_html !== undefined ? { descriptionHtml: patch.description_html ?? "" } : {}),
+    ...(patch.price !== undefined ? { basePrice: money2(patch.price) } : {}),
+    ...(patch.compare_at_price !== undefined ? { compareAtPrice: patch.compare_at_price != null ? money2(patch.compare_at_price) : null } : {}),
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+  });
+  return apiGetProduct(tenantId, id);
+}
+
+export interface ApiVariantPatch {
+  price?: number;
+  compare_at_price?: number | null;
+  sku?: string | null;
+  barcode?: string | null;
+}
+
+/** PATCH /api/v1/variants/{id} — price / SKU / barcode. Keeps "from ₱X" (cheapest variant) right. */
+export async function apiUpdateVariant(tenantId: string, id: string, patch: ApiVariantPatch): Promise<ApiStockRow | null> {
+  if (!UUID.test(id)) return null;
+  const found = await getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select({ v: productVariants, optionsJson: products.optionsJson })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(and(eq(productVariants.id, id), eq(products.tenantId, tenantId)))
+      .for("update");
+    if (!row) return false;
+    const price = patch.price ?? Number(row.v.price);
+    const compare = patch.compare_at_price === undefined ? (row.v.compareAtPrice != null ? Number(row.v.compareAtPrice) : null) : patch.compare_at_price;
+    if (compare != null && compare <= price) throw new ApiInputError("compare_at_price must be higher than price.");
+    if (patch.sku) {
+      const [dupe] = await tx
+        .select({ id: productVariants.id })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(and(eq(products.tenantId, tenantId), eq(productVariants.sku, patch.sku), sql`${productVariants.id} <> ${id}`))
+        .limit(1);
+      if (dupe) throw new ApiInputError(`SKU ${patch.sku} is already used by another variant.`);
+    }
+    await tx
+      .update(productVariants)
+      .set({
+        ...(patch.price !== undefined ? { price: money2(patch.price) } : {}),
+        ...(patch.compare_at_price !== undefined ? { compareAtPrice: patch.compare_at_price != null ? money2(patch.compare_at_price) : null } : {}),
+        ...(patch.sku !== undefined ? { sku: patch.sku || null } : {}),
+        ...(patch.barcode !== undefined ? { barcode: patch.barcode || null } : {}),
+      })
+      .where(eq(productVariants.id, id));
+    // The product's listed price: its own price (no options) or the cheapest active variant.
+    const live = await tx
+      .select({ price: productVariants.price, compareAtPrice: productVariants.compareAtPrice })
+      .from(productVariants)
+      .where(and(eq(productVariants.productId, row.v.productId), eq(productVariants.active, true)));
+    const cheapest = live.reduce<(typeof live)[number] | null>((m, v) => (!m || Number(v.price) < Number(m.price) ? v : m), null);
+    if (cheapest) {
+      await tx
+        .update(products)
+        .set({ basePrice: cheapest.price, compareAtPrice: cheapest.compareAtPrice, updatedAt: new Date() })
+        .where(eq(products.id, row.v.productId));
+    }
+    return true;
+  });
+  if (!found) return null;
+  return (await apiVariantsByIds(tenantId, [id])).get(id) ?? null;
+}

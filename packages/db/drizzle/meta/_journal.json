@@ -253,6 +253,13 @@
       "when": 1786600000000,
       "tag": "0035_seller_polish",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786700000000,
+      "tag": "0036_partners",
+      "breakpoints": true
     }
   ]
 }

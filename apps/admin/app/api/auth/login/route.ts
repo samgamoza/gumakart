@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const { user, sessionToken } = await loginUser(body);
 
     const shopRole = shopRoleOf(user);
-    const redirectTo = shopRole && shopRole !== "owner" ? homeFor(shopRole) : await resolveSellerHomePath({
+    const redirectTo = user.role === "partner" ? "/partner" : shopRole && shopRole !== "owner" ? homeFor(shopRole) : await resolveSellerHomePath({
       tenantId: user.tenantId,
       emailVerified: user.emailVerified,
       preferLaunchWhenUnverified: true,

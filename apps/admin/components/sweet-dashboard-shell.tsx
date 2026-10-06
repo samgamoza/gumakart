@@ -20,6 +20,7 @@ import { resolveStorePattern } from "@gumakart/storefront-themes";
 import type { StorePatternId } from "@gumakart/storefront-themes";
 import { SuspendedShopNotice } from "@/components/suspended-shop-notice";
 import { SupportAccessBanner } from "@/components/support-access-banner";
+import { PartnerAccessBanner } from "@/components/partner-access-banner";
 
 const SWEET_TABS = [
   { id: "overview", label: "Overview", href: "/", icon: LayoutDashboard },
@@ -49,6 +50,7 @@ export function SweetDashboardShell({
     displayName: string;
     tenantStatus?: string;
     supportAccess?: boolean;
+    partnerAccess?: { partnerName: string; shopName: string } | null;
   } | null>(null);
   const [accent, setAccent] = useState("#FF007F");
 
@@ -57,11 +59,16 @@ export function SweetDashboardShell({
       fetch("/api/auth/session").then((res) => res.json()),
       fetch("/api/shop").then((res) => res.json()),
     ]).then(([sessionData, shopData]) => {
+      if (sessionData.partnerRevoked) {
+        window.location.href = sessionData.redirectTo ?? "/partner";
+        return;
+      }
       if (sessionData.ok) {
         setUser({
           ...sessionData.user,
           tenantStatus: shopData?.ok ? shopData.shop.tenant.status : undefined,
           supportAccess: Boolean(sessionData.supportAccess),
+          partnerAccess: sessionData.partnerAccess ?? null,
         });
       }
       if (shopData?.ok && shopData.theme?.primaryColor) {
@@ -101,6 +108,7 @@ export function SweetDashboardShell({
       {supportAccess && (
         <SupportAccessBanner tenantName={user?.tenantName} tenantSlug={slug} />
       )}
+      {user?.partnerAccess && <PartnerAccessBanner partnerName={user.partnerAccess.partnerName} shopName={user.partnerAccess.shopName} />}
       <div className="mx-auto max-w-6xl px-6 pb-24 pt-8">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

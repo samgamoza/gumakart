@@ -1,5 +1,6 @@
 "use client";
 
+import { readPartnerRef } from "@/lib/partner-ref";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthError, AuthLayout, AuthSubmitButton } from "@/components/auth-layout";
@@ -44,7 +45,7 @@ export function GoogleShopSetupForm() {
       const res = await fetch("/api/auth/google/complete-shop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...business, chatUrl: business.chatUrl || undefined }),
+        body: JSON.stringify({ ...business, chatUrl: business.chatUrl || undefined, partnerCode: readPartnerRef() ?? undefined }),
       });
       const data = await res.json();
       if (!data.ok) {

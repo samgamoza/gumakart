@@ -5,12 +5,14 @@ import { logActivity, type ActivityInput } from "@gumakart/db";
  * the action it describes.
  */
 export async function recordActivity(
-  session: { tenantId: string; userId: string; displayName?: string | null; shopRole?: string | null; supportAccess?: boolean },
+  session: { tenantId: string; userId: string; displayName?: string | null; shopRole?: string | null; supportAccess?: boolean; partnerName?: string | null },
   input: ActivityInput
 ): Promise<void> {
   const name = session.supportAccess
     ? `Guma support (${session.displayName ?? "ops"})`
-    : session.displayName?.trim() || "Someone";
+    : session.partnerName
+      ? `${session.displayName?.trim() || "Partner"} (${session.partnerName}, partner)`
+      : session.displayName?.trim() || "Someone";
   await logActivity(
     session.tenantId,
     { userId: session.supportAccess ? null : session.userId, name, role: session.supportAccess ? "support" : session.shopRole ?? null },

@@ -25,6 +25,7 @@ import { SETTINGS_SECTIONS } from "@/lib/settings-nav";
 import { planAtLeast, upgradeHref, type SubscriptionPlan } from "@/lib/plan-access";
 import { SuspendedShopNotice } from "@/components/suspended-shop-notice";
 import { SupportAccessBanner } from "@/components/support-access-banner";
+import { PartnerAccessBanner } from "@/components/partner-access-banner";
 import { PlanNoticeBanner } from "@/components/plan-notice-banner";
 import { storefrontBaseUrl } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ interface SessionUser {
   emailVerified: boolean;
   tenantStatus?: string;
   supportAccess?: boolean;
+  partnerAccess?: { partnerName: string; shopName: string } | null;
 }
 
 interface GateTarget {
@@ -87,11 +89,16 @@ export function AdminShell({
         .then((res) => res.json())
         .catch(() => null),
     ]).then(([sessionData, shopData]) => {
+      if (sessionData.partnerRevoked) {
+        window.location.href = sessionData.redirectTo ?? "/partner";
+        return;
+      }
       if (sessionData.ok) {
         setUser({
           ...sessionData.user,
           tenantStatus: shopData?.ok ? shopData.shop.tenant.status : tenant?.status,
           supportAccess: Boolean(sessionData.supportAccess),
+          partnerAccess: sessionData.partnerAccess ?? null,
         });
       }
     });
@@ -163,6 +170,7 @@ export function AdminShell({
           tenantSlug={slug}
         />
       )}
+      {user?.partnerAccess && <PartnerAccessBanner partnerName={user.partnerAccess.partnerName} shopName={user.partnerAccess.shopName} />}
       {shopRole === "owner" && !supportAccess && <PlanNoticeBanner />}
       <div className="relative min-h-screen lg:flex">
       {/* Soft ambient — keep noise low so content stays readable */}

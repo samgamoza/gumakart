@@ -5,7 +5,7 @@ import { canOpenPage, homeFor, shopRoleOf } from "@gumakart/db/staff-permissions
 
 // "/pos" is reachable by cashiers who only have a POS PIN cookie (no seller
 // session); every /api/pos route checks the owner session or that cookie itself.
-const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/kyc/mobile", "/pos", "/invite"];
+const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/kyc/mobile", "/pos", "/invite", "/partners/join"];
 
 const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
@@ -37,7 +37,17 @@ const PUBLIC_API_PREFIXES = [
   // Phase 15: public REST API — a shop API key (Bearer gk_live_…) checked in each route
   // (lib/public-api withApi). Never a session cookie.
   "/api/v1/",
+  // Phase 18: partner signup and the public "who is this partner code" lookup.
+  "/api/partners/signup",
+  "/api/partners/code",
 ];
+
+/** Phase 18: what a partner's own session (no shop) may open. */
+const PARTNER_PATHS = ["/partner", "/api/partner", "/api/auth/logout", "/api/auth/session"];
+
+function isPartnerPath(pathname: string): boolean {
+  return PARTNER_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 const SHOP_SETUP_PATHS = ["/signup/shop", "/api/auth/google/complete-shop", "/api/auth/logout"];
 
@@ -100,6 +110,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
     return pass(request);
+  }
+
+  // Phase 18: a partner's own session only reaches the partner dashboard. (Inside a client
+  // shop the JWT says seller_staff, so the staff page guard below applies instead.)
+  if (session?.role === "partner") {
+    if (pathname === "/login" || pathname === "/signup" || pathname === "/") {
+      return NextResponse.redirect(new URL("/partner", request.url));
+    }
+    if (isPartnerPath(pathname) || isPublic) return pass(request);
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Open a client shop first.", code: "PARTNER_NO_SHOP" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/partner", request.url));
   }
 
   // Only redirect to shop setup when the account truly has no tenant yet.

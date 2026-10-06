@@ -12,7 +12,7 @@ If 0032–0034 haven't been run yet, run them first; `migrate` applies them in o
   - The trigger runs `AFTER INSERT OR UPDATE OF stock_qty`.
   - It does nothing unless the shop has branch stock turned on.
 
-The pending Phase 2 constraints are now `drizzle-pending/0036_phase2_constrain.sql` (journal idx 36).
+The pending Phase 2 constraints are now `drizzle-pending/0037_phase2_constrain.sql` (journal idx 36).
 
 No new secrets.
 

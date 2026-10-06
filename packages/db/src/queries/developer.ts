@@ -11,7 +11,8 @@ import {
   type ApiScope,
   type WebhookEventName,
 } from "../types/developer";
-import { apiCustomersByIds, apiOrdersByIds, apiVariantsByIds } from "./public-api";
+import { apiCustomersByIds,
+  apiProductsByIds, apiOrdersByIds, apiVariantsByIds } from "./public-api";
 
 /**
  * Phase 15 — API keys and webhooks.
@@ -417,10 +418,11 @@ export async function fanOutWebhookEvents(options: { limit?: number } = {}): Pro
         .from(webhookEndpoints)
         .where(and(eq(webhookEndpoints.tenantId, tenantId), eq(webhookEndpoints.active, true)));
       const ids = (type: string) => events.filter((e) => e.entityType === type).map((e) => e.entityId);
-      const [ordersById, variantsById, customersById] = await Promise.all([
+      const [ordersById, variantsById, customersById, productsById] = await Promise.all([
         apiOrdersByIds(tenantId, ids("order")),
         apiVariantsByIds(tenantId, ids("variant")),
         apiCustomersByIds(tenantId, ids("customer")),
+        apiProductsByIds(tenantId, ids("product")),
       ]);
       for (const e of events) {
         const object =
@@ -430,7 +432,9 @@ export async function fanOutWebhookEvents(options: { limit?: number } = {}): Pro
               ? variantsById.get(e.entityId)
               : e.entityType === "customer"
                 ? customersById.get(e.entityId)
-                : undefined;
+                : e.entityType === "product"
+                  ? productsById.get(e.entityId)
+                  : undefined;
         const envelope: WebhookEnvelope = {
           id: e.id,
           type: e.event,

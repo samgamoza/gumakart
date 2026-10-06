@@ -8,6 +8,7 @@ export const SETTINGS_SECTIONS = [
   { href: "/settings/payments", label: "Payments", icon: "💸", description: "GCash / Maya numbers and cash on delivery" },
   { href: "/settings/delivery-shipping", label: "Delivery", icon: "🚚", description: "Pickup, fees, and couriers" },
   { href: "/settings/staff", label: "Staff & roles", icon: "👥", description: "Invite your team; owner, manager, staff or cashier" },
+  { href: "/settings/partner", label: "Partner", icon: "🤝", description: "Let an agency or VA help run your shop" },
   { href: "/settings/activity", label: "Activity", icon: "🕘", description: "Who confirmed payments, changed prices or stock, refunded" },
   { href: "/settings/pos", label: "POS", icon: "🧾", description: "Cashier PINs, VAT, and shift history" },
   { href: "/settings/notifications", label: "Notifications", icon: "🔔", description: "Email and SMS alerts" },

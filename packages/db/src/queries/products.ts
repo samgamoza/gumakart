@@ -328,15 +328,15 @@ export async function updateProductForTenant(
         // The product photo still lives on the first variant.
         await tx.update(productVariants).set({ imageUrl: input.imageUrl }).where(eq(productVariants.id, variant.id));
       }
-      if (variant && !variant.hasOptions) {
-        await tx
-          .update(productVariants)
-          .set({
-            ...(input.basePrice !== undefined ? { price: input.basePrice } : {}),
-            ...(input.stockQty !== undefined ? { stockQty: input.stockQty } : {}),
-            ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
-          })
-          .where(eq(productVariants.id, variant.id));
+      // Title/description/status-only edits have nothing to set on the variant (Phase 18 fix:
+      // an empty .set() threw "No values to set").
+      const variantSet = {
+        ...(input.basePrice !== undefined ? { price: input.basePrice } : {}),
+        ...(input.stockQty !== undefined ? { stockQty: input.stockQty } : {}),
+        ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+      };
+      if (variant && !variant.hasOptions && Object.keys(variantSet).length > 0) {
+        await tx.update(productVariants).set(variantSet).where(eq(productVariants.id, variant.id));
 
         if (input.stockQty !== undefined) {
           await recordStockMovement(tx, {

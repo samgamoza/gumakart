@@ -208,6 +208,8 @@ export function canUseApi(role: ShopRole | null, pathname: string, method: strin
 /** Admin pages → the permission needed to open them (for nav and page guards). */
 export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }> = [
   { prefix: "/settings/staff", permission: "staff.manage" },
+  // Phase 18: who may work in the shop is the owner's call (partners included).
+  { prefix: "/settings/partner", permission: "staff.manage" },
   { prefix: "/settings/activity", permission: "activity.view" },
   { prefix: "/settings/payments", permission: "settings.payments" },
   { prefix: "/settings/pos", permission: "pos.manage" },

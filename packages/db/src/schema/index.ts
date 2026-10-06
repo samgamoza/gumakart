@@ -25,6 +25,8 @@ export const userRoleEnum = pgEnum("user_role", [
   "seller_owner",
   "seller_staff",
   "customer",
+  /** Phase 18: agency partner — no shop of its own; works in shops that granted access. */
+  "partner",
 ]);
 export const productStatusEnum = pgEnum("product_status", [
   "draft",
@@ -355,6 +357,8 @@ export const tenants = pgTable(
     planExpiresAt: timestamp("plan_expires_at", { withTimezone: true }),
     /** Phase 17: stock is tracked per branch (location_stock) once a second branch is added. */
     branchStockEnabled: boolean("branch_stock_enabled").default(false).notNull(),
+    /** Phase 18: the partner whose link the shop signed up through (for a future commission). */
+    referredByPartnerId: uuid("referred_by_partner_id"),
     /** Next per-tenant order sequence number, claimed atomically at checkout. */
     nextOrderSeq: integer("next_order_seq").default(1).notNull(),
     status: varchar("status", { length: 20 }).default("active").notNull(),
@@ -2370,4 +2374,55 @@ export const buyerOtpCodes = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("buyer_otp_codes_phone_idx").on(table.phone, table.createdAt)]
+);
+
+/** Phase 18: agency partners (their own login; status set by Guma Kart ops). */
+export const partners = pgTable(
+  "partners",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    code: varchar("code", { length: 16 }).notNull(),
+    contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+    phone: varchar("phone", { length: 20 }),
+    website: varchar("website", { length: 255 }),
+    city: varchar("city", { length: 120 }),
+    about: varchar("about", { length: 500 }),
+    status: varchar("status", { length: 12 }).$type<"pending" | "active" | "suspended">().default("pending").notNull(),
+    statusNote: varchar("status_note", { length: 300 }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("partners_user_idx").on(table.userId), uniqueIndex("partners_code_idx").on(table.code)]
+);
+
+/** Phase 18: a partner's link to a shop — by referral and/or an owner's access grant. */
+export const partnerShops = pgTable(
+  "partner_shops",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    partnerId: uuid("partner_id")
+      .references(() => partners.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    source: varchar("source", { length: 10 }).$type<"referral" | "grant">().notNull(),
+    accessRole: varchar("access_role", { length: 10 }).$type<"manager" | "staff">(),
+    grantedBy: uuid("granted_by").references(() => users.id, { onDelete: "set null" }),
+    grantedAt: timestamp("granted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("partner_shops_pair_idx").on(table.partnerId, table.tenantId),
+    index("partner_shops_tenant_idx").on(table.tenantId),
+  ]
 );

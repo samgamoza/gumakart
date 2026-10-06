@@ -25,6 +25,7 @@ import {
   Store,
   Truck,
   Users,
+  Handshake,
 } from "lucide-react";
 import type { SubscriptionPlan } from "@/lib/plan-access";
 
@@ -285,6 +286,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         icon: MapPin,
         badge: "new",
         description: "Stores, stalls and warehouses — stock per branch, POS per branch.",
+      },
+      {
+        id: "settings-partner",
+        label: "Partner",
+        href: "/settings/partner",
+        icon: Handshake,
+        badge: "new",
+        description: "Let an agency or VA help run your shop.",
       },
       {
         id: "settings-pos",

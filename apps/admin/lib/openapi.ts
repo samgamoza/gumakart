@@ -159,7 +159,7 @@ export function openApiDocument(baseUrl: string) {
             type: { type: "string", enum: [...WEBHOOK_EVENTS, "webhook.test"], description: WEBHOOK_EVENTS.map((e) => `${e}: ${WEBHOOK_EVENT_LABELS[e]}`).join(" ") },
             created_at: ts,
             shop: { type: "object", properties: { id: { type: "string" }, slug: { type: "string" } } },
-            data: { type: "object", properties: { object: { description: "An Order, StockRow or Customer, as the API returns it." } } },
+            data: { type: "object", properties: { object: { description: "An Order, StockRow, Customer or Product, as the API returns it." } } },
           },
         },
       },
@@ -216,6 +216,29 @@ export function openApiDocument(baseUrl: string) {
           parameters: [q("status", "draft, active, archived"), ...paging],
           responses: { "200": { description: "A page of products", ...json(page("#/components/schemas/Product")) }, ...errors },
         },
+        post: {
+          summary: "Add a simple product (one variant). Defaults to draft. Options/variants are set up in the dashboard.",
+          "x-scope": "products:write",
+          requestBody: {
+            required: true,
+            ...json({
+              type: "object",
+              required: ["title", "price"],
+              properties: {
+                title: { type: "string", minLength: 2, maxLength: 255 },
+                price: { type: "number", minimum: 0 },
+                compare_at_price: nullable({ type: "number", description: "Higher than price (shown crossed out)" }),
+                description_html: nullable({ type: "string" }),
+                status: { type: "string", enum: ["draft", "active"], default: "draft" },
+                stock: nullable({ type: "integer", minimum: 0 }),
+                sku: nullable({ type: "string" }),
+                barcode: nullable({ type: "string" }),
+                image_url: nullable({ type: "string", format: "uri" }),
+              },
+            }),
+          },
+          responses: { "201": { description: "The new product", ...json(one("#/components/schemas/Product")) }, ...errors },
+        },
       },
       "/products/{id}": {
         get: {
@@ -223,6 +246,45 @@ export function openApiDocument(baseUrl: string) {
           "x-scope": "products:read",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
           responses: { "200": { description: "The product", ...json(one("#/components/schemas/Product")) }, "404": { description: "Not found" }, ...errors },
+        },
+        patch: {
+          summary: "Change title, description, price, compare-at price or status (never deletes). Products with options: set prices per variant.",
+          "x-scope": "products:write",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          requestBody: {
+            required: true,
+            ...json({
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                description_html: nullable({ type: "string" }),
+                price: { type: "number", minimum: 0 },
+                compare_at_price: nullable({ type: "number" }),
+                status: { type: "string", enum: ["draft", "active", "archived"] },
+              },
+            }),
+          },
+          responses: { "200": { description: "The updated product", ...json(one("#/components/schemas/Product")) }, "404": { description: "Not found" }, ...errors },
+        },
+      },
+      "/variants/{id}": {
+        patch: {
+          summary: "Change a variant's price, compare-at price, SKU or barcode (stock: PUT /inventory)",
+          "x-scope": "products:write",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          requestBody: {
+            required: true,
+            ...json({
+              type: "object",
+              properties: {
+                price: { type: "number", minimum: 0 },
+                compare_at_price: nullable({ type: "number" }),
+                sku: nullable({ type: "string" }),
+                barcode: nullable({ type: "string" }),
+              },
+            }),
+          },
+          responses: { "200": { description: "The updated variant", ...json(one("#/components/schemas/StockRow")) }, "404": { description: "Not found" }, ...errors },
         },
       },
       "/inventory": {

@@ -2,6 +2,7 @@ import { getUserSessionById, isSessionCurrent } from "@gumakart/auth";
 import {
   getTenantStatusById,
   sellerWriteHttpRejectionForStatus,
+  verifyPartnerAccess,
 } from "@gumakart/db";
 import {
   can,
@@ -52,6 +53,8 @@ export async function requireTenantSession(
     tenantName: string;
     supportAccess: boolean;
     shopRole: ShopRole;
+    /** Phase 18: set when an agency partner is working in this shop (its name). */
+    partnerName?: string | null;
   }
 > {
   const session = await getSession();
@@ -81,6 +84,41 @@ export async function requireTenantSession(
       needsShopSetup: false,
       supportAccess: true,
       shopRole: "owner",
+    };
+  }
+
+  // Phase 18: an agency partner working in a client's shop. The JWT names the shop; the grant is
+  // re-checked here on every call (owner revoke / ops suspend take effect at once). Fail closed.
+  if (session.partnerAccess) {
+    if (session.role !== "seller_staff" || !session.tenantId) {
+      throw new ApiAuthError("Partner session is missing shop context.", 403, "PARTNER_ACCESS_REVOKED");
+    }
+    const access = await verifyPartnerAccess(session.userId, session.partnerAccess, session.tenantId);
+    if (!access) {
+      throw new ApiAuthError(
+        "Your access to this shop was removed. Go back to your partner dashboard.",
+        403,
+        "PARTNER_ACCESS_REVOKED"
+      );
+    }
+    const req = await requestPathAndMethod();
+    if (!req || !canUseApi(access.role, req.path, req.method)) {
+      throw new ApiAuthError(forbiddenMessage(access.role), 403, "ROLE_FORBIDDEN");
+    }
+    if (!options.allowSuspended) {
+      const rejection = sellerWriteHttpRejectionForStatus(access.tenantStatus as Parameters<typeof sellerWriteHttpRejectionForStatus>[0]);
+      if (rejection) throw new ApiAuthError(rejection.error, rejection.httpStatus, rejection.code);
+    }
+    return {
+      ...session,
+      tenantId: access.tenantId,
+      tenantSlug: access.tenantSlug,
+      tenantName: access.tenantName,
+      needsShopSetup: false,
+      supportAccess: false,
+      staffRole: access.role,
+      shopRole: access.role,
+      partnerName: access.partnerName,
     };
   }
 

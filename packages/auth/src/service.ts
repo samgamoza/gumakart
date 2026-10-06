@@ -79,7 +79,8 @@ function toSessionUser(
     tenantName: tenant?.name ?? null,
     displayName: user.profileJson?.displayName ?? user.email ?? "Seller",
     emailVerified: Boolean(user.emailVerifiedAt),
-    needsShopSetup: !tenant,
+    // Phase 18: partners have no shop of their own — never send them to shop setup.
+    needsShopSetup: user.role === "partner" ? false : !tenant,
     sessionVersion: user.sessionVersion ?? 0,
   };
 }
@@ -249,14 +250,15 @@ export async function loginUser(input: LoginInput): Promise<{
   const email = normalizeEmail(input.email);
   const db = getDb();
 
+  // Phase 18: partners sign in without a shop; everyone else still needs one.
   const [row] = await db
     .select({ user: users, tenant: tenants })
     .from(users)
-    .innerJoin(tenants, eq(users.tenantId, tenants.id))
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .where(eq(users.email, email))
     .limit(1);
 
-  if (!row) {
+  if (!row || (!row.tenant && row.user.role !== "partner")) {
     throw new AuthError("Invalid email or password.", "INVALID_CREDENTIALS");
   }
 
@@ -269,7 +271,7 @@ export async function loginUser(input: LoginInput): Promise<{
     throw new AuthError("Invalid email or password.", "INVALID_CREDENTIALS");
   }
 
-  if (row.user.role !== "seller_owner" && row.user.role !== "seller_staff") {
+  if (row.user.role !== "seller_owner" && row.user.role !== "seller_staff" && row.user.role !== "partner") {
     throw new AuthError("This account cannot access the seller dashboard.", "INVALID_CREDENTIALS");
   }
 
@@ -506,6 +508,42 @@ export async function completeGoogleShopSetup(input: CompleteGoogleShopInput): P
   const sessionToken = await createSessionToken(sessionUser);
 
   return { user: sessionUser, sessionToken };
+}
+
+/** Phase 18: a partner account (no shop). The partners row is created by @gumakart/db. */
+export async function registerPartnerUser(input: {
+  email: string;
+  password: string;
+  displayName: string;
+  emailVerified?: boolean;
+}): Promise<{ userId: string }> {
+  const email = normalizeEmail(input.email);
+  const passwordCheck = validatePasswordStrength(input.password);
+  if (!passwordCheck.ok) throw new AuthError(passwordCheck.reason, "WEAK_PASSWORD");
+  const db = getDb();
+  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+  if (existing) throw new AuthError("An account with this email already exists.", "EMAIL_TAKEN");
+  const passwordHash = await hashPassword(input.password);
+  const [user] = await db
+    .insert(users)
+    .values({
+      email,
+      passwordHash,
+      role: "partner",
+      tenantId: null,
+      profileJson: { displayName: input.displayName.trim() },
+      emailVerifiedAt: input.emailVerified ? new Date() : null,
+    })
+    .returning({ id: users.id });
+  if (!user) throw new Error("Failed to create partner user");
+  return { userId: user.id };
+}
+
+/** Phase 18: a session token for a user as stored (used to leave partner mode). */
+export async function sessionTokenForUser(userId: string): Promise<{ user: SessionUser; sessionToken: string } | null> {
+  const user = await getUserSessionById(userId);
+  if (!user) return null;
+  return { user, sessionToken: await createSessionToken(user) };
 }
 
 export async function getUserSessionById(userId: string): Promise<SessionUser | null> {
