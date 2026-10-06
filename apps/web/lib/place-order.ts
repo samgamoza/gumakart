@@ -42,7 +42,7 @@ import {
 const log = createLogger("checkout");
 import { getCheckoutDeliveryQuote } from "@/lib/delivery-quote";
 import { currentBuyer } from "@/lib/guma-id";
-import { linkOrderToBuyer } from "@gumakart/db";
+import { attachReferralCode, linkOrderToBuyer } from "@gumakart/db";
 import { checkoutDeliveryFee } from "@gumakart/db/shipping";
 import {
   resolveDelivery,
@@ -59,6 +59,8 @@ export const checkoutSchema = z.object({
   couponCode: z.string().trim().max(64).optional(),
   /** Phase 17: gift card / store credit code (pays as much as its balance covers). */
   giftCardCode: z.string().trim().max(24).optional(),
+  /** Phase 32: the Suki referral code the buyer arrived with (?ref=…), checked server-side. */
+  referralCode: z.string().trim().max(16).optional(),
   /** Unticked by default: "Text me reminders about this order". */
   smsConsent: z.boolean().optional().default(false),
   customer: z.object({
@@ -355,6 +357,12 @@ export async function placeOrder(
       utmJson: ctx.utm ?? null,
       giftCardCode: body.giftCardCode || null,
     });
+
+    if (body.referralCode) {
+      await attachReferralCode(order.tenantId, order.id, body.referralCode).catch((error) =>
+        console.error("[checkout] referral attach failed:", error)
+      );
+    }
 
     // Phase 12: a signed-in Guma ID buyer whose verified number is on the order gets it
     // in "My orders" (only when the numbers match — never someone else's order).

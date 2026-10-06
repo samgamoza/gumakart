@@ -1,4 +1,5 @@
 import { Card } from "@gumakart/ui";
+import { SukiShare } from "@/components/suki-share";
 
 const LABEL: Record<string, string> = { bronze: "Bronze", silver: "Silver", gold: "Gold", platinum: "Platinum" };
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
@@ -6,8 +7,20 @@ const peso = (n: number) => `₱${n.toLocaleString("en-PH", { maximumFractionDig
 /** Phase 27: the buyer's Suki points at this shop, on the order page (only when the shop has it on). */
 export function SukiOrderCard({
   data,
+  slug,
 }: {
-  data: { shopName: string; earned: number; pending: number; balance: number; tier: string; next: { tier: string; needed: number } | null; creditValue: number; minRedeem: number };
+  data: {
+    shopName: string;
+    earned: number;
+    pending: number;
+    balance: number;
+    tier: string;
+    next: { tier: string; needed: number } | null;
+    creditValue: number;
+    minRedeem: number;
+    referral: { code: string; referrerReward: number; friendReward: number; minOrder: number } | null;
+  };
+  slug: string;
 }) {
   return (
     <div data-testid="suki-card">
@@ -34,6 +47,7 @@ export function SukiOrderCard({
           : `Pwede nang gamitin pag ${data.minRedeem} points na.`}
         {data.next ? ` ${peso(data.next.needed)} pa para maging Suki ${LABEL[data.next.tier] ?? data.next.tier} (mas maraming points).` : ""}
       </p>
+      {data.referral && <SukiShare slug={slug} shopName={data.shopName} referral={data.referral} />}
     </Card>
     </div>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { readReferral } from "@/lib/referral-capture";
 import { GiftCardInput, type AppliedGiftCard } from "@/components/gift-card-input";
 import { storedUtm } from "@/components/storefront/attribution-capture";
 import { useEffect, useMemo, useState } from "react";
@@ -342,6 +343,7 @@ export function CheckoutForm({
           sessionKey: sessionKey || undefined,
           couponCode: couponCode.trim() || undefined,
           giftCardCode: giftCard?.code,
+          referralCode: readReferral(tenantSlug),
           smsConsent,
           utm: storedUtm(tenantSlug),
           customer: {

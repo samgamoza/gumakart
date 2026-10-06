@@ -13,6 +13,7 @@ import { GumaIdSignIn } from "@/components/guma-id/sign-in";
 import { maskPhone, toKartAddress, useGumaId } from "@/components/guma-id/use-guma-id";
 import { Field, SectionTitle } from "@/components/kart/ui";
 import { EMPTY_ADDRESS, formatAddress, isAddressComplete, type KartAddress } from "@/lib/kart/ph-address";
+import { captureReferral, readReferral } from "@/lib/referral-capture";
 
 // ─── Data from the server page ───────────────────────────────────────────────
 
@@ -95,6 +96,8 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   const [address, setAddress] = useState<KartAddress>(EMPTY_ADDRESS);
   const [method, setMethod] = useState<LinkPaymentId | null>(data.payments.length === 1 ? data.payments[0]!.id : null);
   const [smsConsent, setSmsConsent] = useState(false);
+  // Phase 32: remember a ?ref= Suki referral code for this shop.
+  useEffect(() => captureReferral(data.shop.slug), [data.shop.slug]);
   // Phase 12: Guma ID pre-fill (buyer's own saved details, never shown to other shops).
   const gid = useGumaId();
   const [gidOpen, setGidOpen] = useState(false);
@@ -282,6 +285,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
           fulfillment,
           smsConsent,
           giftCardCode: giftCard?.code,
+          referralCode: readReferral(data.shop.slug),
           customer: { name: name.trim(), phone: phMobile(phone), email: email.trim() || undefined },
           ...(fulfillment === "delivery"
             ? {

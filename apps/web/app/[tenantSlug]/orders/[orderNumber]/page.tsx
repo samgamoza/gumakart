@@ -305,7 +305,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
           />
         ) : null}
 
-        {suki && !isCancelled ? <SukiOrderCard data={suki} /> : null}
+        {suki && !isCancelled ? <SukiOrderCard data={suki} slug={tenantSlug} /> : null}
 
         {!isCancelled && (
           <Card>

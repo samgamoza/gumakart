@@ -12,7 +12,7 @@ import { smsCampaignRecipients, smsCampaigns, type CampaignStatus } from "../sch
  * outside quiet hours only, and never texts a number twice for the same campaign.
  */
 
-export const SEGMENT_KINDS = ["all", "repeat", "vip", "lapsed", "new", "channel"] as const;
+export const SEGMENT_KINDS = ["all", "repeat", "vip", "lapsed", "new", "channel", "suki"] as const;
 export type SegmentKind = (typeof SEGMENT_KINDS)[number];
 
 export interface CampaignSegment {
@@ -23,6 +23,8 @@ export interface CampaignSegment {
   days?: number;
   /** channel: bought at least once through this sales channel. */
   channel?: string;
+  /** Phase 32 suki: Suki tier at least this (12-month spend vs the shop's tier amounts) and no order in `days`. */
+  minTier?: "silver" | "gold" | "platinum";
 }
 
 export const MAX_CAMPAIGN_RECIPIENTS = 5000;
@@ -43,6 +45,10 @@ export function normalizeSegment(raw: unknown): CampaignSegment {
   if (kind === "vip") out.minSpend = Math.max(1, Math.min(Number(s.minSpend) || 5000, 10_000_000));
   if (kind === "lapsed") out.days = Math.max(14, Math.min(Math.trunc(Number(s.days) || 60), 730));
   if (kind === "new") out.days = Math.max(1, Math.min(Math.trunc(Number(s.days) || 30), 365));
+  if (kind === "suki") {
+    out.minTier = s.minTier === "gold" || s.minTier === "platinum" ? s.minTier : "silver";
+    out.days = Math.max(14, Math.min(Math.trunc(Number(s.days) || 45), 730));
+  }
   if (kind === "channel") out.channel = String(s.channel ?? "facebook").replace(/[^a-z_]/g, "").slice(0, 20) || "facebook";
   return out;
 }
@@ -61,6 +67,8 @@ export function describeSegment(s: CampaignSegment): string {
       return `First order in the last ${s.days} days`;
     case "channel":
       return `Bought through ${s.channel}`;
+    case "suki":
+      return `Suki ${s.minTier === "platinum" ? "Platinum" : s.minTier === "gold" ? "Gold+" : "Silver+"} who haven't ordered in ${s.days} days`;
   }
 }
 
@@ -70,7 +78,9 @@ function segmentQuery(tenantId: string, segment: CampaignSegment, now: Date) {
   const stats = sql`(
     select o.customer_record_id as cid, count(*) as n, coalesce(sum(o.total - coalesce(o.refunded_amount, 0)), 0) as spent,
            max(o.created_at) as last_at, min(o.created_at) as first_at,
-           bool_or(o.sales_channel = ${s.channel ?? ""}) as via_channel
+           bool_or(o.sales_channel = ${s.channel ?? ""}) as via_channel,
+           coalesce(sum(greatest(0, o.total - coalesce(o.delivery_fee, 0) - coalesce(o.gift_card_amount, 0) - coalesce(o.refunded_amount, 0)))
+             filter (where o.created_at >= ${new Date(now.getTime() - 365 * 86_400_000).toISOString()}::timestamptz), 0) as spent12m
     from orders o
     where o.tenant_id = ${tenantId} and o.customer_record_id is not null
       and coalesce(o.order_state::text, 'open') <> 'cancelled' and o.voided_at is null
@@ -86,7 +96,11 @@ function segmentQuery(tenantId: string, segment: CampaignSegment, now: Date) {
             ? sql`st.first_at >= ${new Date(now.getTime() - (s.days ?? 30) * 86_400_000).toISOString()}::timestamptz`
             : s.kind === "channel"
               ? sql`st.via_channel`
-              : sql`true`;
+              : s.kind === "suki"
+                ? sql`st.last_at < ${new Date(now.getTime() - (s.days ?? 45) * 86_400_000).toISOString()}::timestamptz
+                    and st.spent12m >= coalesce((select (t.settings_json -> 'loyalty' -> 'tiers' ->> ${s.minTier ?? "silver"})::numeric from tenants t where t.id = ${tenantId}),
+                                                ${s.minTier === "platinum" ? 40000 : s.minTier === "gold" ? 15000 : 5000})`
+                : sql`true`;
   return sql`
     select c.id as customer_id, c.phone, c.name
     from customers c join ${stats} st on st.cid = c.id

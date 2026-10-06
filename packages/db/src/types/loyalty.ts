@@ -32,6 +32,44 @@ export interface TenantLoyaltySettings {
   minRedeem?: number;
   /** 12-month spend needed for silver / gold / platinum. */
   tiers?: { silver?: number; gold?: number; platinum?: number };
+  /** Phase 32: buyer referrals ("give ₱50, get ₱50"), paid as store credit. */
+  referral?: { enabled?: boolean; referrerReward?: number; friendReward?: number; minOrder?: number; monthlyCap?: number };
+}
+
+export interface ReferralRules {
+  enabled: boolean;
+  referrerReward: number;
+  friendReward: number;
+  /** The friend's first order (items, after discount) must be at least this. */
+  minOrder: number;
+  /** Most rewarded referrals per referrer per calendar month (Manila). */
+  monthlyCap: number;
+}
+
+export const REFERRAL_DEFAULTS: ReferralRules = { enabled: false, referrerReward: 50, friendReward: 50, minOrder: 300, monthlyCap: 10 };
+
+export function referralRules(s: TenantLoyaltySettings | null | undefined): ReferralRules {
+  const r = s?.referral;
+  const d = REFERRAL_DEFAULTS;
+  return {
+    enabled: r?.enabled === true,
+    referrerReward: Math.round(clampNum(r?.referrerReward, 0, 5000, d.referrerReward) * 100) / 100,
+    friendReward: Math.round(clampNum(r?.friendReward, 0, 5000, d.friendReward) * 100) / 100,
+    minOrder: Math.round(clampNum(r?.minOrder, 0, 1_000_000, d.minOrder)),
+    monthlyCap: Math.round(clampNum(r?.monthlyCap, 1, 100, d.monthlyCap)),
+  };
+}
+
+/** Referral codes avoid look-alike characters (no 0/O, 1/I/L). */
+export function newReferralCode(): string {
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(6));
+  return `S${[...bytes].map((b) => A[b % A.length]).join("")}`;
+}
+
+export function normalizeReferralCode(raw: string | null | undefined): string | null {
+  const c = (raw ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return /^S[A-Z0-9]{6}$/.test(c) ? c : null;
 }
 
 export interface LoyaltyRules {

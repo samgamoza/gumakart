@@ -10,13 +10,14 @@ import { Button, Card, formatPrice } from "@gumakart/ui";
  * Semaphore stays ready to hook up: without it the composer saves drafts and explains.
  */
 
-type SegmentKind = "all" | "repeat" | "vip" | "lapsed" | "new" | "channel";
+type SegmentKind = "all" | "repeat" | "vip" | "lapsed" | "new" | "channel" | "suki";
 
 interface Segment {
   kind: SegmentKind;
   minSpend?: number;
   days?: number;
   channel?: string;
+  minTier?: "silver" | "gold" | "platinum";
 }
 
 interface Campaign {
@@ -43,7 +44,12 @@ const SEGMENTS: Array<{ kind: SegmentKind; label: string; hint: string }> = [
   { kind: "lapsed", label: "Haven't ordered lately", hint: "Win them back" },
   { kind: "new", label: "New buyers", hint: "First order recently" },
   { kind: "channel", label: "By channel", hint: "Bought through TikTok, Facebook…" },
+  { kind: "suki", label: "Suki win-back", hint: "Silver+ buyers who stopped ordering" },
 ];
+
+/** Phase 32: a starting message for the Suki win-back preset (seller edits before sending). */
+const SUKI_WINBACK_BODY = "Hi {name}! Miss ka na namin. May bagong stocks kami, silipin mo dito:";
+const DEFAULT_BODY = "Hi {name}! Payday sale: 10% off everything until Sunday. Order here:";
 
 const STATUS: Record<Campaign["status"], string> = {
   draft: "bg-white/10 text-muted-foreground",
@@ -225,7 +231,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function Composer({ smsReady, onClose, onDone }: { smsReady: boolean; onClose: () => void; onDone: () => Promise<void> }) {
   const [name, setName] = useState("");
   const [segment, setSegment] = useState<Segment>({ kind: "all" });
-  const [body, setBody] = useState("Hi {name}! Payday sale: 10% off everything until Sunday. Order here:");
+  const [body, setBody] = useState(DEFAULT_BODY);
   const [when, setWhen] = useState<"now" | "later">("now");
   const [at, setAt] = useState("");
   const [preview, setPreview] = useState<{ count: number; consented: number; preview: string | null; segments: number | null; sample: string[] } | null>(null);
@@ -283,7 +289,10 @@ function Composer({ smsReady, onClose, onDone }: { smsReady: boolean; onClose: (
               <button
                 key={s.kind}
                 type="button"
-                onClick={() => setSegment({ kind: s.kind, ...(s.kind === "vip" ? { minSpend: 3000 } : s.kind === "lapsed" ? { days: 60 } : s.kind === "new" ? { days: 30 } : s.kind === "channel" ? { channel: "tiktok" } : {}) })}
+                onClick={() => {
+                  setSegment({ kind: s.kind, ...(s.kind === "vip" ? { minSpend: 3000 } : s.kind === "lapsed" ? { days: 60 } : s.kind === "new" ? { days: 30 } : s.kind === "channel" ? { channel: "tiktok" } : s.kind === "suki" ? { minTier: "silver" as const, days: 45 } : {}) });
+                  if (s.kind === "suki" && (!body.trim() || body === DEFAULT_BODY)) setBody(SUKI_WINBACK_BODY);
+                }}
                 className={`rounded-xl border p-2.5 text-left text-sm ${segment.kind === s.kind ? "border-violet-500 bg-violet-600/15" : "border-white/10 hover:border-white/20"}`}
                 aria-pressed={segment.kind === s.kind}
               >
@@ -303,6 +312,18 @@ function Composer({ smsReady, onClose, onDone }: { smsReady: boolean; onClose: (
               <>
                 {segment.kind === "lapsed" ? "No order in the last" : "First order in the last"}
                 <input type="number" min="1" className="guma-field h-9 w-20" value={segment.days ?? 30} onChange={(e) => setSegment({ ...segment, days: Math.trunc(Number(e.target.value)) || 30 })} aria-label="Days" />
+                days
+              </>
+            )}
+            {segment.kind === "suki" && (
+              <>
+                <select className="guma-field h-9 w-36" value={segment.minTier ?? "silver"} onChange={(e) => setSegment({ ...segment, minTier: e.target.value as "silver" | "gold" | "platinum" })} aria-label="Suki tier">
+                  <option value="silver">Silver and up</option>
+                  <option value="gold">Gold and up</option>
+                  <option value="platinum">Platinum</option>
+                </select>
+                no order in the last
+                <input type="number" min="14" className="guma-field h-9 w-20" value={segment.days ?? 45} onChange={(e) => setSegment({ ...segment, days: Math.trunc(Number(e.target.value)) || 45 })} aria-label="Days" />
                 days
               </>
             )}

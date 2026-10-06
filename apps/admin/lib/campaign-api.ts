@@ -8,6 +8,8 @@ export const segmentSchema = z.object({
   minSpend: z.number().min(1).max(10_000_000).optional(),
   days: z.number().int().min(1).max(730).optional(),
   channel: z.string().max(20).optional(),
+  /** Phase 32: Suki win-back. */
+  minTier: z.enum(["silver", "gold", "platinum"]).optional(),
 });
 
 export function campaignFail(error: unknown, label: string): NextResponse {

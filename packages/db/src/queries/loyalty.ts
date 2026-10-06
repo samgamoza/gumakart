@@ -12,6 +12,7 @@ import {
   type TenantLoyaltySettings,
 } from "../types/loyalty";
 import { issueGiftCardInTx } from "./gift-cards";
+import { ensureReferralCode, getReferralRules } from "./referrals";
 
 /**
  * Phase 27: Suki loyalty points.
@@ -54,7 +55,8 @@ export async function saveLoyaltySettings(tenantId: string, input: TenantLoyalty
   const before = loyaltyRules(current.loyalty);
   const merged = loyaltyRules({ ...current.loyalty, ...input, tiers: { ...current.loyalty?.tiers, ...input.tiers } });
   const enabledAt = merged.enabled ? (before.enabled && before.enabledAt ? before.enabledAt : new Date().toISOString()) : before.enabledAt;
-  const loyalty: TenantLoyaltySettings = { ...merged, enabledAt: enabledAt ?? undefined };
+  // Keep the Phase 32 referral rules, which live alongside.
+  const loyalty: TenantLoyaltySettings = { ...merged, enabledAt: enabledAt ?? undefined, ...(current.loyalty?.referral ? { referral: current.loyalty.referral } : {}) };
   await db.update(tenants).set({ settingsJson: { ...current, loyalty } as never, updatedAt: new Date() }).where(eq(tenants.id, tenantId));
   return loyaltyRules(loyalty);
 }
@@ -240,6 +242,8 @@ export async function getOrderLoyalty(orderId: string): Promise<null | {
   next: { tier: SukiTier; needed: number } | null;
   creditValue: number;
   minRedeem: number;
+  /** Phase 32: the buyer's share code and rewards, when referrals are on. */
+  referral: { code: string; referrerReward: number; friendReward: number; minOrder: number } | null;
 }> {
   const [o] = await rows<{ tenant_id: string; customer_id: string | null; name: string; amount: string; live: boolean; paid: boolean }>(sql`
     select o.tenant_id, o.customer_record_id as customer_id, t.name, ${EARN_AMOUNT} as amount, (${LIVE}) as live, (${PAID}) as paid
@@ -250,7 +254,12 @@ export async function getOrderLoyalty(orderId: string): Promise<null | {
   const [e] = await rows<{ p: string }>(sql`select coalesce(sum(points), 0) as p from loyalty_ledger where order_id = ${orderId} and kind in ('earn', 'reverse')`);
   const earned = num(e?.p);
   const pending = !o.paid && o.live && earned === 0 ? pointsFor(num(o.amount), standing.tier, standing.rules) : 0;
+  const rr = await getReferralRules(o.tenant_id);
+  const referral = rr.enabled
+    ? { code: await ensureReferralCode(o.tenant_id, o.customer_id), referrerReward: rr.referrerReward, friendReward: rr.friendReward, minOrder: rr.minOrder }
+    : null;
   return {
+    referral,
     shopName: o.name,
     earned,
     pending,

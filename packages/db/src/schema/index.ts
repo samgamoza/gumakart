@@ -608,6 +608,8 @@ export const customers = pgTable(
     smsMarketingOptIn: boolean("sms_marketing_opt_in").default(false).notNull(),
     smsOptInAt: timestamp("sms_opt_in_at", { withTimezone: true }),
     smsOptInSource: varchar("sms_opt_in_source", { length: 40 }),
+    /** Phase 32: this buyer's referral code at this shop (made on first use). */
+    referralCode: varchar("referral_code", { length: 12 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -706,6 +708,8 @@ export const orders = pgTable(
     socialThreadId: uuid("social_thread_id").references((): AnyPgColumn => socialThreads.id, { onDelete: "set null" }),
     /** Phase 17: part of the total paid with a gift card / store credit (amount due = total − this). */
     giftCardAmount: decimal("gift_card_amount", { precision: 12, scale: 2 }).default("0").notNull(),
+    /** Phase 32: referral code the buyer arrived with (checked against this shop's customers). */
+    referralCode: varchar("referral_code", { length: 12 }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -2459,5 +2463,29 @@ export const loyaltyLedger = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("loyalty_ledger_customer_idx").on(table.tenantId, table.customerId)]
+);
+
+/** Phase 32: one row per referred friend (rewarded or blocked, never both, never twice). */
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    referrerCustomerId: uuid("referrer_customer_id")
+      .references(() => customers.id, { onDelete: "cascade" })
+      .notNull(),
+    friendCustomerId: uuid("friend_customer_id")
+      .references(() => customers.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    status: varchar("status", { length: 10 }).$type<"rewarded" | "blocked">().notNull(),
+    reason: varchar("reason", { length: 120 }),
+    referrerCardId: uuid("referrer_card_id").references(() => giftCards.id, { onDelete: "set null" }),
+    friendCardId: uuid("friend_card_id").references(() => giftCards.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("referrals_referrer_idx").on(table.tenantId, table.referrerCustomerId, table.createdAt)]
 );
 

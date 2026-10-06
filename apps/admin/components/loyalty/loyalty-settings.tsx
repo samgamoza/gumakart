@@ -5,6 +5,7 @@ import { Button, formatPrice } from "@gumakart/ui";
 import { SettingsPageLayout } from "@/components/settings/settings-shell";
 import { SettingsCard, SettingsField, inputClassName } from "@/components/settings/settings-forms";
 import { TierBadge } from "./tier-badge";
+import { ReferralSettings } from "./referral-settings";
 
 interface Rules {
   enabled: boolean;
@@ -105,6 +106,8 @@ export function LoyaltySettingsPage() {
             </Button>
             {msg && <p role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-emerald-600" : "text-red-500"}`}>{msg.text}</p>}
           </div>
+
+          <ReferralSettings loyaltyOn={summary.rules.enabled} />
 
           <SettingsCard title="Your Suki">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

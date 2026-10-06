@@ -5,6 +5,7 @@ import { StorefrontTracking } from "@/components/storefront/storefront-tracking"
 import { StorefrontJsonLd } from "@/components/storefront/storefront-json-ld";
 import { VariantProductRegistry } from "@/components/storefront/variant-product-registry";
 import { AttributionCapture } from "@/components/storefront/attribution-capture";
+import { ReferralCapture } from "@/components/referral-capture";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -31,6 +32,7 @@ export default async function TenantStorefrontLayout({ children, params }: Layou
     <div className={`${spaceGrotesk.variable} ${inter.variable}`}>
       {tenant && <StorefrontTracking tracking={tenant.storeSettings.tracking} />}
       {tenant && <AttributionCapture tenantSlug={tenant.slug} />}
+      {tenant && <ReferralCapture slug={tenant.slug} />}
       {tenant && (
         <VariantProductRegistry
           tenantSlug={tenant.slug}

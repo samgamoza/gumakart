@@ -1014,3 +1014,14 @@ export {
   type CustomerLoyalty,
   type LoyaltySummary,
 } from "./queries/loyalty";
+
+// Phase 32: buyer referrals.
+export {
+  getReferralRules,
+  ensureReferralCode,
+  attachReferralCode,
+  syncReferrals,
+  getReferralSummary,
+  saveReferralSettings,
+  type ReferralSummary,
+} from "./queries/referrals";
