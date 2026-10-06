@@ -35,7 +35,8 @@ were verified on 2026-10-06 and can go stale.
 | 26, 27 | AI seller assistant; Suki loyalty tiers (migration `0038_loyalty`) | Approved (`fb2c3ca`) |
 | 31 | palenkeAi harvest quick wins: supplier message, new-order chime, POS beep/full screen/58mm, GoTyme label — `docs/PHASE-31-NOTES.md` | Approved (`0d9c454`) |
 | 32 | Buyer referrals "give ₱50, get ₱50" (store credit) + Suki win-back SMS audience (migration `0039_referrals`) — `docs/PHASE-32-NOTES.md` | Approved (`7feead1`) |
-| **33** | **Compare couriers, fill a listing from a photo, background-removal cap, next-30-days forecast** — `docs/PHASE-33-NOTES.md` | **Built, in review** |
+| 33 | Compare couriers, fill a listing from a photo, background-removal cap, next-30-days forecast — `docs/PHASE-33-NOTES.md` | Approved (`b098ed4`) |
+| **23** | **Verified reviews: buyer stars/text/photos, seller reply/hide/report, storefront stars + trust bar, ops review reports, opt-in SMS ask (migration `0040_reviews`)** — `docs/PHASE-23-NOTES.md` | **Built, in review** |
 
 ## The launch track (not code: Sam's to-dos)
 
@@ -89,7 +90,7 @@ button (only a demo button in `v0-store/live-selling`), wishlists, pre-orders.
 **Needs:** Semaphore and/or Resend for the notifications. Without them, the seller sees the list and
 messages buyers manually.
 
-### Phase 23 — Trust and social proof (M)
+### Phase 23 — Trust and social proof (M) · ✅ built (`docs/PHASE-23-NOTES.md`; Q&A not built)
 
 **Why.** Chat buyers ask "legit ba?". Real reviews from real orders answer that, and fit our rule
 against invented numbers.
@@ -286,7 +287,7 @@ These are the follow-ups gathered from the Phase 18–21 notes.
 | Load test before the first big SMS campaign or live sale | Roadmap ops track | Every-minute cron, outbox, Neon connection limits |
 | External uptime monitor on `kart.guma.one/api/status` | Phase 16 | Free UptimeRobot |
 | Rotate `AUTH_SECRET` only together with a 2FA reset | Phase 21 | It keys the stored authenticator secrets |
-| Move `drizzle-pending/0040_phase2_constrain.sql` into the journal after a clean week of `phase2-verify.sql` | Phase 2 | Renumber it whenever a phase adds a migration |
+| Move `drizzle-pending/0041_phase2_constrain.sql` into the journal after a clean week of `phase2-verify.sql` | Phase 2 | Renumber it whenever a phase adds a migration |
 | Self-serve ops password reset (deliberately absent) | Phase 19 | Revisit only together with Phase 28's ops 2FA reset |
 
 ## Not planned (on purpose)

@@ -104,6 +104,8 @@ export type AutomationRecipeId =
   | "delivered"
   | "abandoned_checkout"
   | "unpaid_reminder"
+  /** Phase 23: "rate your order" text 2 days after delivery. Opt-in: missing = OFF. */
+  | "review_request"
   /** Phase 13: email copies of the order texts when the buyer gave an email (missing = on). */
   | "email_copies";
 

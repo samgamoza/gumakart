@@ -32,6 +32,7 @@ function mapDbTenantToDemo(
       categorySlug: product.categorySlug ?? undefined,
       isMain: Boolean(product.isMain),
       tags: product.isMain ? ["featured", "bestseller"] : [],
+      ...(product.rating ? { rating: product.rating } : {}),
       pricingMeta: product.metadataJson
         ? {
             unitType: product.metadataJson.unitType,
@@ -88,6 +89,7 @@ function mapDbTenantToDemo(
     codEnabled: storeSettings.codEnabled,
     storeSettings,
     products: mappedProducts,
+    ...(tenant.rating ? { rating: tenant.rating } : {}),
     subscriptionPlan: tenant.subscriptionPlan,
     seo: tenant.seoPublishedJson ?? null,
   };

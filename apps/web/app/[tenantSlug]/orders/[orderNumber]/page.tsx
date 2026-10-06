@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   getOrderLoyalty,
+  getReviewableItems,
   getOrderForTracking,
   getTenantStorefrontBySlug,
   resolveTenantPaymentsSettings,
@@ -11,6 +12,7 @@ import { getTenant as getDemoTenant } from "@/lib/demo-data";
 import { OrderAutoRefresh } from "@/components/order-auto-refresh";
 import { GumaIdOrderPrompt } from "@/components/guma-id/order-prompt";
 import { SukiOrderCard } from "@/components/suki-order-card";
+import { OrderReviewCard } from "@/components/order-review-card";
 import { ManualPaymentPanel } from "@/components/manual-payment-panel";
 import { MessageSellerButton } from "@/components/storefront/message-seller-button";
 import { resolveStorefrontSettings } from "@/lib/storefront-settings";
@@ -133,6 +135,11 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
   const tenant = demoTenant ? null : await getTenantStorefrontBySlug(tenantSlug);
   // Phase 27: Suki points (null when the shop hasn't turned loyalty on or there's no customer).
   const suki = order ? await getOrderLoyalty(order.orderId).catch(() => null) : null;
+  // Phase 23: verified reviews, once delivered/completed.
+  const reviewable =
+    order && (order.fulfillmentState === "delivered" || order.orderState === "completed")
+      ? await getReviewableItems(order.orderId).catch(() => null)
+      : null;
 
   const storeSettings = tenant
     ? resolveStorefrontSettings(
@@ -302,6 +309,16 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
             shopName={order.tenantName}
             alreadyPaid={order.paymentState === "paid"}
             lang={fromLink ? "tl" : "en"}
+          />
+        ) : null}
+
+        {order && reviewable && reviewable.items.length > 0 && (reviewable.eligible || reviewable.items.some((i) => i.review)) ? (
+          <OrderReviewCard
+            tenantSlug={tenantSlug}
+            orderNumber={order.orderNumber}
+            accessToken={accessToken}
+            shopName={order.tenantName}
+            items={reviewable.eligible ? reviewable.items : reviewable.items.filter((i) => i.review)}
           />
         ) : null}
 

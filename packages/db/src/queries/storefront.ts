@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../client";
+import { getProductRatingSummaries, type RatingSummary } from "./reviews";
 import { categories, productImages, productVariants, products, tenants } from "../schema/index";
 
 export interface StorefrontTenantRecord {
@@ -45,7 +46,11 @@ export interface StorefrontTenantRecord {
     options: Array<{ name: string; values: string[] }>;
     /** Active variants in display order. Only filled when the product has options. */
     variants: StorefrontVariant[];
+    /** Phase 23: published verified reviews only; null when there are none. */
+    rating: { average: number; count: number } | null;
   }>;
+  /** Phase 23: shop-wide rating from published reviews; null when there are none. */
+  rating: { average: number; count: number } | null;
   shopCategories: Array<{
     id: string;
     name: string;
@@ -229,6 +234,14 @@ async function mapStorefrontTenant(
     .from(categories)
     .where(eq(categories.tenantId, tenant.id));
 
+  const ratings = await getProductRatingSummaries(tenant.id).catch(() => new Map<string, RatingSummary>());
+  let ratingCount = 0;
+  let ratingSum = 0;
+  for (const r of ratings.values()) {
+    ratingCount += r.count;
+    ratingSum += r.average * r.count;
+  }
+
   const themeJson = options?.preferDraft
     ? tenant.themeDraftJson ?? tenant.themePublishedJson ?? tenant.themeJson
     : tenant.themePublishedJson ?? tenant.themeJson;
@@ -256,7 +269,9 @@ async function mapStorefrontTenant(
       metadataJson: p.metadataJson ?? null,
       options: optionsJson ?? [],
       variants: variantsByProduct.get(p.id) ?? [],
+      rating: ratings.get(p.id) ?? null,
     })),
     shopCategories,
+    rating: ratingCount > 0 ? { average: Math.round((ratingSum / ratingCount) * 10) / 10, count: ratingCount } : null,
   };
 }

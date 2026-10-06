@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  resolveReviewReport,
   addSupportTicketMessage,
   createTemplateStock,
   getSupportTicketById,
@@ -1007,6 +1008,28 @@ export async function addIncidentUpdateAction(
     await addIncidentUpdate(id, input);
     await writeAudit({ actorId: session.userId, actorEmail: session.email, action: `status_incident_${input.status}`, entityType: "status_incident", entityId: id, entityLabel: input.message.slice(0, 80) });
     revalidatePath("/status-page");
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+// ─── Phase 23: reported product reviews ──────────────────────────────────────
+
+export async function resolveReviewReportAction(reviewId: string, decision: "kept" | "removed", label: string): Promise<ActionResult> {
+  try {
+    const session = await guard();
+    const { tenantId } = await resolveReviewReport(reviewId, decision);
+    await writeAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: decision === "removed" ? "review_removed" : "review_kept",
+      entityType: "review",
+      entityId: reviewId,
+      entityLabel: label,
+      metadata: { tenantId },
+    });
+    revalidatePath("/moderation/reviews");
     return { ok: true };
   } catch (error) {
     return fail(error);

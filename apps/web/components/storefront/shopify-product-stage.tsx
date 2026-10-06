@@ -8,6 +8,7 @@ import { adminUrl } from "@/lib/utils";
 import { resolveCommerceChrome } from "@gumakart/storefront-themes";
 import { AddToCartButton } from "./add-to-cart";
 import { ShopifyRelatedProducts } from "./shopify-catalog";
+import { RatingStars } from "@/components/rating-stars";
 
 export function ShopifyProductStage({
   tenant,
@@ -94,6 +95,11 @@ export function ShopifyProductStage({
             <h1 className="mt-3 font-display text-3xl font-bold tracking-tight md:text-4xl lg:text-5xl">
               {product.title}
             </h1>
+            {product.rating ? (
+              <a href="#reviews" className="mt-2 inline-block text-neutral-600 hover:underline">
+                <RatingStars rating={product.rating} size="md" />
+              </a>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap items-baseline gap-3">
               <span className="text-2xl font-semibold md:text-3xl">

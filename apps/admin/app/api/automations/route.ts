@@ -8,6 +8,7 @@ import {
   orderCreatedSms,
   outForDeliverySms,
   paymentConfirmedSms,
+  reviewRequestSms,
   riderBookedSms,
   unpaidReminderSms,
   type BuyerRecipe,
@@ -32,6 +33,7 @@ function examples(shopName: string): Record<BuyerRecipe, string> {
     delivered: deliveredSms(c),
     abandoned_checkout: `${abandonedCheckoutSms({ shopName, productTitle: "Canvas Backpack", url: "kart.guma.one/c/…", step: 1 })} Stop reminders: kart.guma.one/stop/…`,
     unpaid_reminder: `${unpaidReminderSms({ ...c, paymentMethod: "gcash" })} Stop reminders: kart.guma.one/stop/…`,
+    review_request: `${reviewRequestSms(c)} Stop reminders: kart.guma.one/stop/…`,
   };
 }
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";

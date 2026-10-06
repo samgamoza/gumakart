@@ -188,6 +188,7 @@ const patchSchema = z.object({
           delivered: z.boolean().optional(),
           abandoned_checkout: z.boolean().optional(),
           unpaid_reminder: z.boolean().optional(),
+          review_request: z.boolean().optional(),
           email_copies: z.boolean().optional(),
         })
         .strict()

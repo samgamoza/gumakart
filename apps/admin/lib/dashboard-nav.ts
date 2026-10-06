@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BadgePercent,
+  Star,
   Blocks,
   Code2,
   MapPin,
@@ -145,6 +146,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         href: "/customers",
         icon: Users,
         description: "Every buyer by phone number, with their orders.",
+      },
+      {
+        id: "reviews",
+        label: "Reviews",
+        href: "/reviews",
+        icon: Star,
+        badge: "new",
+        description: "Verified buyer reviews: reply, hide or report.",
       },
     ],
   },

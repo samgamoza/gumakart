@@ -18,6 +18,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  Star,
   ShoppingCart,
   Store,
   Users,
@@ -66,6 +67,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/helpdesk", label: "Helpdesk", icon: Headphones },
       { href: "/moderation", label: "Moderation", icon: ShieldCheck },
+      { href: "/moderation/reviews", label: "Review reports", icon: Star },
     ],
   },
   {
@@ -116,7 +118,11 @@ export function PlatformShell({
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
-    return pathname === href || pathname.startsWith(`${href}/`);
+    if (pathname !== href && !pathname.startsWith(`${href}/`)) return false;
+    // A more specific nav item (e.g. /moderation/reviews) wins over its parent.
+    return !NAV_SECTIONS.some((s) =>
+      s.items.some((i) => i.href.length > href.length && (pathname === i.href || pathname.startsWith(`${i.href}/`)))
+    );
   }
 
   const initials = user.displayName

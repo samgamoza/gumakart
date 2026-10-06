@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DemoProduct } from "@/lib/demo-data";
+import { RatingStars } from "@/components/rating-stars";
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat("en-PH", {
@@ -42,6 +43,7 @@ export function ProductCard({
             <h3 className="font-semibold leading-snug text-foreground group-hover:text-primary">
               {product.title}
             </h3>
+            <RatingStars rating={product.rating} className="mt-0.5 text-muted-foreground" />
             <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
               {product.shortDescription}
             </p>

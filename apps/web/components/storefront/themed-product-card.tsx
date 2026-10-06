@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DemoProduct } from "@/lib/demo-data";
 import type { ResolvedShopTheme } from "@gumakart/storefront-themes";
+import { RatingStars } from "@/components/rating-stars";
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat("en-PH", {
@@ -40,6 +41,7 @@ export function ThemedProductCard({
           </div>
           <div className="p-3">
             <h3 className="font-semibold leading-snug">{product.title}</h3>
+            <RatingStars rating={product.rating} className="opacity-80" />
             <p className="mt-2 font-bold" style={{ color: theme.primaryColor }}>
               {formatPrice(product.price)}
             </p>
@@ -67,6 +69,7 @@ export function ThemedProductCard({
           <div className="flex min-w-0 flex-1 flex-col justify-between">
             <div>
               <h3 className="font-black leading-snug">{product.title}</h3>
+              <RatingStars rating={product.rating} className="opacity-80" />
               <p className="mt-1 line-clamp-2 text-xs opacity-70">{product.shortDescription}</p>
             </div>
             <p className="font-black" style={{ color: theme.primaryColor }}>
@@ -96,6 +99,7 @@ export function ThemedProductCard({
           <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
             <div>
               <h3 className="font-semibold leading-snug">{product.title}</h3>
+              <RatingStars rating={product.rating} className="opacity-80" />
               <p className="mt-0.5 line-clamp-2 text-xs opacity-70">{product.shortDescription}</p>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -134,6 +138,7 @@ export function ThemedProductCard({
         <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
           <div>
             <h3 className="font-semibold leading-snug group-hover:opacity-90">{product.title}</h3>
+            <RatingStars rating={product.rating} className="opacity-80" />
             <p className="mt-0.5 line-clamp-2 text-xs opacity-70">{product.shortDescription}</p>
           </div>
           <div className="flex items-center justify-between gap-2">

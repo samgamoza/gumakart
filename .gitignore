@@ -47,6 +47,7 @@ apps/web/public/uploads/products/**
 !apps/web/public/uploads/products/.gitkeep
 apps/web/public/uploads/payment-proofs/**
 !apps/web/public/uploads/payment-proofs/.gitkeep
+apps/web/public/uploads/reviews/**
 
 # Private KYC uploads (local dev)
 apps/admin/.data/

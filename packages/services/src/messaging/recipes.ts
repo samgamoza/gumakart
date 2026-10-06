@@ -18,7 +18,8 @@ export type BuyerRecipe =
   | "out_for_delivery"
   | "delivered"
   | "abandoned_checkout"
-  | "unpaid_reminder";
+  | "unpaid_reminder"
+  | "review_request";
 
 export const BUYER_RECIPES: Array<{
   id: BuyerRecipe;
@@ -43,7 +44,16 @@ export const BUYER_RECIPES: Array<{
     when: "6 h after an e-wallet order with no payment — only if they ticked SMS reminders",
     kind: "marketing",
   },
+  {
+    id: "review_request",
+    label: "Ask for a review",
+    when: "2 days after delivery, once — only if they ticked SMS reminders. Off until you turn it on.",
+    kind: "marketing",
+  },
 ];
+
+/** Recipes that stay off until the seller turns them on (new texts shouldn't start costing credits by themselves). */
+export const OPT_IN_RECIPES: ReadonlySet<BuyerRecipe> = new Set<BuyerRecipe>(["review_request"]);
 
 const PAYMENT_NAMES: Record<string, string> = {
   gcash: "GCash",
@@ -192,12 +202,18 @@ export function isQuietHours(now = new Date()): boolean {
   return h >= 21 || h < 8;
 }
 
-/** Recipe toggles: missing = on. */
+/** Recipe toggles: missing = on, except opt-in recipes (missing = off). */
 export function isRecipeEnabled(
   automations: Partial<Record<string, boolean>> | null | undefined,
   recipe: BuyerRecipe
 ): boolean {
+  if (OPT_IN_RECIPES.has(recipe)) return automations?.[recipe] === true;
   return automations?.[recipe] !== false;
+}
+
+/** Phase 23: "Kumusta ang order mo?" with the order link (where the review form is). ASCII only. */
+export function reviewRequestSms(c: OrderSmsContext): string {
+  return `${smsShopName(c.shopName)}: Kumusta ang order #${c.orderNumber}? I-rate ang items mo dito, salamat! ${c.orderUrl ?? ""}`.trim();
 }
 
 // ─── POS receipt ─────────────────────────────────────────────────────────────

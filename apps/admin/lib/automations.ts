@@ -8,6 +8,7 @@ import {
   listPushSubscriptionsForTenant,
   listRecoveryCandidates,
   listUnpaidReminderCandidates,
+  listReviewRequestCandidates,
   sendWithLog,
   type OrderMessagingContext,
   type OutboxRow,
@@ -33,6 +34,7 @@ import {
   sellerProofSubmittedSms,
   sendPushNotifications,
   unpaidReminderSms,
+  reviewRequestSms,
   withOptOutFooter,
   type BuyerRecipe,
   type OrderSmsContext,
@@ -294,6 +296,8 @@ export interface TimedRunResult {
   quietHours: boolean;
   recovery: { considered: number; sent: number; skipped: number };
   unpaid: { considered: number; sent: number; skipped: number };
+  /** Phase 23: "rate your order" texts. */
+  reviews: { considered: number; sent: number; skipped: number };
 }
 
 /** Timed recipes 6 and 7. Safe to run every 5 minutes. */
@@ -302,6 +306,7 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
     quietHours: isQuietHours(now),
     recovery: { considered: 0, sent: 0, skipped: 0 },
     unpaid: { considered: 0, sent: 0, skipped: 0 },
+    reviews: { considered: 0, sent: 0, skipped: 0 },
   };
   if (result.quietHours) return result;
 
@@ -379,6 +384,27 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
     const outcome = await textBuyer(ctx, "unpaid_reminder", body, "marketing", 1);
     if (outcome?.status === "sent") result.unpaid.sent += 1;
     else result.unpaid.skipped += 1;
+  }
+
+  // Phase 23 — ask for a review 2 days after delivery (opt-in recipe; consent; once per order).
+  for (const orderId of await listReviewRequestCandidates(now, 50)) {
+    result.reviews.considered += 1;
+    const ctx = await getOrderMessagingContext(orderId);
+    if (!ctx || !ctx.phone || !isRecipeEnabled(ctx.settings.automations, "review_request")) {
+      result.reviews.skipped += 1;
+      continue;
+    }
+    let body: string;
+    try {
+      body = withOptOutFooter(reviewRequestSms(smsContext(ctx)), ctx.phone, webBase());
+    } catch (error) {
+      console.error("[automations] opt-out link unavailable — review requests off", error);
+      result.reviews.skipped += 1;
+      continue;
+    }
+    const outcome = await textBuyer(ctx, "review_request", body, "marketing", 1);
+    if (outcome?.status === "sent") result.reviews.sent += 1;
+    else result.reviews.skipped += 1;
   }
 
   return result;

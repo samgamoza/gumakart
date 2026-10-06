@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   integer,
+  smallint,
   bigint,
   decimal,
   jsonb,
@@ -2489,3 +2490,38 @@ export const referrals = pgTable(
   (table) => [index("referrals_referrer_idx").on(table.tenantId, table.referrerCustomerId, table.createdAt)]
 );
 
+
+// Phase 23: verified product reviews (one per order item, from a delivered/completed order only).
+export const productReviews = pgTable(
+  "product_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id")
+      .references(() => orders.id, { onDelete: "cascade" })
+      .notNull(),
+    orderItemId: uuid("order_item_id")
+      .references(() => orderItems.id, { onDelete: "cascade" })
+      .notNull(),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    rating: smallint("rating").notNull(),
+    body: text("body"),
+    photosJson: jsonb("photos_json").$type<string[]>().default([]).notNull(),
+    buyerName: varchar("buyer_name", { length: 60 }).notNull(),
+    status: varchar("status", { length: 10 }).$type<"published" | "hidden" | "removed">().default("published").notNull(),
+    hiddenReason: varchar("hidden_reason", { length: 200 }),
+    sellerReply: text("seller_reply"),
+    sellerReplyAt: timestamp("seller_reply_at", { withTimezone: true }),
+    reportStatus: varchar("report_status", { length: 10 }).$type<"open" | "kept" | "removed">(),
+    reportReason: varchar("report_reason", { length: 200 }),
+    reportedAt: timestamp("reported_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("product_reviews_item_idx").on(table.orderItemId),
+    index("product_reviews_product_idx").on(table.tenantId, table.productId, table.status),
+    index("product_reviews_tenant_idx").on(table.tenantId, table.createdAt),
+  ]
+);

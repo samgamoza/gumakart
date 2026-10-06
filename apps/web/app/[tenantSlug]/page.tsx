@@ -8,6 +8,8 @@ import {
 import { verifyStorefrontPreviewToken } from "@gumakart/services";
 import { adminUrl } from "@/lib/utils";
 import { TenantStorefrontHome } from "@/components/storefront/tenant-storefront-home";
+import { ShopTrustBar } from "@/components/shop-trust-bar";
+import { getShopReviewHighlights, getTenantIdBySlug } from "@gumakart/db";
 
 /** Seller catalog changes must show up immediately after publish/add. */
 export const dynamic = "force-dynamic";
@@ -85,6 +87,12 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
   }
 
   const utmSource = query.utm_source ?? "";
+  // Phase 23: shop rating bar (only once there are published reviews; never for demo shops).
+  const highlights = tenant.rating
+    ? await getTenantIdBySlug(tenantSlug)
+        .then((id) => (id ? getShopReviewHighlights(id, 6) : null))
+        .catch(() => null)
+    : null;
 
   return (
     <>
@@ -107,6 +115,7 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
           </span>
         </div>
       )}
+      {highlights?.rating ? <ShopTrustBar slug={tenant.slug} rating={highlights.rating} photoReviews={highlights.photoReviews} /> : null}
       <TenantStorefrontHome
         tenant={tenant}
         activeCategorySlug={query.category}

@@ -9,6 +9,7 @@ import {
   outForDeliverySms,
   paymentConfirmedSms,
   readyForPickupSms,
+  reviewRequestSms,
   sellerNewOrderSms,
   smsPeso,
   smsShopName,
@@ -116,4 +117,14 @@ test("Phase 14 campaign texts", async (t0) => {
     assert.equal(smsSegments("a".repeat(160)), 1);
     assert.equal(smsSegments("a".repeat(161)), 2);
   });
+});
+
+test("Phase 23: review request is ASCII, carries the order link, and is opt-in", () => {
+  const body = reviewRequestSms(base);
+  assert.ok(ascii(body), body);
+  assert.ok(body.startsWith("Tess Lifestyle PH:"));
+  assert.ok(body.includes(base.orderUrl));
+  assert.equal(isRecipeEnabled({}, "review_request"), false);
+  assert.equal(isRecipeEnabled({ review_request: true }, "review_request"), true);
+  assert.equal(isRecipeEnabled({}, "delivered"), true, "others stay on by default");
 });

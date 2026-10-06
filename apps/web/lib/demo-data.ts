@@ -32,6 +32,8 @@ export interface DemoProduct {
     image?: string;
     available: boolean;
   }>;
+  /** Phase 23: from published verified reviews only. Absent = no reviews (show nothing). */
+  rating?: { average: number; count: number };
 }
 
 export interface DemoTenant {
@@ -52,6 +54,8 @@ export interface DemoTenant {
   subscriptionPlan?: string | null;
   patternId?: StorePatternId;
   seo?: import("@gumakart/db").TenantSeoJson | null;
+  /** Phase 23: shop rating from published verified reviews. Absent = none yet. */
+  rating?: { average: number; count: number };
 }
 
 export const DEMO_TENANT: DemoTenant = {

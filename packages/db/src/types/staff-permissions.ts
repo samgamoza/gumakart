@@ -147,6 +147,9 @@ export const API_RULES: ApiRule[] = [
   // Selling
   { pattern: /^\/api\/checkout-links(\/|$)/, permission: "links.manage" },
   { pattern: /^\/api\/customers(\/|$)/, permission: "customers.view" },
+  // Phase 23: everyone who sees customers can read reviews; reply/hide/report is for owners and managers.
+  { pattern: /^\/api\/reviews$/, methods: READ, permission: "customers.view" },
+  { pattern: /^\/api\/reviews(\/|$)/, permission: "marketing.manage" },
   { pattern: /^\/api\/messages(\/|$)/, permission: "messages.reply" },
   // Phase 13: Messenger / Instagram inbox (reply, send links) and channel setup.
   { pattern: /^\/api\/inbox(\/|$)/, permission: "messages.reply" },
@@ -235,6 +238,7 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/categories", permission: "products.view" },
   { prefix: "/checkout-links", permission: "links.manage" },
   { prefix: "/customers", permission: "customers.view" },
+  { prefix: "/reviews", permission: "customers.view" },
   { prefix: "/messages", permission: "messages.reply" },
   { prefix: "/inbox", permission: "messages.reply" },
   { prefix: "/channels", permission: "settings.shop" },
