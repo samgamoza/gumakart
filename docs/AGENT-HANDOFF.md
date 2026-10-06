@@ -1,14 +1,14 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–24, 26, 27, 31–33 built; 22 and 24 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–24, 26, 27, 31–33 built and approved; paused for Sam to migrate 0038–0042 and deploy — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (Phases 22 and 24 in review)
+## ▶ Resume here — 2026-10-06 (all approved; paused for deploy)
 
-**Status.** Phases 8–21 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
+**Status.** Everything below is built, committed on branch `wip/uncommitted-work-2026-08-01` and approved. Work is paused until Sam migrates Neon (0038–0042) and pushes; deploy steps are under "Before pushing". Live so far: up to Phase 21 (deploy #20, `df6d24c`).
 
-- Phase 24 faster fulfilment (batch pick list + mark packed, barcode/price labels with in-store EAN-13, parcel courier tracking numbers, fee by area; waybill aggregator ready to hook). Migration 0042_fulfilment. In review.
-- `4161ff5` Phase 22 buyer demand capture (Notify me / back-in-stock texts, wishlists + /{shop}/saved, pre-orders with ship date; seller demand panel on Stock). Migration 0041_demand. In review.
+- `3ec567d` Phase 24 faster fulfilment (batch pick list + mark packed, barcode/price labels with in-store EAN-13, parcel courier tracking numbers, fee by area; waybill aggregator ready to hook). Migration 0042_fulfilment. Approved.
+- `4161ff5` Phase 22 buyer demand capture (Notify me / back-in-stock texts, wishlists + /{shop}/saved, pre-orders with ship date; seller demand panel on Stock). Migration 0041_demand. Approved.
 - `e8e6d1f` Phase 23 verified reviews (buyer stars/text/photos from delivered orders, seller Reviews page, storefront stars + trust bar + /{shop}/reviews, ops Review reports, opt-in "Ask for a review" SMS). Migration 0040_reviews. Approved.
 - `b098ed4` Phase 33 harvest rest: compare couriers (H7), fill a listing from a photo (H2), background-removal plan cap (H9), next-30-days forecast (H10). No migration. Approved.
 - `7feead1` Phase 32 buyer referrals (H8, "give ₱50, get ₱50" store credit) + Suki win-back SMS audience (H5). Migration 0039_referrals. Approved.
