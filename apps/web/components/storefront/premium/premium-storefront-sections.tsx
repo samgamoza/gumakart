@@ -441,7 +441,6 @@ function LiveSellingContent({
   onAdd: ReturnType<typeof useCart>["addItem"];
 }) {
   const theme = tenant.shopTheme;
-  const [viewers] = useState(() => 180 + Math.floor(Math.random() * 420));
 
   return (
     <div
@@ -468,9 +467,7 @@ function LiveSellingContent({
           </span>
           LIVE
         </span>
-        <span className="absolute right-3 top-3 text-xs font-medium text-white/90">
-          👁 {viewers.toLocaleString("en-PH")} watching
-        </span>
+        {/* Phase 20: removed a random "N watching" count — buyers shouldn't see invented numbers. */}
         <p className="text-sm font-semibold text-white">{tenant.name} Live</p>
       </div>
       <div className="divide-y" style={{ borderColor: theme.border }}>

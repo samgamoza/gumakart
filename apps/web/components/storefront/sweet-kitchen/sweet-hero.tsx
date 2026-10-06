@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl, sizedSrcSet } from "@/lib/image-sizes";
 import Link from "next/link";
 import { Play, ShoppingBag, Sparkles } from "lucide-react";
 import type { DemoTenant } from "@/lib/demo-data";
@@ -16,7 +17,7 @@ export function SweetHero({ tenant }: { tenant: DemoTenant }) {
     <section className="relative flex min-h-[85vh] items-center overflow-hidden pt-24">
       <div className="absolute inset-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={heroImage} alt="" className="h-full w-full object-cover" />
+        <img src={sizedImageUrl(heroImage, 640)} srcSet={sizedSrcSet(heroImage, 640)} sizes="100vw" alt="" fetchPriority="high" decoding="async" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#fffdf5]/95 via-[#fffdf5]/75 to-transparent" />
       </div>
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-16">

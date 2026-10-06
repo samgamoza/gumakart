@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl, sizedSrcSet } from "@/lib/image-sizes";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -30,7 +31,11 @@ function SweetProductCard({
       <div className="relative aspect-square overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={product.image}
+          src={sizedImageUrl(product.image, 300)}
+          srcSet={sizedSrcSet(product.image, 300)}
+          sizes="(max-width: 640px) 50vw, 300px"
+          loading="lazy"
+          decoding="async"
           alt={product.title}
           className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
         />

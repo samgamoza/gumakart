@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import { GiftCardInput, type AppliedGiftCard } from "@/components/gift-card-input";
 import { FreeDeliveryNudge } from "@/components/free-delivery-nudge";
 import { forgetRememberedBuyer, readRememberedBuyer, saveRememberedBuyer } from "@/lib/remembered-buyer";
@@ -337,7 +338,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       <header className="flex items-center gap-3 border-b border-[color:var(--kart-line)] bg-white px-4 py-3 lg:mx-3 lg:mb-2 lg:rounded-2xl lg:border">
         {data.shop.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={data.shop.logoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+          <img src={sizedImageUrl(data.shop.logoUrl, 36)} alt="" width={36} height={36} decoding="async" className="h-9 w-9 rounded-full object-cover" />
         ) : (
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--kart-orange-soft)] text-sm font-extrabold text-[color:var(--kart-orange-dark)]">
             {data.shop.name.slice(0, 1).toUpperCase()}
@@ -364,7 +365,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
               <div className="h-16 w-16 flex-none overflow-hidden rounded-xl bg-slate-100 lg:h-20 lg:w-20">
                 {item.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="eager" />
+                  <img src={sizedImageUrl(item.imageUrl, 80)} alt="" width={80} height={80} decoding="async" className="h-full w-full object-cover" loading="eager" />
                 )}
               </div>
               <div className="min-w-0 flex-1">

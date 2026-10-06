@@ -1,4 +1,5 @@
-import type { DemoTenant } from "@/lib/demo-data";
+
+import { sizedImageUrl } from "@/lib/image-sizes";import type { DemoTenant } from "@/lib/demo-data";
 
 export function SweetFooter({ tenant }: { tenant: DemoTenant }) {
   const accent = tenant.shopTheme.primaryColor;
@@ -10,7 +11,9 @@ export function SweetFooter({ tenant }: { tenant: DemoTenant }) {
           {tenant.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={tenant.logoUrl}
+              src={sizedImageUrl(tenant.logoUrl, 80)}
+              loading="lazy"
+              decoding="async"
               alt={tenant.name}
               className="mb-4 h-20 w-auto rounded-full"
             />

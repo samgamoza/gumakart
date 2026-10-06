@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { sizedImageUrl } from "@/lib/image-sizes";
 import { ShoppingBag, Sparkles } from "lucide-react";
 import { PremiumStorefrontSections } from "@/components/storefront/premium/premium-storefront-sections";
 import { ShopAssistant } from "@/components/storefront/shop-assistant";
@@ -176,8 +177,9 @@ function LogoMark({ tenant, large }: { tenant: DemoTenant; large?: boolean }) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={tenant.logoUrl}
+        src={sizedImageUrl(tenant.logoUrl, 64)}
         alt=""
+        decoding="async"
         className={`${size} shrink-0 border-4 border-white object-cover shadow-lg`}
         style={{ borderRadius: theme.radius, borderColor: theme.mode === "dark" ? theme.foreground : "#fff" }}
       />

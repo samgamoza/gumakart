@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
-
 .furnish-root {
   --furnish-primary: #111100;
   --furnish-secondary: #d47f31;
   --furnish-gray-100: #ecebe9;
   --furnish-gray-600: #837a6d;
   --furnish-gray-900: #211f1c;
-  font-family: "Poppins", sans-serif;
+  font-family: var(--gf-poppins, "Poppins"), sans-serif;
   color: var(--furnish-gray-600);
   background: #fff;
 }

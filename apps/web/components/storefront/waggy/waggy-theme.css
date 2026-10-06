@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Chilanka&family=Montserrat:wght@300;400;500;600;700&display=swap");
-
 .waggy-root {
   --wg-primary: #dead6f;
   --wg-accent: #333333;
   --wg-cream: #f9f3ec;
   --wg-muted: #747474;
-  --wg-heading: "Chilanka", cursive;
-  --wg-body: "Montserrat", system-ui, sans-serif;
+  --wg-heading: var(--gf-chilanka, "Chilanka"), cursive;
+  --wg-body: var(--gf-montserrat, "Montserrat"), system-ui, sans-serif;
   font-family: var(--wg-body);
   color: var(--wg-muted);
   background: #fff;

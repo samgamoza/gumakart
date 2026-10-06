@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -113,7 +114,7 @@ export function MottoHeader({ tenant }: { tenant: DemoTenant }) {
       <div className="mt-container mt-header-inner">
         <Link href={homeHref} className="mt-logo">
           {tenant.logoUrl ? (
-            <img src={tenant.logoUrl} alt={tenant.name} className="h-9 w-auto object-contain" />
+            <img src={sizedImageUrl(tenant.logoUrl, 160)} alt={tenant.name} decoding="async" className="h-9 w-auto object-contain" />
           ) : (
             <>
               <Bike className="mt-logo-icon h-8 w-8" />

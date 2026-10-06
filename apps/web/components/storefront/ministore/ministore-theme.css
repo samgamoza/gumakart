@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Lato:wght@300;400;700&display=swap");
-
 .ministore-root {
   --ms-primary: #72aec8;
   --ms-accent: #212529;
   --ms-light-blue: #edf1f3;
   --ms-muted: #aeaeae;
-  --ms-heading: "Jost", system-ui, sans-serif;
-  --ms-body: "Lato", system-ui, sans-serif;
+  --ms-heading: var(--gf-jost, "Jost"), system-ui, sans-serif;
+  --ms-body: var(--gf-lato, "Lato"), system-ui, sans-serif;
   font-family: var(--ms-body);
   color: var(--ms-muted);
   background: #fff;

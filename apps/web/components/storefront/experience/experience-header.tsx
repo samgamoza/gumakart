@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import Link from "next/link";
 import { useState } from "react";
 import { Heart, Menu, Search, ShoppingBag, Sparkles } from "lucide-react";
@@ -32,8 +33,9 @@ export function ExperienceHeader() {
           {tenant.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={tenant.logoUrl}
+              src={sizedImageUrl(tenant.logoUrl, 140)}
               alt=""
+              decoding="async"
               className="h-9 w-auto max-w-[140px] object-contain"
             />
           ) : (

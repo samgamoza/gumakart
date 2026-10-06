@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl, sizedSrcSet } from "@/lib/image-sizes";
 import { useState } from "react";
 
 /**
@@ -22,8 +23,12 @@ export function SarabHeroImage({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={sizedImageUrl(src, 480)}
+      srcSet={sizedSrcSet(src, 480)}
+      sizes="min(480px, 90vw)"
       alt={alt}
+      fetchPriority="high"
+      decoding="async"
       onError={() => {
         if (index < list.length - 1) setIndex((i) => i + 1);
       }}

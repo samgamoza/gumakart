@@ -1,13 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600&family=Birthstone+Bounce:wght@400&display=swap");
-
 .sweet-kitchen-root {
   --sweet-cream: #fffdf5;
   --sweet-espresso: #2d1b1b;
   --sweet-petal: #ffd1dc;
   --sweet-neon: #ff007f;
-  --font-sweet-display: "Birthstone Bounce", cursive;
-  --font-sweet-heading: "Cormorant Garamond", Georgia, serif;
-  --font-sweet-body: "Inter", system-ui, sans-serif;
+  --font-sweet-display: var(--gf-birthstone-bounce, "Birthstone Bounce"), cursive;
+  --font-sweet-heading: var(--gf-cormorant-garamond, "Cormorant Garamond"), Georgia, serif;
+  --font-sweet-body: var(--gf-inter, "Inter"), system-ui, sans-serif;
   background: var(--sweet-cream);
   color: var(--sweet-espresso);
   font-family: var(--font-sweet-body);

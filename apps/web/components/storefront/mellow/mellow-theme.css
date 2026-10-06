@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sora:wght@100..800&display=swap");
-
 .mellow-root {
   --ml-primary: #d16806;
   --ml-accent: #1a1a1a;
   --ml-secondary: #f9f6f3;
   --ml-muted: #777f81;
-  --ml-heading: "Cormorant Upright", Georgia, serif;
-  --ml-body: "Sora", system-ui, sans-serif;
+  --ml-heading: var(--gf-cormorant-upright, "Cormorant Upright"), Georgia, serif;
+  --ml-body: var(--gf-sora, "Sora"), system-ui, sans-serif;
   font-family: var(--ml-body);
   color: #353535;
   background: #fff;

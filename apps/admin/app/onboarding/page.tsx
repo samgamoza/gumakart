@@ -1,5 +1,6 @@
 "use client";
 
+import { shrinkImage } from "@gumakart/ui/shrink-image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Check, Loader2 } from "lucide-react";
@@ -164,8 +165,10 @@ function ProductStep({
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function upload(file: File) {
-    if (!IMAGE_TYPES.includes(file.type)) return setError("Use a JPG, PNG or WebP photo.");
+  async function upload(original: File) {
+    if (!IMAGE_TYPES.includes(original.type)) return setError("Use a JPG, PNG or WebP photo.");
+    // Phase 20: shrink in the browser first.
+    const file = await shrinkImage(original);
     if (file.size > MAX_IMAGE_BYTES) return setError("The photo must be 5 MB or smaller.");
     setError(null);
     setUploading(true);

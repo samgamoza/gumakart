@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import Link from "next/link";
 import { Flame, Mail, MapPin, Phone, ShoppingBag, Star, UtensilsCrossed } from "lucide-react";
 import type { DemoTenant } from "@/lib/demo-data";
@@ -54,7 +55,7 @@ export function SarabNavbar({ tenant }: { tenant: DemoTenant }) {
       <div className="sarab-container sarab-nav-inner">
         <Link href={homeHref} className="sarab-blogo">
           {tenant.logoUrl ? (
-            <img src={tenant.logoUrl} alt={tenant.name} className="h-11 w-auto object-contain" />
+            <img src={sizedImageUrl(tenant.logoUrl, 160)} alt={tenant.name} decoding="async" className="h-11 w-auto object-contain" />
           ) : (
             <>
               <div className="sarab-bico">

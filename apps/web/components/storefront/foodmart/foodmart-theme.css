@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&family=Open+Sans:wght@400;700&display=swap");
-
 .foodmart-root {
   --fm-primary: #ffc43f;
   --fm-accent: #6995b1;
   --fm-light: #fff9eb;
   --fm-muted: #6c757d;
   --fm-text: #212529;
-  font-family: "Open Sans", sans-serif;
+  font-family: var(--gf-open-sans, "Open Sans"), sans-serif;
   color: var(--fm-text);
   background: #fff;
 }
@@ -32,7 +30,7 @@
 }
 
 .foodmart-logo {
-  font-family: "Nunito", sans-serif;
+  font-family: var(--gf-nunito, "Nunito"), sans-serif;
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--fm-text);
@@ -258,7 +256,7 @@
 }
 
 .foodmart-hero-title {
-  font-family: "Nunito", sans-serif;
+  font-family: var(--gf-nunito, "Nunito"), sans-serif;
   font-size: clamp(1.25rem, 3vw, 1.75rem);
   font-weight: 700;
   margin-bottom: 0.75rem;
@@ -305,7 +303,7 @@
 }
 
 .foodmart-section-head h2 {
-  font-family: "Nunito", sans-serif;
+  font-family: var(--gf-nunito, "Nunito"), sans-serif;
   font-size: 1.75rem;
   font-weight: 700;
   margin: 0;
@@ -464,7 +462,7 @@
 }
 
 .foodmart-promo h2 {
-  font-family: "Nunito", sans-serif;
+  font-family: var(--gf-nunito, "Nunito"), sans-serif;
   font-size: clamp(1.5rem, 4vw, 2.25rem);
   margin-bottom: 1rem;
 }
@@ -492,7 +490,7 @@
 }
 
 .foodmart-footer h5 {
-  font-family: "Nunito", sans-serif;
+  font-family: var(--gf-nunito, "Nunito"), sans-serif;
   font-weight: 700;
   margin-bottom: 1rem;
 }

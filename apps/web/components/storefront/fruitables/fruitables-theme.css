@@ -1,13 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&family=Raleway:wght@600;800&display=swap");
-
 .fruitables-root {
   --fb-primary: #81c408;
   --fb-secondary: #ffb524;
   --fb-dark: #45595b;
   --fb-light: #f4f6f8;
   --fb-muted: #6c757d;
-  --fb-heading: "Raleway", system-ui, sans-serif;
-  --fb-body: "Open Sans", system-ui, sans-serif;
+  --fb-heading: var(--gf-raleway, "Raleway"), system-ui, sans-serif;
+  --fb-body: var(--gf-open-sans, "Open Sans"), system-ui, sans-serif;
   font-family: var(--fb-body);
   color: var(--fb-muted);
   background: #fff;

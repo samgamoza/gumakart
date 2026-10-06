@@ -1,5 +1,6 @@
 "use client";
 
+import { shrinkImage } from "@gumakart/ui/shrink-image";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { ShopAssistant } from "@/components/storefront/shop-assistant";
@@ -48,10 +49,12 @@ export function ManualPaymentPanel({
   if (alreadyPaid) return null;
   if (paymentMethod === "cod") return null;
 
-  async function uploadScreenshot(file: File) {
+  async function uploadScreenshot(original: File) {
     setUploading(true);
     setError(null);
     try {
+      // Phase 20: smaller upload on mobile data; receipts stay readable at 2000 px.
+      const file = await shrinkImage(original, { maxSide: 2000, quality: 0.85 });
       const formData = new FormData();
       formData.set("tenantSlug", tenantSlug);
       formData.set("orderNumber", orderNumber);

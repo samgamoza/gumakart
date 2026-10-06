@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import Link from "next/link";
 import { MessageCircle, ShoppingBag } from "lucide-react";
 import type { DemoTenant } from "@/lib/demo-data";
@@ -41,8 +42,10 @@ export function ShopShell({
             {tenant.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={tenant.logoUrl}
+                src={sizedImageUrl(tenant.logoUrl, 220)}
                 alt={tenant.name}
+                fetchPriority="high"
+                decoding="async"
                 className="h-10 w-auto max-w-[220px] object-contain md:h-12"
               />
             ) : (

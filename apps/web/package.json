@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test lib/image-sizes.test.ts"
   },
   "dependencies": {
     "@gumakart/ai": "workspace:*",

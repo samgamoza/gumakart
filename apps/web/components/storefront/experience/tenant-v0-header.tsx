@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import Link from "next/link";
 import { useState } from "react";
 import { Heart, Search, ShoppingBag, Sparkles } from "lucide-react";
@@ -32,7 +33,7 @@ export function TenantV0Header({
         <Link href={`/${shopSlug}`} className="flex shrink-0 items-center gap-2" aria-label={`${shopName} home`}>
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" className="h-9 w-auto max-w-[160px] object-contain" />
+            <img src={sizedImageUrl(logoUrl, 160)} alt="" decoding="async" className="h-9 w-auto max-w-[160px] object-contain" />
           ) : (
             <>
               <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">

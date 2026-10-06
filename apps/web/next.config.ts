@@ -42,6 +42,11 @@ const nextConfig: NextConfig = {
   ],
   outputFileTracingRoot: monorepoRoot,
   images: {
+    // Phase 20: few widths + WebP only — each photo × width is one Cloudflare transformation.
+    // Same numbers as lib/image-sizes.ts.
+    deviceSizes: [384, 640, 828, 1200],
+    imageSizes: [64, 128, 256],
+    formats: ["image/webp"],
     remotePatterns: [{ protocol: "https", hostname: "**" }],
     localPatterns: [
       { pathname: "/uploads/**" },

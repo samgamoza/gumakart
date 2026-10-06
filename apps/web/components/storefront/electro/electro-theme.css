@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap");
-
 .electro-root {
   --electro-primary: #f28b00;
   --electro-secondary: #f92400;
   --electro-dark: #484848;
   --electro-light: #f5f5f5;
   --electro-muted: #6c757d;
-  font-family: "Open Sans", sans-serif;
+  font-family: var(--gf-open-sans, "Open Sans"), sans-serif;
   color: var(--electro-dark);
   background: #fff;
 }
@@ -66,7 +64,7 @@
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--gf-roboto, "Roboto"), sans-serif;
   font-size: 2rem;
   font-weight: 700;
   color: var(--electro-primary);

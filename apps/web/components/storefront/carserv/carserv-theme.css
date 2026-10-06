@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Barlow:wght@600;700&family=Ubuntu:wght@400;500&display=swap");
-
 .cs-root {
   --cs-primary: #d81324;
   --cs-accent: #1b1b1b;
   --cs-light: #f2f2f2;
   --cs-muted: #6c757d;
   --cs-white: #ffffff;
-  font-family: "Ubuntu", sans-serif;
+  font-family: var(--gf-ubuntu, "Ubuntu"), sans-serif;
   color: var(--cs-accent);
   background: var(--cs-white);
 }
@@ -17,7 +15,7 @@
 .cs-root h4,
 .cs-root h5,
 .cs-root h6 {
-  font-family: "Barlow", sans-serif;
+  font-family: var(--gf-barlow, "Barlow"), sans-serif;
   font-weight: 700;
 }
 
@@ -115,7 +113,7 @@
   align-items: center;
   gap: 0.75rem;
   text-decoration: none;
-  font-family: "Barlow", sans-serif;
+  font-family: var(--gf-barlow, "Barlow"), sans-serif;
   font-size: 1.75rem;
   font-weight: 700;
   color: var(--cs-primary);
@@ -674,7 +672,7 @@
 
 .cs-product-title {
   display: block;
-  font-family: "Barlow", sans-serif;
+  font-family: var(--gf-barlow, "Barlow"), sans-serif;
   font-size: 1.0625rem;
   font-weight: 700;
   color: var(--cs-accent);

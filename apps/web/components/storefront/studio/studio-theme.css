@@ -1,13 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
-
 .st-root {
   --st-primary: #1d1d1d;
   --st-accent: #838383;
   --st-light: #f6f6f6;
   --st-muted: #838383;
   --st-white: #ffffff;
-  --st-heading: "Poppins", system-ui, sans-serif;
-  --st-body: "Poppins", system-ui, sans-serif;
+  --st-heading: var(--gf-poppins, "Poppins"), system-ui, sans-serif;
+  --st-body: var(--gf-poppins, "Poppins"), system-ui, sans-serif;
   font-family: var(--st-body);
   color: var(--st-primary);
   background: var(--st-white);

@@ -1,11 +1,13 @@
 "use client";
 
+import { sizedImageUrl, sizedSrcSet } from "@/lib/image-sizes";
 import Image from "next/image";
 import type { CSSProperties } from "react";
 
 /**
  * Product photos from seller uploads are served from /uploads/products/*.
- * Use a plain img for those so local disk files work without next/image quirks.
+ * Use a plain img for those so local disk files work without next/image quirks; Phase 20 adds a
+ * srcset of resized copies (?w=) so phones download a small WebP, not the full upload.
  * Remote (https / Unsplash) URLs still go through next/image.
  */
 export function StorefrontProductImage({
@@ -38,8 +40,13 @@ export function StorefrontProductImage({
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src}
+          src={sizedImageUrl(src, width ?? 600)}
+          srcSet={sizedSrcSet(src, width ?? 600)}
+          sizes={sizes ?? "(max-width: 640px) 50vw, 300px"}
           alt={alt}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : undefined}
+          decoding="async"
           className={className}
           style={{
             position: "absolute",
@@ -55,8 +62,13 @@ export function StorefrontProductImage({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
+        src={sizedImageUrl(src, width ?? 600)}
+        srcSet={sizedSrcSet(src, width ?? 600)}
+        sizes={sizes ?? (width ? `${width}px` : "(max-width: 640px) 50vw, 300px")}
         alt={alt}
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
+        decoding="async"
         width={width}
         height={height}
         className={className}

@@ -1,5 +1,6 @@
 "use client";
 
+import { shrinkImage } from "@gumakart/ui/shrink-image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, formatPrice } from "@gumakart/ui";
 import { ProductVariantsEditor } from "@/components/product-variants-editor";
@@ -317,13 +318,15 @@ export function ProductsManager() {
       setError("Use a JPG, PNG, WebP, GIF, or AVIF image.");
       return;
     }
+    setError(null);
+    setUploadingImage(true);
+    // Phase 20: shrink in the browser first (big phone photos become ~200–400 KB WebP).
+    file = await shrinkImage(file);
     if (file.size > PRODUCT_IMAGE_MAX_BYTES) {
+      setUploadingImage(false);
       setError("Image must be 5 MB or smaller.");
       return;
     }
-
-    setError(null);
-    setUploadingImage(true);
 
     const formData = new FormData();
     formData.append("file", file);

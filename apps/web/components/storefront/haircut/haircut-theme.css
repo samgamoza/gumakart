@@ -1,13 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Roboto:wght@400;500;700&display=swap");
-
 .hc-root {
   --hc-primary: #eb1616;
   --hc-secondary: #191c24;
   --hc-light: #6c7293;
   --hc-dark: #000000;
   --hc-white: #ffffff;
-  --hc-heading: "Oswald", system-ui, sans-serif;
-  --hc-body: "Roboto", system-ui, sans-serif;
+  --hc-heading: var(--gf-oswald, "Oswald"), system-ui, sans-serif;
+  --hc-body: var(--gf-roboto, "Roboto"), system-ui, sans-serif;
   font-family: var(--hc-body);
   color: var(--hc-white);
   background: var(--hc-dark);

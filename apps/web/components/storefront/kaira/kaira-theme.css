@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Marcellus&display=swap");
-
 .kaira-root {
   --kaira-primary: #8c907e;
   --kaira-accent: #111111;
   --kaira-light: #f1f1f0;
   --kaira-muted: #8f8f8f;
-  --kaira-heading: "Marcellus", serif;
-  --kaira-body: "Jost", sans-serif;
+  --kaira-heading: var(--gf-marcellus, "Marcellus"), serif;
+  --kaira-body: var(--gf-jost, "Jost"), sans-serif;
   font-family: var(--kaira-body);
   color: var(--kaira-muted);
   background: #fff;

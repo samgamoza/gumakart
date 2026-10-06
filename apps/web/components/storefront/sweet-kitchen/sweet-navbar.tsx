@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImageUrl } from "@/lib/image-sizes";
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "@/lib/cart";
@@ -24,7 +25,7 @@ export function SweetNavbar({
         <Link href={`/${tenantSlug}`} className="min-w-0">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={shopName} className="h-12 w-auto max-w-[200px] object-contain" />
+            <img src={sizedImageUrl(logoUrl, 200)} alt={shopName} decoding="async" className="h-12 w-auto max-w-[200px] object-contain" />
           ) : (
             <span className="font-display text-3xl leading-none text-[#2d1b1b]">{shopName}</span>
           )}

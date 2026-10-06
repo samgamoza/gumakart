@@ -1,13 +1,14 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–19 built; Phase 19 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–20 built; Phase 20 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (Phase 19 in review)
+## ▶ Resume here — 2026-10-06 (Phase 20 in review)
 
-**Status.** Phases 8–19 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
+**Status.** Phases 8–20 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- Phase 19 go-live hardening: forgot password, route auth audit (CI), deploy schema guard (CI + `pnpm db:status`), smoke suite (`e2e/`). In review.
+- Phase 20 storefront speed: Cloudflare IMAGES binding + resized seller photos, self-hosted theme fonts, per-theme code split, two hydration fixes. In review.
+- `43a10f1` Phase 19 go-live hardening. Approved.
 - `1a362cc` Phase 18 agency partners (no commission yet) + platform v1.1. Approved.
 - `cd59bf9` Phase 17b leftovers: free-delivery nudge (+ live-quote fix), remembered buyer details. Approved.
 - `da89610` Phase 17 seller polish: deals at the POS, gift cards & store credit, branch stock. Approved.
@@ -32,7 +33,7 @@ Pushing also switches the admin Worker cron to **every minute**. Check first wit
 - admin → Gift cards, Settings → Branches, Stock → By branch, POS (deal line, Gift card tender).
 - admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
 Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**

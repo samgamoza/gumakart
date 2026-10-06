@@ -1,79 +1,17 @@
-import dynamic from "next/dynamic";
 import { resolveStorePattern, getStorePattern } from "@gumakart/storefront-themes";
 import { ThemedStorefrontHome } from "@/components/storefront/themed-home";
 import type { DemoTenant } from "@/lib/demo-data";
+import dynamic from "next/dynamic";
+import { ThemeRenderer } from "@/components/storefront/theme-renderer";
 
-const SweetKitchenStorefront = dynamic(() =>
-  import("@/components/storefront/sweet-kitchen/sweet-kitchen-storefront").then((m) => ({
-    default: m.SweetKitchenStorefront,
-  }))
-);
-const BloomStorefront = dynamic(() =>
-  import("@/components/storefront/bloom/bloom-storefront").then((m) => ({ default: m.BloomStorefront }))
-);
-const SarabStorefront = dynamic(() =>
-  import("@/components/storefront/sarab/sarab-storefront").then((m) => ({ default: m.SarabStorefront }))
-);
-const FurnishStorefront = dynamic(() =>
-  import("@/components/storefront/furnish/furnish-storefront").then((m) => ({ default: m.FurnishStorefront }))
-);
-const ZayStorefront = dynamic(() =>
-  import("@/components/storefront/zay/zay-storefront").then((m) => ({ default: m.ZayStorefront }))
-);
-const ElectroStorefront = dynamic(() =>
-  import("@/components/storefront/electro/electro-storefront").then((m) => ({ default: m.ElectroStorefront }))
-);
-const KairaStorefront = dynamic(() =>
-  import("@/components/storefront/kaira/kaira-storefront").then((m) => ({ default: m.KairaStorefront }))
-);
-const FoodmartStorefront = dynamic(() =>
-  import("@/components/storefront/foodmart/foodmart-storefront").then((m) => ({ default: m.FoodmartStorefront }))
-);
-const StylishStorefront = dynamic(() =>
-  import("@/components/storefront/stylish/stylish-storefront").then((m) => ({ default: m.StylishStorefront }))
-);
-const MellowStorefront = dynamic(() =>
-  import("@/components/storefront/mellow/mellow-storefront").then((m) => ({ default: m.MellowStorefront }))
-);
-const OrganicStorefront = dynamic(() =>
-  import("@/components/storefront/organic/organic-storefront").then((m) => ({ default: m.OrganicStorefront }))
-);
-const WaggyStorefront = dynamic(() =>
-  import("@/components/storefront/waggy/waggy-storefront").then((m) => ({ default: m.WaggyStorefront }))
-);
-const FruitablesStorefront = dynamic(() =>
-  import("@/components/storefront/fruitables/fruitables-storefront").then((m) => ({
-    default: m.FruitablesStorefront,
-  }))
-);
-const MinistoreStorefront = dynamic(() =>
-  import("@/components/storefront/ministore/ministore-storefront").then((m) => ({ default: m.MinistoreStorefront }))
-);
-const AirconStorefront = dynamic(() =>
-  import("@/components/storefront/aircon/aircon-storefront").then((m) => ({ default: m.AirconStorefront }))
-);
-const CarservStorefront = dynamic(() =>
-  import("@/components/storefront/carserv/carserv-storefront").then((m) => ({ default: m.CarservStorefront }))
-);
-const MottoStorefront = dynamic(() =>
-  import("@/components/storefront/motto/motto-storefront").then((m) => ({ default: m.MottoStorefront }))
-);
-const StudioStorefront = dynamic(() =>
-  import("@/components/storefront/studio/studio-storefront").then((m) => ({ default: m.StudioStorefront }))
-);
-const HaircutStorefront = dynamic(() =>
-  import("@/components/storefront/haircut/haircut-storefront").then((m) => ({ default: m.HaircutStorefront }))
-);
-const SpecialtyStorefront = dynamic(() =>
-  import("@/components/storefront/specialty/specialty-storefront").then((m) => ({
-    default: m.SpecialtyStorefront,
-  }))
-);
 const StorefrontExperience = dynamic(() =>
   import("@/components/storefront/experience/storefront-experience").then((m) => ({
     default: m.StorefrontExperience,
   }))
 );
+
+/** Themes rendered by the client-side switch (one chunk per theme). */
+const THEME_RENDERER_IDS = new Set<string>(["sweet-kitchen", "bloom", "sarab", "furnish", "zay", "electro", "kaira", "foodmart", "stylish", "mellow", "organic", "waggy", "fruitables", "ministore", "aircon", "carserv", "motto", "studio", "haircut", "specialty"]);
 
 export function TenantStorefrontHome({
   tenant,
@@ -86,84 +24,8 @@ export function TenantStorefrontHome({
   const patternId = tenant.patternId ?? resolveStorePattern({ templateId: tenant.shopTheme.templateId });
   const pattern = getStorePattern(patternId);
 
-  if (pattern.storefrontRenderer === "sweet-kitchen") {
-    return <SweetKitchenStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "bloom") {
-    return <BloomStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "sarab") {
-    return <SarabStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "furnish") {
-    return <FurnishStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "zay") {
-    return <ZayStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "electro") {
-    return <ElectroStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "kaira") {
-    return <KairaStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "foodmart") {
-    return <FoodmartStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "stylish") {
-    return <StylishStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "mellow") {
-    return <MellowStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "organic") {
-    return <OrganicStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "waggy") {
-    return <WaggyStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "fruitables") {
-    return <FruitablesStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "ministore") {
-    return <MinistoreStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "aircon") {
-    return <AirconStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "carserv") {
-    return <CarservStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "motto") {
-    return <MottoStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "studio") {
-    return <StudioStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "haircut") {
-    return <HaircutStorefront tenant={tenant} />;
-  }
-
-  if (pattern.storefrontRenderer === "specialty") {
-    return <SpecialtyStorefront tenant={tenant} />;
+  if (THEME_RENDERER_IDS.has(pattern.storefrontRenderer)) {
+    return <ThemeRenderer renderer={pattern.storefrontRenderer} tenant={tenant} />;
   }
 
   if (pattern.storefrontRenderer === "experience") {

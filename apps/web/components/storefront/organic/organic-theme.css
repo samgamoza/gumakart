@@ -1,13 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&family=Open+Sans:ital,wght@0,400;0,700;1,400&display=swap");
-
 .organic-root {
   --og-primary: #6bb252;
   --og-accent: #364127;
   --og-danger: #f95f09;
   --og-light: #fff9eb;
   --og-muted: #747474;
-  --og-heading: "Nunito", system-ui, sans-serif;
-  --og-body: "Open Sans", system-ui, sans-serif;
+  --og-heading: var(--gf-nunito, "Nunito"), system-ui, sans-serif;
+  --og-body: var(--gf-open-sans, "Open Sans"), system-ui, sans-serif;
   font-family: var(--og-body);
   color: var(--og-muted);
   background: #fff;

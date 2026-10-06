@@ -1,12 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,900;1,900&display=swap");
-
 .stylish-root {
   --st-primary: #ce071e;
   --st-accent: #111111;
   --st-light: #f1f1f0;
   --st-muted: #8f8f8f;
-  --st-body: "Inter", system-ui, sans-serif;
-  --st-display: "Playfair Display", Georgia, serif;
+  --st-body: var(--gf-inter, "Inter"), system-ui, sans-serif;
+  --st-display: var(--gf-playfair-display, "Playfair Display"), Georgia, serif;
   font-family: var(--st-body);
   color: var(--st-muted);
   background: #fff;
