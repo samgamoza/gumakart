@@ -41,6 +41,7 @@ interface View {
   total: number;
   refunded: number;
   refundable: number;
+  giftCard: number;
   subtotal: number;
   discount: number;
   deliveryFee: number;
@@ -80,6 +81,7 @@ const METHOD_LABEL: Record<string, string> = {
   maya: "Maya",
   bank: "Bank transfer",
   card: "Card",
+  store_credit: "Store credit (code for next order)",
   shop: "Shop returns it",
   none: "—",
 };
@@ -132,6 +134,7 @@ export function OrderTools({ orderId, onClose, onChanged }: { orderId: string; o
             {view && (
               <p className="text-xs text-muted-foreground">
                 Total {peso(view.total)}
+                {view.giftCard > 0 ? ` · ${peso(view.giftCard)} by gift card/store credit (goes back on the card if fully refunded)` : ""}
                 {view.refunded > 0 ? ` · refunded ${peso(view.refunded)}` : ""}
               </p>
             )}
@@ -563,7 +566,7 @@ function ReturnTab({ view, saving, setSaving, setError, onSaved }: TabProps) {
         <label className="block text-sm">
           <span className="mb-1 block font-medium">{Number(refund) > 0 ? "Money goes back by" : "Paid by"}</span>
           <select className="h-10 w-full rounded-lg border border-border bg-background px-2" value={method} onChange={(e) => setMethod(e.target.value)}>
-            {(view.paidOnline ? ["original", "cash", "gcash", "maya", "bank"] : ["cash", "gcash", "maya", "bank", "card"]).map((m) => (
+            {(view.paidOnline ? ["original", "cash", "gcash", "maya", "bank", "store_credit"] : ["cash", "gcash", "maya", "bank", "card", "store_credit"]).map((m) => (
               <option key={m} value={m}>
                 {METHOD_LABEL[m]}
               </option>

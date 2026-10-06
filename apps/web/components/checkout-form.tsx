@@ -1,5 +1,6 @@
 "use client";
 
+import { GiftCardInput, type AppliedGiftCard } from "@/components/gift-card-input";
 import { storedUtm } from "@/components/storefront/attribution-capture";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -104,6 +105,7 @@ export function CheckoutForm({
     cityCode: "",
   });
   const [couponCode, setCouponCode] = useState("");
+  const [giftCard, setGiftCard] = useState<AppliedGiftCard | null>(null);
   // Phase 12: Guma ID pre-fill.
   const gid = useGumaId();
   const [gidOpen, setGidOpen] = useState(false);
@@ -253,6 +255,9 @@ export function CheckoutForm({
     // Phase 14: quantity deals need the lines (the server recomputes the same way).
     lines: cart.items.map((i) => ({ productId: i.productId, quantity: i.qty, lineTotal: i.price * i.qty })),
   });
+  // Phase 17: gift card / store credit pays first; the rest is due by the chosen method.
+  const giftApplied = giftCard ? Math.min(giftCard.balance, totals.total) : 0;
+  const amountDue = Math.max(0, Math.round((totals.total - giftApplied) * 100) / 100);
   const belowMinimum = subtotal > 0 && subtotal < storeSettings.minOrderAmount;
 
   const cleanPhone = phone.replace(/[\s-]/g, "");
@@ -305,6 +310,7 @@ export function CheckoutForm({
           fulfillment,
           sessionKey: sessionKey || undefined,
           couponCode: couponCode.trim() || undefined,
+          giftCardCode: giftCard?.code,
           smsConsent,
           utm: storedUtm(tenantSlug),
           customer: {
@@ -404,12 +410,25 @@ export function CheckoutForm({
           <span className="font-medium text-emerald-700">FREE (Pickup)</span>
         </div>
       )}
+      {giftApplied > 0 && (
+        <>
+          <div className="flex justify-between gap-4 border-t border-stone-200 pt-2">
+            <span className="text-stone-500">Order total</span>
+            <span className="font-medium">{formatPrice(totals.total, storeSettings.currency)}</span>
+          </div>
+          <div className="flex justify-between gap-4 text-emerald-700" data-testid="summary-giftcard">
+            <span>{giftCard?.kind === "store_credit" ? "Store credit" : "Gift card"}</span>
+            <span>-{formatPrice(giftApplied, storeSettings.currency)}</span>
+          </div>
+        </>
+      )}
       <div className="flex items-end justify-between gap-4 border-t border-stone-200 pt-3">
-        <span className="text-sm font-semibold text-stone-800">Total Payment</span>
-        <span className="text-xl font-bold tracking-tight text-[#ee4d2d]">
-          {formatPrice(totals.total, storeSettings.currency)}
+        <span className="text-sm font-semibold text-stone-800">{giftApplied > 0 ? "Babayaran" : "Total Payment"}</span>
+        <span className="text-xl font-bold tracking-tight text-[#ee4d2d]" data-testid="summary-due">
+          {formatPrice(amountDue, storeSettings.currency)}
         </span>
       </div>
+      {giftApplied > 0 && amountDue === 0 && <p className="text-xs text-emerald-700">Bayad na lahat gamit ang card — walang babayaran pa.</p>}
       {storeSettings.minOrderAmount > 0 && (
         <p className="text-xs text-stone-500">
           Minimum order: {formatPrice(storeSettings.minOrderAmount, storeSettings.currency)}
@@ -462,7 +481,7 @@ export function CheckoutForm({
           <div className="hidden text-right text-xs text-stone-500 sm:block">
             <p className="font-semibold text-stone-800">{cart.count} item{cart.count === 1 ? "" : "s"}</p>
             <p className="font-bold text-[#ee4d2d]">
-              {formatPrice(totals.total, storeSettings.currency)}
+              {formatPrice(amountDue, storeSettings.currency)}
             </p>
           </div>
         </div>
@@ -785,6 +804,9 @@ export function CheckoutForm({
                   </span>
                 )}
               </div>
+              <div className="mt-3">
+                <GiftCardInput tenantSlug={tenantSlug} value={giftCard} onChange={setGiftCard} />
+              </div>
             </div>
           </section>
 
@@ -847,9 +869,9 @@ export function CheckoutForm({
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-stone-200 bg-white/95 px-3 py-2.5 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden">
         <div className="mx-auto flex max-w-5xl items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-stone-500">Total Payment</p>
+            <p className="text-[11px] text-stone-500">{giftApplied > 0 ? "Babayaran" : "Total Payment"}</p>
             <p className="truncate text-lg font-bold leading-tight text-[#ee4d2d]">
-              {formatPrice(totals.total, storeSettings.currency)}
+              {formatPrice(amountDue, storeSettings.currency)}
             </p>
           </div>
           <Button

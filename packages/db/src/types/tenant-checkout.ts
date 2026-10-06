@@ -422,3 +422,26 @@ export function isPaymentMethodEnabled(
   if (method === "card") return pm?.card === true;
   return false;
 }
+
+/**
+ * Phase 17 — the promos that apply without a code (quantity deals, then the automatic
+ * discount on what's left), for the POS register. Same math as computeCheckoutTotals.
+ */
+export function computeStorePromotion(
+  checkout: Pick<TenantCheckoutJson, "volumeDiscounts" | "automaticDiscount">,
+  lines: CheckoutLineForDiscount[],
+  now: Date = new Date()
+): { amount: number; labels: string[] } {
+  const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
+  const volume = computeVolumeDiscount(checkout.volumeDiscounts, lines, now);
+  const afterVolume = Math.max(0, subtotal - volume.amount);
+  const labels = [...volume.labels];
+  let extra = 0;
+  const auto = checkout.automaticDiscount;
+  if (auto && inDiscountWindow(auto, now) && subtotal >= (auto.minSubtotal ?? 0) && afterVolume > 0) {
+    extra = Math.min(afterVolume, auto.type === "percent" ? (afterVolume * auto.value) / 100 : auto.value);
+    if (extra > 0) labels.push(auto.label ?? "Automatic discount");
+  }
+  const amount = Math.round((volume.amount + extra) * 100) / 100;
+  return { amount: Math.min(amount, subtotal), labels };
+}

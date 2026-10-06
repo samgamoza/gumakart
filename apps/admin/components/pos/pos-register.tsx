@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Banknote,
+  Gift,
   CreditCard,
   History,
   Loader2,
@@ -26,10 +27,10 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
+import { computeStorePromotion, type TenantCheckoutJson } from "@gumakart/db/checkout";
 import {
   checkTenders,
-  computeSaleTotals,
-  discountRateFor,
+  computePosSaleTotals,
   type PosDiscountType,
   type PosTenderMethod,
   type SaleTotals,
@@ -154,6 +155,11 @@ interface State {
   /** Phase 12b: BIR receipt header when numbering is on (offline receipts need it). */
   bir?: (NonNullable<Receipt["bir"]> & { invoicePrefix?: string }) | null;
   offlineIssues?: number;
+  /** Phase 17: branches (empty unless the shop has more than one) and this register's branch. */
+  branches?: Array<{ id: string; name: string }>;
+  branchId?: string;
+  /** Phase 17: store promos that apply at the register. */
+  promotions?: Pick<TenantCheckoutJson, "volumeDiscounts" | "automaticDiscount">;
 }
 
 interface Receipt {
@@ -207,8 +213,8 @@ interface ReturnLine {
 const peso = (n: number) =>
   `${n < 0 ? "-" : ""}₱${Math.abs(Math.round(n * 100) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const METHOD_LABEL: Record<PosTenderMethod, string> = { cash: "Cash", gcash: "GCash", maya: "Maya", card: "Card" };
-const METHOD_ICON: Record<PosTenderMethod, typeof Banknote> = { cash: Banknote, gcash: Smartphone, maya: Smartphone, card: CreditCard };
+const METHOD_LABEL: Record<PosTenderMethod, string> = { cash: "Cash", gcash: "GCash", maya: "Maya", card: "Card", gift_card: "Gift card" };
+const METHOD_ICON: Record<PosTenderMethod, typeof Banknote> = { cash: Banknote, gcash: Smartphone, maya: Smartphone, card: CreditCard, gift_card: Gift };
 
 function newKey(): string {
   const c = globalThis.crypto as Crypto | undefined;
@@ -317,7 +323,13 @@ function ReceiptView({ r, vat }: { r: Receipt; vat: VatConfig }) {
         <span>Subtotal</span>
         <span>{peso(r.totals.subtotal)}</span>
       </p>
-      {r.discountType !== "none" && (
+      {(r.totals.promoAmount ?? 0) > 0 && (
+        <p className="flex justify-between">
+          <span>{r.totals.promoLabel ?? "Promo"}</span>
+          <span>-{peso(r.totals.promoAmount ?? 0)}</span>
+        </p>
+      )}
+      {r.discountType !== "none" && r.totals.discountAmount > 0 && (
         <>
           <p className="flex justify-between">
             <span>{r.discountType === "pwd" ? "PWD" : "Senior"} 20%</span>
@@ -664,15 +676,19 @@ export function PosRegister() {
   }, [products, query]);
 
   const subtotal = cart.reduce((s, l) => s + l.product.price * l.qty, 0);
-  const totals = useMemo(
+  const promo = useMemo(
     () =>
-      computeSaleTotals({
-        subtotal,
-        discountRate: discountRateFor(discountType),
-        discountType,
-        config: state?.vat,
-      }),
-    [subtotal, discountType, state?.vat]
+      state?.promotions
+        ? computeStorePromotion(
+            state.promotions,
+            cart.map((l) => ({ productId: l.product.productId, quantity: l.qty, lineTotal: l.product.price * l.qty }))
+          )
+        : null,
+    [cart, state?.promotions]
+  );
+  const totals = useMemo(
+    () => computePosSaleTotals({ subtotal, discountType, config: state?.vat, promo }),
+    [subtotal, discountType, state?.vat, promo]
   );
   const itemCount = cart.reduce((s, l) => s + l.qty, 0);
 
@@ -866,7 +882,31 @@ export function PosRegister() {
           </Link>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold">{state.shop.name} · POS</p>
+          <p className="truncate text-sm font-bold">
+            {state.shop.name} · POS
+            {(state.branches?.length ?? 0) > 1 && (
+              <select
+                className="ml-2 rounded-md border border-white/15 bg-transparent px-1 py-0.5 text-xs font-medium text-slate-200"
+                value={state.branchId}
+                disabled={Boolean(state.shift) || state.actor.role === "cashier" || !online}
+                title={state.shift ? "Close the shift to switch branch" : "Branch this register sells from"}
+                aria-label="Branch"
+                data-testid="pos-branch"
+                onChange={async (e) => {
+                  const r = await api("/api/pos/branch", { method: "POST", body: JSON.stringify({ locationId: e.target.value }) });
+                  if (!r.ok) return setNotice(r.error ?? "Couldn't switch branch.");
+                  await load();
+                  await loadProducts();
+                }}
+              >
+                {state.branches!.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-slate-900">
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </p>
           <p className="truncate text-xs text-slate-400">
             {state.actor.name}
             {state.actor.role !== "cashier" ? ` (${state.actor.role})` : ""}
@@ -1340,11 +1380,20 @@ function CartPanel(props: {
             <dt>Subtotal</dt>
             <dd>{peso(totals.subtotal)}</dd>
           </div>
+          {(totals.promoAmount ?? 0) > 0 && (
+            <div className="flex justify-between text-emerald-300" data-testid="pos-promo">
+              <dt>{totals.promoLabel}</dt>
+              <dd>-{peso(totals.promoAmount ?? 0)}</dd>
+            </div>
+          )}
           {totals.discountAmount > 0 && (
             <div className="flex justify-between text-emerald-300">
               <dt>{discountType === "pwd" ? "PWD" : "Senior"} 20%{vat.registered ? " (VAT-exempt)" : ""}</dt>
               <dd>-{peso(totals.discountAmount)}</dd>
             </div>
+          )}
+          {discountType !== "none" && (totals.promoAmount ?? 0) > 0 && (
+            <p className="text-[11px] text-slate-400">Store promo is better than the 20% here — Senior/PWD buyers get whichever is higher, not both.</p>
           )}
           {vat.registered && !totals.vatExempt && (
             <div className="flex justify-between text-xs text-slate-500">
@@ -1362,6 +1411,34 @@ function CartPanel(props: {
           Charge {peso(totals.total)}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Phase 17: gift card / store credit code with a balance check (the sale spends it). */
+function GiftCardField({ code, setCode, due, onBalance }: { code: string; setCode: (v: string) => void; due: number; onBalance: (use: number) => void }) {
+  const [info, setInfo] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  async function check() {
+    setChecking(true);
+    setInfo(null);
+    const r = await fetch(`/api/pos/gift-cards?code=${encodeURIComponent(code)}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+    setChecking(false);
+    if (!r?.ok) return setInfo(r?.error ?? "Couldn't check the card.");
+    const use = Math.min(Number(r.card.balance), due);
+    setCode(r.card.code);
+    onBalance(use);
+    setInfo(`${r.card.kind === "store_credit" ? "Store credit" : "Gift card"} balance ${peso(r.card.balance)} — using ${peso(use)}.`);
+  }
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-2">
+        <input className="guma-field flex-1 font-mono uppercase" placeholder="GC-XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} data-testid="pos-giftcard-code" />
+        <button type="button" className="rounded-xl border border-white/15 px-3 text-sm" disabled={checking || code.trim().length < 8} onClick={() => void check()}>
+          {checking ? "…" : "Check"}
+        </button>
+      </div>
+      {info && <p className="text-xs text-slate-300" data-testid="pos-giftcard-info">{info}</p>}
     </div>
   );
 }
@@ -1404,9 +1481,9 @@ function PayModal({
   const quick = Array.from(new Set([total, Math.ceil(total / 50) * 50, Math.ceil(total / 100) * 100, 500, 1000].filter((n) => n >= total))).slice(0, 4);
 
   const methodButtons = (value: PosTenderMethod, set: (m: PosTenderMethod) => void, exclude?: PosTenderMethod) => (
-    <div className="grid grid-cols-4 gap-1.5">
-      {(["cash", "gcash", "maya", "card"] as const)
-        .filter((m) => m !== exclude)
+    <div className="grid grid-cols-5 gap-1.5">
+      {(["cash", "gcash", "maya", "card", "gift_card"] as const)
+        .filter((m) => m !== exclude && !(offline && m === "gift_card"))
         .map((m) => {
           const Icon = METHOD_ICON[m];
           return (
@@ -1445,9 +1522,11 @@ function PayModal({
             ))}
           </div>
         )}
-        {first !== "cash" && (
+        {first === "gift_card" ? (
+          <GiftCardField code={firstRef} setCode={setFirstRef} due={total} onBalance={(use) => setFirstAmount(use.toFixed(2))} />
+        ) : first !== "cash" ? (
           <input className="guma-field" placeholder={first === "card" ? "Terminal approval code (optional)" : "Reference no. (optional)"} value={firstRef} onChange={(e) => setFirstRef(e.target.value)} />
-        )}
+        ) : null}
 
         {!split ? (
           <button
@@ -1472,9 +1551,11 @@ function PayModal({
             </div>
             {methodButtons(second, setSecond, first)}
             <MoneyInput label="Amount" value={secondAmount} onChange={setSecondAmount} />
-            {second !== "cash" && (
+            {second === "gift_card" ? (
+              <GiftCardField code={secondRef} setCode={setSecondRef} due={Math.max(total - Number(firstAmount || 0), 0)} onBalance={(use) => setSecondAmount(use.toFixed(2))} />
+            ) : second !== "cash" ? (
               <input className="guma-field" placeholder="Reference no. (optional)" value={secondRef} onChange={(e) => setSecondRef(e.target.value)} />
-            )}
+            ) : null}
           </div>
         )}
 
@@ -1593,7 +1674,7 @@ function SaleManage({ receipt, onDone }: { receipt: Receipt; onDone: (msg: strin
   const [lines, setLines] = useState<ReturnLine[] | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [restock, setRestock] = useState(true);
-  const [method, setMethod] = useState<PosTenderMethod>("cash");
+  const [method, setMethod] = useState<Exclude<PosTenderMethod, "gift_card"> | "store_credit">("cash");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1686,10 +1767,11 @@ function SaleManage({ receipt, onDone }: { receipt: Receipt; onDone: (msg: strin
           </label>
           <div className="grid grid-cols-2 gap-2">
             <input className="guma-field h-10" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Refund ₱" aria-label="Refund amount" />
-            <select className="guma-field h-10" value={method} onChange={(e) => setMethod(e.target.value as PosTenderMethod)} aria-label="Refund by">
+            <select className="guma-field h-10" value={method} onChange={(e) => setMethod(e.target.value as typeof method)} aria-label="Refund by">
               {(["cash", "gcash", "maya", "card"] as const).map((m) => (
                 <option key={m} value={m}>{METHOD_LABEL[m]}</option>
               ))}
+              <option value="store_credit">Store credit</option>
             </select>
           </div>
           <input className="guma-field h-10" placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
@@ -1781,6 +1863,7 @@ function CloseShiftModal({ shift, summary, onClose, onClosed }: { shift: Shift; 
     gcash: summary.expected.gcash ? summary.expected.gcash.toFixed(2) : "0",
     maya: summary.expected.maya ? summary.expected.maya.toFixed(2) : "0",
     card: summary.expected.card ? summary.expected.card.toFixed(2) : "0",
+    gift_card: (summary.expected.gift_card ?? 0).toFixed(2),
   });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);

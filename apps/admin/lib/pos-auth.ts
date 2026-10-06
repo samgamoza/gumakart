@@ -98,3 +98,11 @@ export function posCookieOptions(maxAge: number) {
   const secure = override === "false" || override === "0" ? false : override === "true" || override === "1" ? true : process.env.NODE_ENV === "production";
   return { httpOnly: true, secure, sameSite: "lax" as const, path: "/", maxAge };
 }
+
+/** Phase 17: which branch this register device sells from (validated server-side on use). */
+export const POS_BRANCH_COOKIE = "gk_pos_branch";
+
+export async function posBranchId(): Promise<string | null> {
+  const value = (await cookies()).get(POS_BRANCH_COOKIE)?.value ?? null;
+  return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+}

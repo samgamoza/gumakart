@@ -3,6 +3,8 @@ import {
   BadgePercent,
   Blocks,
   Code2,
+  MapPin,
+  Gift,
   LifeBuoy,
   BarChart3,
   Megaphone,
@@ -179,6 +181,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         description: "Coupon codes, quantity deals and automatic discounts.",
       },
       {
+        id: "gift-cards",
+        label: "Gift cards",
+        href: "/gift-cards",
+        icon: Gift,
+        badge: "new",
+        description: "Gift cards and store credit — buyers use the code online or at the POS.",
+      },
+      {
         id: "automations",
         label: "Auto SMS",
         href: "/automations",
@@ -267,6 +277,14 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         href: "/settings/shop",
         icon: Store,
         description: "Shop name, category, and contact details.",
+      },
+      {
+        id: "settings-branches",
+        label: "Branches",
+        href: "/settings/branches",
+        icon: MapPin,
+        badge: "new",
+        description: "Stores, stalls and warehouses — stock per branch, POS per branch.",
       },
       {
         id: "settings-pos",

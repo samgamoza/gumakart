@@ -27,7 +27,11 @@ export const DEFAULT_POS_VAT: VatConfig = { rate: DEFAULT_VAT_RATE, inclusive: t
 
 export interface SaleTotals {
   subtotal: number;
+  /** Senior/PWD 20% (0 otherwise). */
   discountAmount: number;
+  /** Phase 17: store promos (quantity deals + automatic discount) taken off before VAT. */
+  promoAmount?: number;
+  promoLabel?: string | null;
   netOfVat: number;
   vatAmount: number;
   vatExemptSales: number;
@@ -120,11 +124,46 @@ export function computeSaleTotals(input: {
   };
 }
 
+export interface PosPromotion {
+  amount: number;
+  labels: string[];
+}
+
+/**
+ * Phase 17 — POS totals with store promos (quantity deals, automatic discount).
+ * Promos come off the shelf price first (VAT-inclusive), then VAT is worked out as usual.
+ * Senior/PWD: the law lets the buyer take the 20% discount OR a store promo, whichever is
+ * better for them — never both — so both are computed and the lower total wins.
+ */
+export function computePosSaleTotals(input: {
+  subtotal: number;
+  discountType?: PosDiscountType;
+  config?: VatConfig;
+  promo?: PosPromotion | null;
+}): SaleTotals {
+  const subtotal = Number(input.subtotal) || 0;
+  const type = input.discountType ?? "none";
+  const promoAmount = money(Math.min(Math.max(0, input.promo?.amount ?? 0), subtotal));
+  const promoLabel = promoAmount > 0 && input.promo?.labels.length ? input.promo.labels.join(" + ") : promoAmount > 0 ? "Promo" : null;
+  const withPromo = (): SaleTotals => ({
+    ...computeSaleTotals({ subtotal: subtotal - promoAmount, discountType: "none", config: input.config }),
+    subtotal: money(subtotal),
+    promoAmount,
+    promoLabel,
+  });
+  if (type === "none") return promoAmount > 0 ? withPromo() : { ...computeSaleTotals({ subtotal, config: input.config }), promoAmount: 0, promoLabel: null };
+  const senior: SaleTotals = { ...computeSaleTotals({ subtotal, discountRate: discountRateFor(type), discountType: type, config: input.config }), promoAmount: 0, promoLabel: null };
+  if (promoAmount <= 0) return senior;
+  const promo = withPromo();
+  return promo.total < senior.total ? promo : senior;
+}
+
 export function discountRateFor(type: PosDiscountType): number {
   return type === "senior" || type === "pwd" ? SENIOR_PWD_DISCOUNT_RATE : 0;
 }
 
-export type PosTenderMethod = "cash" | "gcash" | "maya" | "card";
+/** Phase 17: gift_card = gift card or store credit (code in `reference`). */
+export type PosTenderMethod = "cash" | "gcash" | "maya" | "card" | "gift_card";
 
 export interface PosTender {
   method: PosTenderMethod;
@@ -149,14 +188,14 @@ export function checkTenders(total: number, tenders: PosTender[]): TenderCheck {
   const due = cents(total);
   let cash = 0;
   let other = 0;
-  const paidByMethod: Record<PosTenderMethod, number> = { cash: 0, gcash: 0, maya: 0, card: 0 };
+  const paidByMethod: Record<PosTenderMethod, number> = { cash: 0, gcash: 0, maya: 0, card: 0, gift_card: 0 };
   for (const t of tenders) {
     const amount = cents(Number(t.amount));
     if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Payment amounts must be more than zero." };
     if (t.method === "cash") cash += amount;
     else other += amount;
   }
-  if (other > due) return { ok: false, error: "GCash, Maya or card can't be more than the amount due." };
+  if (other > due) return { ok: false, error: "GCash, Maya, card or gift card can't be more than the amount due." };
   if (cash + other < due) return { ok: false, error: `Still short by ₱${((due - cash - other) / 100).toFixed(2)}.` };
   const change = cash + other - due;
   if (change > cash) return { ok: false, error: "Change can only come from cash." };

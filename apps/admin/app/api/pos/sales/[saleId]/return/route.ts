@@ -17,7 +17,7 @@ const schema = z.object({
     .max(100),
   refundAmount: z.number().min(0).max(10_000_000),
   collectedAmount: z.number().min(0).max(10_000_000).optional(),
-  refundMethod: z.enum(["cash", "gcash", "maya", "card", "none"]),
+  refundMethod: z.enum(["cash", "gcash", "maya", "card", "store_credit", "none"]),
   note: z.string().max(300).nullish(),
 });
 

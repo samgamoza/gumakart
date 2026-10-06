@@ -10,7 +10,7 @@ import {
   type PosOfflineInfo,
 } from "@gumakart/db";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
-import { posErrorResponse, requirePosActor } from "@/lib/pos-auth";
+import { posErrorResponse, requirePosActor, posBranchId } from "@/lib/pos-auth";
 
 const totalsSchema = z
   .object({
@@ -40,7 +40,7 @@ const bodySchema = z.object({
   tenders: z
     .array(
       z.object({
-        method: z.enum(["cash", "gcash", "maya", "card"]),
+        method: z.enum(["cash", "gcash", "maya", "card", "gift_card"]),
         amount: z.number().positive().max(10_000_000),
         reference: z.string().max(60).optional(),
       })
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
         cashierName = body.offline.cashierName.trim().slice(0, 80) || actor.name;
       }
     } else {
-      const register = await ensureRegister(actor.tenantId);
+      const register = await ensureRegister(actor.tenantId, await posBranchId());
       const shift = await getOpenShift(actor.tenantId, register.id);
       if (!shift) throw new PosError("Open a shift first.", "NO_SHIFT");
       shiftId = shift.id;

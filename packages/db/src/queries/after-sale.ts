@@ -12,6 +12,7 @@ import {
 } from "../schema/index";
 import { applyOrderActionInTx, applyWalletEffects, restockOrderInTx, type ApplyOrderActionResult } from "./order-lifecycle";
 import { OrderError } from "./order-status";
+import { issueGiftCardInTx, restoreGiftCardsForOrderInTx } from "./gift-cards";
 import { recordStockMovement } from "./stock-ledger";
 
 /**
@@ -123,6 +124,8 @@ export interface AfterSaleView {
   refunded: number;
   /** What can still be refunded. */
   refundable: number;
+  /** Phase 17: paid by gift card / store credit (restored to the card on a full refund). */
+  giftCard: number;
   staffNote: string | null;
   tags: string[];
   canEdit: boolean;
@@ -180,7 +183,7 @@ export async function getAfterSaleView(tenantId: string, orderId: string): Promi
       .where(and(eq(paymentTransactions.orderId, orderId), eq(paymentTransactions.gateway, "paymongo"), eq(paymentTransactions.status, "pending")))
       .limit(1),
   ]);
-  const refundableC = Math.max(0, c(order.total) - c(order.refundedAmount));
+  const refundableC = Math.max(0, c(order.total) - c(order.giftCardAmount ?? 0) - c(order.refundedAmount));
   const [paid] = await db
     .select({ gateway: paymentTransactions.gateway })
     .from(paymentTransactions)
@@ -202,6 +205,7 @@ export async function getAfterSaleView(tenantId: string, orderId: string): Promi
     total: Number(order.total),
     refunded: Number(order.refundedAmount),
     refundable: refundableC / 100,
+    giftCard: Number(order.giftCardAmount ?? 0),
     staffNote: order.staffNote,
     tags: order.tagsJson ?? [],
     canEdit: edit === null,
@@ -511,7 +515,7 @@ export async function editOrderItems(
 
 // ─── Returns, exchanges, partial refunds ─────────────────────────────────────
 
-export const REFUND_METHODS = ["original", "cash", "gcash", "maya", "bank", "card", "none"] as const;
+export const REFUND_METHODS = ["original", "cash", "gcash", "maya", "bank", "card", "store_credit", "none"] as const;
 export type RefundMethod = (typeof REFUND_METHODS)[number];
 
 export interface ReturnItemInput {
@@ -542,6 +546,8 @@ export interface ReturnResult {
   restockedUnits: number;
   gatewayRefundId: string | null;
   summary: string;
+  /** Phase 17: the store credit issued when refundMethod = store_credit. */
+  storeCredit?: { code: string; amount: number } | null;
 }
 
 export async function recordReturn(
@@ -563,7 +569,10 @@ export async function recordReturn(
   let applied: ApplyOrderActionResult | null = null;
   const result = await db.transaction(async (tx) => {
     const order = await lockOrder(tx, tenantId, orderId);
-    const refundableC = c(order.total) - c(order.refundedAmount);
+    // Phase 17: the part paid by gift card / store credit goes back on the card (when the
+    // order is fully refunded), so only the rest can be refunded as money.
+    const giftC = c(order.giftCardAmount ?? 0);
+    const refundableC = c(order.total) - giftC - c(order.refundedAmount);
     const blocked = returnBlocked(order, refundableC);
     if (blocked) throw new OrderError(blocked, "INVALID_TRANSITION");
     if (refundC > refundableC) throw new OrderError(`You can refund up to ₱${peso(refundableC)} on this order.`, "INVALID_TRANSITION");
@@ -634,6 +643,22 @@ export async function recordReturn(
 
     const refundedAfterC = c(order.refundedAmount) + refundC;
     await tx.update(orders).set({ refundedAmount: peso(refundedAfterC) }).where(eq(orders.id, orderId));
+
+    // Phase 17: refund as store credit — a credit the buyer spends on a later order.
+    let storeCredit: { code: string; amount: number } | null = null;
+    if (refundC > 0 && input.refundMethod === "store_credit") {
+      const card = await issueGiftCardInTx(tx, {
+        tenantId,
+        amount: refundC / 100,
+        kind: "store_credit",
+        customerId: order.customerRecordId,
+        recipientName: order.guestName && order.guestName !== "Walk-in" ? order.guestName : null,
+        note: `Return on ${order.orderNumber}`,
+        createdByName: actor.name,
+        orderId,
+      });
+      storeCredit = { code: card.code, amount: card.balance };
+    }
     const [row] = await tx
       .insert(orderReturns)
       .values({
@@ -655,12 +680,12 @@ export async function recordReturn(
       .returning({ id: orderReturns.id });
 
     const what = items.map((i) => `${i.qty}× ${i.title}${i.replacementTitle ? ` → ${i.replacementTitle}` : ""}`).join(", ");
-    const summary = `${kind === "exchange" ? "Exchange" : "Return"} on ${order.orderNumber}${what ? `: ${what}` : ""}${refundC ? ` · refunded ₱${peso(refundC)}` : ""}${collectedC ? ` · collected ₱${peso(collectedC)}` : ""}`;
+    const summary = `${kind === "exchange" ? "Exchange" : "Return"} on ${order.orderNumber}${what ? `: ${what}` : ""}${refundC ? ` · refunded ₱${peso(refundC)}${storeCredit ? ` as store credit ${storeCredit.code}` : ""}` : ""}${collectedC ? ` · collected ₱${peso(collectedC)}` : ""}`;
     await tx.insert(orderStatusHistory).values({ orderId, status: order.status, event: `order_${kind}`, note: summary.slice(0, 500), actorId: actor.userId });
 
     // Everything refunded → the order closes as refunded (normal state machine, no restock:
     // the goods were with the buyer and came back item by item above).
-    const fullyRefunded = refundedAfterC >= c(order.total) && c(order.total) > 0;
+    const fullyRefunded = refundedAfterC >= c(order.total) - giftC && c(order.total) > 0;
     if (fullyRefunded) {
       applied = await applyOrderActionInTx(tx, {
         orderId,
@@ -671,8 +696,10 @@ export async function recordReturn(
         note: "Fully refunded through returns",
         payment: { refundId: gatewayRefundId, viaRefundFlow: true },
       });
+      // The gift-card part was put back on its card by the refund action.
+      if (giftC > 0) await tx.update(orders).set({ refundedAmount: order.total }).where(eq(orders.id, orderId));
     }
-    return { returnId: row!.id, orderNumber: order.orderNumber, refunded: refundC / 100, fullyRefunded, restockedUnits, gatewayRefundId, summary };
+    return { returnId: row!.id, orderNumber: order.orderNumber, refunded: refundC / 100, fullyRefunded, restockedUnits, gatewayRefundId, summary, storeCredit };
   });
   if (applied) await applyWalletEffects(applied);
   return result;
@@ -712,6 +739,7 @@ export async function voidPosSale(
     if (ret) throw new OrderError("This sale already has a return — it can't be voided.", "INVALID_TRANSITION");
 
     await restockOrderInTx(tx, orderId, "restock_cancel", actor.userId);
+    await restoreGiftCardsForOrderInTx(tx, { tenantId, orderId, actorName: actor.name || "Cashier", note: "POS sale voided — balance put back" });
     applied = await applyOrderActionInTx(tx, {
       orderId,
       tenantId,

@@ -85,6 +85,8 @@ export interface ReadingTotals {
   gcash: number;
   maya: number;
   card: number;
+  /** Phase 17: gift card / store credit tenders. */
+  giftCard: number;
   firstInvoice: string | null;
   lastInvoice: string | null;
 }
@@ -96,7 +98,7 @@ async function totalsFor(tenantId: string, where: { shiftIds: string[] }): Promi
   const empty: ReadingTotals = {
     transactions: 0, grossSales: 0, regularDiscounts: 0, seniorDiscounts: 0, pwdDiscounts: 0, vatableSales: 0, vatAmount: 0,
     vatExemptSales: 0, zeroRatedSales: 0, returns: 0, returnCount: 0, voids: 0, voidCount: 0, netSales: 0, cash: 0, gcash: 0,
-    maya: 0, card: 0, firstInvoice: null, lastInvoice: null,
+    maya: 0, card: 0, giftCard: 0, firstInvoice: null, lastInvoice: null,
   };
   if (where.shiftIds.length === 0) return empty;
   const sales = await db
@@ -124,6 +126,8 @@ async function totalsFor(tenantId: string, where: { shiftIds: string[] }): Promi
     }
     t.netSales += Number(s.total);
     for (const m of ["cash", "gcash", "maya", "card"] as const) t[m] += Number(meta.paidByMethod?.[m] ?? 0);
+    t.giftCard += Number(meta.paidByMethod?.gift_card ?? 0);
+    t.regularDiscounts += totals?.promoAmount ?? 0;
   }
   const rets = await db
     .select({ kind: orderReturns.kind, amount: orderReturns.refundAmount, collected: orderReturns.collectedAmount })

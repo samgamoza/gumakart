@@ -313,6 +313,12 @@ export function InventoryManager() {
             {label}
           </button>
         ))}
+        <Link
+          href="/inventory/branches"
+          className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/[0.05]"
+        >
+          By branch →
+        </Link>
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <input

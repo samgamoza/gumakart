@@ -165,6 +165,9 @@ export const API_RULES: ApiRule[] = [
   { pattern: /^\/api\/reports(\/|$)/, permission: "reports.view" },
   { pattern: /^\/api\/(discounts|campaigns)(\/|$)/, permission: "marketing.manage" },
   { pattern: /^\/api\/developers(\/|$)/, permission: "developers.manage" },
+  { pattern: /^\/api\/gift-cards(\/|$)/, permission: "orders.payments" },
+  { pattern: /^\/api\/branches(\/|$)/, permission: "settings.shop" },
+  { pattern: /^\/api\/inventory\/(branches|transfer)(\/|$)/, permission: "stock.adjust" },
   { pattern: /^\/api\/integrations(\/|$)/, permission: "settings.shop" },
 
   // Shop setup
@@ -226,6 +229,7 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/discounts", permission: "marketing.manage" },
   { prefix: "/campaigns", permission: "marketing.manage" },
   { prefix: "/developers", permission: "developers.manage" },
+  { prefix: "/gift-cards", permission: "orders.payments" },
   { prefix: "/integrations", permission: "settings.shop" },
   { prefix: "/agents", permission: "marketing.manage" },
   { prefix: "/ai-studio", permission: "marketing.manage" },

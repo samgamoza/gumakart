@@ -41,6 +41,7 @@ interface OrderRow {
   paymentMethod: string;
   deliveryType: string;
   total: string;
+  giftCardAmount?: string;
   itemsSummary: string;
   itemCount: number;
   createdAt: string;
@@ -610,6 +611,14 @@ export function OrdersManager() {
                     <p className="mt-1 font-bold text-emerald-700">
                       {formatPrice(Number(order.total))}
                     </p>
+                    {Number(order.giftCardAmount ?? 0) > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {formatPrice(Number(order.giftCardAmount ?? 0))} by gift card ·{" "}
+                        {Number(order.total) - Number(order.giftCardAmount ?? 0) > 0.004
+                          ? `${order.paymentMethod === "cod" ? "collect" : "due"} ${formatPrice(Number(order.total) - Number(order.giftCardAmount ?? 0))}`
+                          : "fully paid"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {canConfirm && perms.can("orders.payments") && (

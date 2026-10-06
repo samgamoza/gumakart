@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ensureRegister, getOrReserveInvoiceBlock, PosOfflineError } from "@gumakart/db";
-import { posErrorResponse, requirePosActor } from "@/lib/pos-auth";
+import { posErrorResponse, requirePosActor, posBranchId } from "@/lib/pos-auth";
 
 /**
  * BIR on: this device's block of invoice numbers for receipts printed while offline.
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = z
       .object({ deviceId: z.string().regex(/^[A-Za-z0-9_-]{8,40}$/), replaceBlockId: z.string().uuid().nullish() })
       .parse(await request.json());
-    const register = await ensureRegister(actor.tenantId);
+    const register = await ensureRegister(actor.tenantId, await posBranchId());
     const block = await getOrReserveInvoiceBlock({
       tenantId: actor.tenantId,
       registerId: register.id,

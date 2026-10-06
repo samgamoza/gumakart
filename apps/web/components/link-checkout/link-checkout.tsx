@@ -1,5 +1,7 @@
 "use client";
 
+import { GiftCardInput, type AppliedGiftCard } from "@/components/gift-card-input";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, MapPin, Minus, Plus, ShieldCheck, Store, Truck } from "lucide-react";
 import { computeCheckoutTotals, type TenantCheckoutJson } from "@gumakart/db/checkout";
@@ -175,6 +177,10 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
     lines: data.items.map((i) => ({ productId: i.productId, quantity: quantities[i.key] ?? i.quantity, lineTotal: i.price * (quantities[i.key] ?? i.quantity) })),
   });
   const belowMinimum = data.minOrderAmount > 0 && subtotal < data.minOrderAmount;
+  // Phase 17: gift card / store credit pays first.
+  const [giftCard, setGiftCard] = useState<AppliedGiftCard | null>(null);
+  const giftApplied = giftCard ? Math.min(giftCard.balance, totals.total) : 0;
+  const amountDue = Math.max(0, Math.round((totals.total - giftApplied) * 100) / 100);
 
   // Save progress once the buyer has given a valid number (counts as "started checkout").
   const savedFor = useRef<string>("");
@@ -241,6 +247,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
           paymentMethod: method,
           fulfillment,
           smsConsent,
+          giftCardCode: giftCard?.code,
           customer: { name: name.trim(), phone: phMobile(phone), email: email.trim() || undefined },
           ...(fulfillment === "delivery"
             ? {
@@ -368,7 +375,16 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
             muted={fulfillment === "delivery" && deliveryFee == null}
           />
           <div className="my-1 border-t border-dashed border-[color:var(--kart-line)]" />
-          <Row label="Total" value={peso(totals.total)} bold />
+          <Row label="Total" value={peso(totals.total)} bold={giftApplied === 0} />
+          {giftApplied > 0 && (
+            <>
+              <Row label={giftCard?.kind === "store_credit" ? "Store credit" : "Gift card"} value={`−${peso(giftApplied)}`} />
+              <Row label="Babayaran" value={peso(amountDue)} bold />
+            </>
+          )}
+          <div className="mt-2">
+            <GiftCardInput tenantSlug={data.shop.slug} value={giftCard} onChange={setGiftCard} tone="neutral" />
+          </div>
         </div>
         <button
           type="button"
@@ -377,7 +393,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
           className="k-btn k-btn-primary mt-3 hidden w-full text-[15px] lg:flex"
         >
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {submitting ? "Pinapadala ang order mo…" : `I-place ang order · ${peso(totals.total)}`}
+          {submitting ? "Pinapadala ang order mo…" : `I-place ang order · ${peso(amountDue)}`}
         </button>
         {methodLabel && <p className="mt-2 hidden text-center text-xs text-[color:var(--kart-muted)] lg:block">Bayad: {methodLabel}</p>}
         {belowMinimum && (
@@ -619,7 +635,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
         <div className="mx-auto flex max-w-md items-center gap-3 p-3">
           <div className="min-w-[84px]">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--kart-muted)]">Total</p>
-            <p className="text-lg font-extrabold leading-tight tabular-nums">{peso(totals.total)}</p>
+            <p className="text-lg font-extrabold leading-tight tabular-nums">{peso(amountDue)}</p>
             {methodLabel && <p className="text-[11px] text-[color:var(--kart-muted)]">{methodLabel}</p>}
           </div>
           <button

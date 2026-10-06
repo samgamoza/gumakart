@@ -12,6 +12,7 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  primaryKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -352,6 +353,8 @@ export const tenants = pgTable(
     subscriptionPlan: varchar("subscription_plan", { length: 50 }).default("free"),
     /** When a PayMongo-billed plan period ends; null for free/manual plans. */
     planExpiresAt: timestamp("plan_expires_at", { withTimezone: true }),
+    /** Phase 17: stock is tracked per branch (location_stock) once a second branch is added. */
+    branchStockEnabled: boolean("branch_stock_enabled").default(false).notNull(),
     /** Next per-tenant order sequence number, claimed atomically at checkout. */
     nextOrderSeq: integer("next_order_seq").default(1).notNull(),
     status: varchar("status", { length: 20 }).default("active").notNull(),
@@ -690,6 +693,8 @@ export const orders = pgTable(
     externalOrderId: varchar("external_order_id", { length: 80 }),
     /** The Messenger/Instagram conversation the order link was sent in. */
     socialThreadId: uuid("social_thread_id").references((): AnyPgColumn => socialThreads.id, { onDelete: "set null" }),
+    /** Phase 17: part of the total paid with a gift card / store credit (amount due = total − this). */
+    giftCardAmount: decimal("gift_card_amount", { precision: 12, scale: 2 }).default("0").notNull(),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -765,6 +770,10 @@ export const stockMovementReasonEnum = pgEnum("stock_movement_reason", [
   "order_edit",
   "return_restock",
   "exchange_out",
+  // Phase 17: branch stock.
+  "transfer_out",
+  "transfer_in",
+  "branch_count",
 ]);
 
 /**
@@ -2234,6 +2243,71 @@ export const billingNotices = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("billing_notices_unique_idx").on(table.tenantId, table.kind, table.periodEnd)]
+);
+
+// ─── Phase 17: gift cards, store credit, branch stock ───────────────────────
+
+export const giftCards = pgTable(
+  "gift_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    code: varchar("code", { length: 24 }).notNull(),
+    kind: varchar("kind", { length: 14 }).$type<"gift_card" | "store_credit">().default("gift_card").notNull(),
+    initialAmount: decimal("initial_amount", { precision: 12, scale: 2 }).notNull(),
+    balance: decimal("balance", { precision: 12, scale: 2 }).notNull(),
+    status: varchar("status", { length: 10 }).$type<"active" | "disabled">().default("active").notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    recipientName: varchar("recipient_name", { length: 120 }),
+    note: varchar("note", { length: 200 }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdByName: varchar("created_by_name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("gift_cards_tenant_code_idx").on(table.tenantId, table.code), index("gift_cards_customer_idx").on(table.customerId)]
+);
+
+export const giftCardTxns = pgTable(
+  "gift_card_txns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cardId: uuid("card_id")
+      .references(() => giftCards.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    kind: varchar("kind", { length: 10 }).$type<"issue" | "redeem" | "restore" | "adjust">().notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    balanceAfter: decimal("balance_after", { precision: 12, scale: 2 }).notNull(),
+    note: varchar("note", { length: 200 }),
+    actorName: varchar("actor_name", { length: 80 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("gift_card_txns_card_idx").on(table.cardId, table.createdAt), index("gift_card_txns_order_idx").on(table.orderId)]
+);
+
+/** Stock per branch; kept equal to product_variants.stock_qty in total by a DB trigger (0035). */
+export const locationStock = pgTable(
+  "location_stock",
+  {
+    locationId: uuid("location_id")
+      .references(() => locations.id, { onDelete: "cascade" })
+      .notNull(),
+    variantId: uuid("variant_id")
+      .references(() => productVariants.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    qty: integer("qty").default(0).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.locationId, table.variantId] }), index("location_stock_variant_idx").on(table.variantId), index("location_stock_tenant_idx").on(table.tenantId)]
 );
 
 // ─── Phase 12: Guma ID ───────────────────────────────────────────────────────

@@ -41,6 +41,7 @@ import {
 
 export { ORDER_STATUS_TRANSITIONS, OrderError, type OrderStatus } from "./order-status";
 import { OrderError, type OrderStatus } from "./order-status";
+import { GiftCardError, redeemGiftCardInTx } from "./gift-cards";
 
 function toCentavos(value: string | number): number {
   return Math.round(Number(value) * 100);
@@ -97,6 +98,8 @@ export interface CreateOrderInput {
   utmJson?: Record<string, string> | null;
   /** Phase 13: set when the channel is known for sure (marketplace import, chat order). */
   salesChannel?: string | null;
+  /** Phase 17: gift card / store credit code — pays as much of the total as its balance covers. */
+  giftCardCode?: string | null;
 }
 
 export interface CreatedOrder {
@@ -114,6 +117,12 @@ export interface CreatedOrder {
   /** Secret for the buyer's order link (?t=…). Never log it. */
   accessToken: string;
   items: Array<{ title: string; quantity: number; unitPrice: string; lineTotal: string }>;
+  /** Phase 17: paid with a gift card / store credit, and what's left to pay. */
+  giftCardAmount: string;
+  amountDue: string;
+  amountDueCentavos: number;
+  /** The gift card covered everything — the order is already paid. */
+  paidInFull: boolean;
 }
 
 /**
@@ -483,9 +492,52 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       })
       .returning({ id: orderStatusHistory.id });
 
+    // Phase 17: gift card / store credit pays first (balance row-locked). If it covers the
+    // whole order, the order is paid now; otherwise the rest is due by the chosen method.
+    let giftCentavos = 0;
+    let paidInFull = false;
+    if (input.giftCardCode?.trim()) {
+      try {
+        const used = await redeemGiftCardInTx(tx, {
+          tenantId: tenant.id,
+          code: input.giftCardCode,
+          maxAmount: totalCentavos / 100,
+          orderId: order.id,
+          actorName: input.customer.name || "Buyer",
+        });
+        giftCentavos = toCentavos(used.amount);
+      } catch (error) {
+        if (error instanceof GiftCardError) throw new OrderError(error.message, "GIFT_CARD_INVALID");
+        throw error;
+      }
+      paidInFull = giftCentavos >= totalCentavos;
+      const now = new Date();
+      await tx.insert(paymentTransactions).values({
+        orderId: order.id,
+        tenantId: tenant.id,
+        gateway: "manual",
+        gatewayIntentId: `giftcard_${order.id}`,
+        amount: fromCentavos(giftCentavos),
+        status: "paid",
+        methodType: "gift_card",
+        paidAt: now,
+      });
+      const paidFacts = { ...initialFacts, paymentState: "paid" as const };
+      await tx
+        .update(orders)
+        .set({
+          giftCardAmount: fromCentavos(giftCentavos),
+          ...(paidInFull
+            ? { paymentState: "paid" as const, paymentStatus: "paid" as const, paidAt: now, paymentMethod: "gift_card", status: legacyStatusOf(paidFacts) }
+            : {}),
+        })
+        .where(eq(orders.id, order.id));
+    }
+    const amountDueCentavos = Math.max(0, totalCentavos - giftCentavos);
+
     // COD has its charge row from the start (amount due on delivery). Manual
     // and PayMongo rows are added by the checkout route once it knows which.
-    if (isCod) {
+    if (isCod && !paidInFull) {
       await tx
         .insert(paymentTransactions)
         .values({
@@ -493,7 +545,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
           tenantId: tenant.id,
           gateway: "cod",
           gatewayIntentId: `cod_${order.id}`,
-          amount: order.total,
+          amount: fromCentavos(amountDueCentavos),
           status: "pending",
           methodType: "cod",
         })
@@ -515,6 +567,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         total: order.total,
         historyId: history?.id ?? null,
         ...initialFacts,
+        ...(paidInFull ? { paymentState: "paid" } : {}),
       },
     });
 
@@ -570,7 +623,6 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       id: order.id,
       orderNumber: order.orderNumber,
       tenantId: tenant.id,
-      status: order.status as OrderStatus,
       subtotal: order.subtotal,
       discount: order.discount ?? "0.00",
       tax: order.tax ?? "0.00",
@@ -585,6 +637,11 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         unitPrice: fromCentavos(line.unitPriceCentavos),
         lineTotal: fromCentavos(line.unitPriceCentavos * line.quantity),
       })),
+      giftCardAmount: fromCentavos(giftCentavos),
+      amountDue: fromCentavos(amountDueCentavos),
+      amountDueCentavos,
+      paidInFull,
+      status: (paidInFull ? legacyStatusOf({ ...initialFacts, paymentState: "paid" }) : order.status) as OrderStatus,
     };
   });
 }
@@ -751,6 +808,8 @@ export interface TenantOrderListItem {
   paymentMethod: string;
   deliveryType: string;
   total: string;
+  /** Phase 17: part paid by gift card / store credit. */
+  giftCardAmount: string;
   itemsSummary: string;
   itemCount: number;
   createdAt: Date;
@@ -893,6 +952,7 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       paymentMethod: row.paymentMethod ?? "",
       deliveryType: row.deliveryType ?? "delivery",
       total: row.total,
+      giftCardAmount: row.giftCardAmount ?? "0.00",
       itemCount: orderItemsList.reduce((sum, item) => sum + item.quantity, 0),
       itemsSummary: orderItemsList
         .map((item) => `${item.quantity}× ${item.title}`)
@@ -1070,6 +1130,9 @@ export interface OrderTrackingData {
   subtotal: string;
   deliveryFee: string;
   total: string;
+  /** Phase 17: paid with a gift card / store credit, and what's still to pay. */
+  giftCardAmount: string;
+  amountDue: string;
   createdAt: Date;
   items: Array<{ title: string; quantity: number; unitPrice: string; lineTotal: string }>;
   history: Array<{ status: OrderStatus; note: string | null; createdAt: Date }>;
@@ -1186,6 +1249,8 @@ export async function getOrderForTracking(
     subtotal: row.order.subtotal,
     deliveryFee: row.order.deliveryFee ?? "0.00",
     total: row.order.total,
+    giftCardAmount: row.order.giftCardAmount ?? "0.00",
+    amountDue: Math.max(0, Number(row.order.total) - Number(row.order.giftCardAmount ?? 0)).toFixed(2),
     createdAt: row.order.createdAt,
     items: items.map((item) => ({
       title: item.titleSnapshot,

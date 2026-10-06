@@ -15,6 +15,7 @@ import {
   reverseSaleCreditForOrder,
 } from "./wallet";
 import { OrderError } from "./order-status";
+import { restoreGiftCardsForOrderInTx } from "./gift-cards";
 import { recordStockMovement } from "./stock-ledger";
 import { insertOutboxEvent } from "./outbox";
 import {
@@ -444,6 +445,17 @@ export async function applyOrderActionInTx(
     restocked = await restockOrderInTx(tx, order.id, reason, input.actorId);
   }
 
+  // Phase 17: a cancelled / expired / fully refunded order gives back what it took from
+  // gift cards or store credit (once — restoreGiftCardsForOrderInTx is idempotent).
+  if (after.orderState === "cancelled" || input.action.type === "refund") {
+    await restoreGiftCardsForOrderInTx(tx, {
+      tenantId: order.tenantId,
+      orderId: order.id,
+      actorName: input.source === "seller" ? "Seller" : "Guma Kart",
+      note: input.action.type === "refund" ? "Order refunded — balance put back" : "Order cancelled — balance put back",
+    });
+  }
+
   let note = input.note ?? defaultNote(input.action, input.source, plan.codCollected);
   if (plan.cancelCourierBooking) {
     note = `${note ? `${note}. ` : ""}A rider was booked — cancel it with the courier too.`;
@@ -614,7 +626,8 @@ export async function refundOrder(params: {
           gateway,
           gatewayPaymentId: txn.gatewayPaymentId,
           // Phase 11: only what's left after partial refunds (returns).
-          totalCentavos: Math.round(Number(order.total) * 100) - Math.round(Number(order.refundedAmount ?? 0) * 100),
+          // Phase 17: the gift-card part goes back on the card, not through the gateway.
+          totalCentavos: Math.max(0, Math.round(Number(order.total) * 100) - Math.round(Number(order.giftCardAmount ?? 0) * 100) - Math.round(Number(order.refundedAmount ?? 0) * 100)),
           orderNumber: order.orderNumber,
         });
         gatewayRefundId = res.refundId;

@@ -42,6 +42,7 @@ export class OrderError extends Error {
       | "INVALID_TRANSITION"
       | "ORDER_NOT_FOUND"
       | "LINK_CLOSED"
+      | "GIFT_CARD_INVALID"
   ) {
     super(message);
     this.name = "OrderError";

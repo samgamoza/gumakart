@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { closeShift, ensureRegister, getOpenShift, getShiftSummary, logActivity, PosError } from "@gumakart/db";
-import { posErrorResponse, requirePosActor } from "@/lib/pos-auth";
+import { posErrorResponse, requirePosActor, posBranchId } from "@/lib/pos-auth";
 
 const amount = z.number().min(0).max(10_000_000);
 const bodySchema = z.object({
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const actor = await requirePosActor();
     const body = bodySchema.parse(await request.json());
-    const register = await ensureRegister(actor.tenantId);
+    const register = await ensureRegister(actor.tenantId, await posBranchId());
     const open = await getOpenShift(actor.tenantId, register.id);
     if (!open || open.id !== body.shiftId) throw new PosError("This shift is already closed.", "SHIFT_CLOSED");
     const summary = await getShiftSummary(actor.tenantId, body.shiftId);

@@ -924,3 +924,36 @@ export {
   type PlanStatus,
 } from "./queries/billing";
 export { installConsoleErrorCapture } from "./console-capture";
+
+// Phase 17 — gift cards & store credit, branch stock, POS promos
+export {
+  GiftCardError,
+  adjustGiftCard,
+  checkGiftCard,
+  checkGiftCardForSlug,
+  getGiftCardHistory,
+  giftCardSummary,
+  issueGiftCard,
+  listGiftCards,
+  newGiftCardCode,
+  normalizeGiftCardCode,
+  setGiftCardStatus,
+  type GiftCardCheck,
+  type GiftCardRow,
+  type GiftCardTxnRow,
+} from "./queries/gift-cards";
+export { computeStorePromotion } from "./types/tenant-checkout";
+export { computePosSaleTotals, type PosPromotion } from "./types/pos-tax";
+export {
+  BranchError,
+  MAX_BRANCHES,
+  createBranch,
+  getBranchStock,
+  listBranches,
+  resolvePosLocationId,
+  setBranchCount,
+  transferStock,
+  updateBranch,
+  type BranchRow,
+  type BranchStockRow,
+} from "./queries/branches";

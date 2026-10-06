@@ -14,10 +14,12 @@ import {
   posSyncIssues,
   registerSessions,
   registers,
+  locationStock,
   tenants,
   type PosSyncIssueKind,
 } from "../schema/index";
 import { getDefaultLocationId } from "./locations";
+import { branchStockEnabled, registerLocationId, resolvePosLocationId } from "./branches";
 import { insertOutboxEvent } from "./outbox";
 import { describeStates, legacyStatusOf } from "./order-state";
 import { OrderError } from "./order-status";
@@ -25,10 +27,13 @@ import { recordStockMovement } from "./stock-ledger";
 import { shiftRefundsByMethod } from "./after-sale";
 import { birActive, getBirReceiptHeader, nextInvoiceNumberInTx } from "./bir";
 import { claimOfflineInvoiceInTx } from "./pos-offline";
+import { GiftCardError, redeemGiftCardInTx } from "./gift-cards";
+import { checkoutFromLegacySettings, computeStorePromotion, normalizeCheckoutJson } from "../types/tenant-checkout";
 import type { TenantBirSettings } from "../types/tenant-settings";
 import {
   checkTenders,
   computeSaleTotals,
+  computePosSaleTotals,
   discountRateFor,
   vatConfigFromSettings,
   type PosDiscountType,
@@ -212,10 +217,13 @@ export interface PosRegister {
   locationId: string;
 }
 
-/** The shop's register at its default location (created on first use). */
-export async function ensureRegister(tenantId: string): Promise<PosRegister> {
+/**
+ * The shop's register at a branch (created on first use). Phase 17: `locationId` is the
+ * branch this device sells from (validated); without it, the default branch.
+ */
+export async function ensureRegister(tenantId: string, wantedLocationId?: string | null): Promise<PosRegister> {
   const db = getDb();
-  const locationId = await getDefaultLocationId(db, tenantId);
+  const locationId = await resolvePosLocationId(db, tenantId, wantedLocationId);
   await db.insert(registers).values({ tenantId, locationId }).onConflictDoNothing();
   const [row] = await db
     .select({ id: registers.id, name: registers.name, locationId: registers.locationId })
@@ -227,7 +235,7 @@ export async function ensureRegister(tenantId: string): Promise<PosRegister> {
 }
 
 export type TenderTotals = Record<PosTenderMethod, number>;
-const ZERO_TENDERS: TenderTotals = { cash: 0, gcash: 0, maya: 0, card: 0 };
+const ZERO_TENDERS: TenderTotals = { cash: 0, gcash: 0, maya: 0, card: 0, gift_card: 0 };
 
 export interface PosShift {
   id: string;
@@ -370,6 +378,8 @@ export async function getShiftSummary(tenantId: string, shiftId: string): Promis
   const refundsRaw = await shiftRefundsByMethod(tenantId, shiftId);
   const refunds: TenderTotals = { ...ZERO_TENDERS };
   for (const [method, amount] of Object.entries(refundsRaw)) {
+    // Store credit and gift-card restores don't leave the drawer.
+    if (method === "store_credit" || method === "gift_card") continue;
     const m = (method in refunds ? method : "cash") as PosTenderMethod;
     refunds[m] = round(refunds[m] + amount);
   }
@@ -391,7 +401,7 @@ export async function getShiftSummary(tenantId: string, shiftId: string): Promis
 export async function closeShift(input: {
   tenantId: string;
   shiftId: string;
-  counted: TenderTotals;
+  counted: Partial<TenderTotals>;
   note?: string | null;
   staffId?: string | null;
   userId?: string | null;
@@ -402,7 +412,8 @@ export async function closeShift(input: {
   const counted: TenderTotals = { ...ZERO_TENDERS };
   const variance: TenderTotals = { ...ZERO_TENDERS };
   for (const m of Object.keys(ZERO_TENDERS) as PosTenderMethod[]) {
-    const value = Number(input.counted[m] ?? 0);
+    // Gift cards aren't in the drawer: nothing to count, never a variance.
+    const value = m === "gift_card" ? summary.expected.gift_card : Number(input.counted[m] ?? 0);
     if (!Number.isFinite(value) || value < 0) throw new PosError("Counted amounts must be ₱0 or more.", "BAD_TENDER");
     counted[m] = toCentavos(value) / 100;
     variance[m] = (toCentavos(counted[m]) - toCentavos(summary.expected[m])) / 100;
@@ -470,8 +481,10 @@ export interface PosProduct {
   hasOptions: boolean;
 }
 
-export async function listPosProducts(tenantId: string, query?: string): Promise<PosProduct[]> {
+export async function listPosProducts(tenantId: string, query?: string, locationId?: string | null): Promise<PosProduct[]> {
   const db = getDb();
+  // Phase 17: with branches, the register sees what's on ITS shelves.
+  const branchQty = locationId && (await branchStockEnabled(db, tenantId)) ? new Map<string, number>() : null;
   const q = query?.trim();
   const rows = await db
     .select({
@@ -505,6 +518,13 @@ export async function listPosProducts(tenantId: string, query?: string): Promise
         .where(and(inArray(productVariants.productId, ids), eq(productVariants.active, true)))
         .orderBy(asc(productVariants.position), asc(productVariants.id))
     : [];
+  if (branchQty && variantRows.length) {
+    const rowsAt = await db
+      .select({ variantId: locationStock.variantId, qty: locationStock.qty })
+      .from(locationStock)
+      .where(and(eq(locationStock.locationId, locationId!), inArray(locationStock.variantId, variantRows.map((v) => v.id))));
+    for (const r of rowsAt) branchQty.set(r.variantId, r.qty);
+  }
   const byProduct = new Map<string, PosVariant[]>();
   for (const v of variantRows) {
     byProduct.set(v.productId, [
@@ -515,7 +535,7 @@ export async function listPosProducts(tenantId: string, query?: string): Promise
         price: Number(v.price),
         sku: v.sku,
         barcode: v.barcode,
-        stockQty: v.stockQty ?? 0,
+        stockQty: branchQty ? branchQty.get(v.id) ?? 0 : v.stockQty ?? 0,
         imageUrl: v.imageUrl,
       },
     ]);
@@ -815,11 +835,18 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
       }
 
       const settings = (tenant.settingsJson ?? {}) as { pos?: { vatRate?: unknown; vatInclusive?: unknown; vatRegistered?: unknown } };
-      let totals = computeSaleTotals({
+      // Phase 17: quantity deals + automatic discount apply at the register too (no coupons).
+      const checkoutCfg = tenant.checkoutPublishedJson ? normalizeCheckoutJson(tenant.checkoutPublishedJson) : checkoutFromLegacySettings(tenant.settingsJson);
+      const promo = computeStorePromotion(
+        checkoutCfg,
+        lines.map((l) => ({ productId: l.productId, quantity: l.quantity, lineTotal: (l.unit * l.quantity) / 100 })),
+        offline ? offline.rungAt : new Date()
+      );
+      let totals = computePosSaleTotals({
         subtotal: subtotalCentavos / 100,
-        discountRate: discountRateFor(input.discountType),
         discountType: input.discountType,
         config: vatConfigFromSettings(settings.pos),
+        promo,
       });
       let tenderCheck = checkTenders(totals.total, input.tenders);
       // Offline: the device's printed total wins when the shop changed its VAT settings since.
@@ -859,7 +886,9 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
 
       const now = offline ? clampRungAt(offline.rungAt, shift.openedAt, shift.closedAt) : new Date();
       const facts = { orderState: "completed" as const, paymentState: "paid" as const, fulfillmentState: "delivered" as const, accepted: true };
-      const locationId = await getDefaultLocationId(tx, input.tenantId);
+      // Phase 17: the sale belongs to (and takes stock from) the register's branch.
+      const locationId = (await registerLocationId(tx, shift.registerId)) ?? (await getDefaultLocationId(tx, input.tenantId));
+      await tx.execute(sql`select set_config('guma.location_id', ${locationId}, true)`);
       const [seqRow] = await tx
         .update(tenants)
         .set({ nextOrderSeq: sql`${tenants.nextOrderSeq} + 1` })
@@ -913,7 +942,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           guestPhone: phone,
           status: legacyStatusOf(facts),
           subtotal: fromCentavos(subtotalCentavos),
-          discount: fromCentavos(toCentavos(totals.discountAmount)),
+          discount: fromCentavos(toCentavos(totals.discountAmount + (totals.promoAmount ?? 0))),
           // VAT-inclusive prices: the VAT inside the total (for the receipt / reports).
           tax: fromCentavos(toCentavos(totals.vatAmount)),
           deliveryFee: "0.00",
@@ -961,7 +990,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
         status: legacyStatusOf(facts),
         event: "pos_sale",
         toState: describeStates(facts),
-        note: `POS sale by ${input.cashierName}${input.discountType !== "none" ? ` · ${input.discountType === "pwd" ? "PWD" : "Senior"} discount` : ""}${offline ? " · rung offline, synced later" : ""}`,
+        note: `POS sale by ${input.cashierName}${totals.discountAmount > 0 ? ` · ${input.discountType === "pwd" ? "PWD" : "Senior"} discount` : ""}${totals.promoAmount ? ` · ${totals.promoLabel}` : ""}${offline ? " · rung offline, synced later" : ""}`,
         actorId: input.userId,
       });
 
@@ -979,6 +1008,18 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           paidAt: now,
         }))
       );
+
+      // Phase 17: gift card / store credit tenders — spend exactly that much (row-locked).
+      for (const t of tenders) {
+        if (t.method !== "gift_card") continue;
+        if (offline) throw new PosError("Gift cards need the internet — take another payment for offline sales.", "BAD_TENDER");
+        try {
+          await redeemGiftCardInTx(tx, { tenantId: input.tenantId, code: t.reference ?? "", maxAmount: t.amount, orderId: order.id, actorName: input.cashierName, exact: true });
+        } catch (error) {
+          if (error instanceof GiftCardError) throw new PosError(error.message, "BAD_TENDER");
+          throw error;
+        }
+      }
 
       // Same atomic, never-below-zero decrement as online checkout: online and
       // POS can't both sell the last unit.
@@ -1107,7 +1148,7 @@ export async function refreshClosedShift(tenantId: string, shiftId: string): Pro
   const counted = row.counted as TenderTotals;
   const variance: TenderTotals = { ...ZERO_TENDERS };
   for (const m of Object.keys(ZERO_TENDERS) as PosTenderMethod[]) {
-    variance[m] = (toCentavos(Number(counted[m] ?? 0)) - toCentavos(summary.expected[m])) / 100;
+    variance[m] = m === "gift_card" ? 0 : (toCentavos(Number(counted[m] ?? 0)) - toCentavos(summary.expected[m])) / 100;
   }
   await db
     .update(registerSessions)

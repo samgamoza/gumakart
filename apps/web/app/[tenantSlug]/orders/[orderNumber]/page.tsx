@@ -153,7 +153,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
               : order.paymentMethod === "bank"
                 ? "bank"
                 : "gcash",
-          amount: formatPrice(order.total),
+          amount: formatPrice(order.amountDue),
           orderNumber: order.orderNumber,
           receiving: payments.receiving,
         })
@@ -292,7 +292,7 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
             orderNumber={order.orderNumber}
             accessToken={accessToken}
             paymentMethod={order.paymentMethod}
-            totalLabel={formatPrice(order.total)}
+            totalLabel={formatPrice(order.amountDue)}
             instructions={payInstructions}
             shopAssistant={storeSettings.shopAssistant}
             shopName={order.tenantName}
@@ -395,6 +395,18 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
                 <span>Total</span>
                 <span className="text-emerald-700">{formatPrice(order.total)}</span>
               </div>
+              {Number(order.giftCardAmount) > 0 && (
+                <>
+                  <div className="flex justify-between text-gray-600">
+                    <span>{tx("Paid with gift card / store credit", "Bayad gamit ang gift card / store credit")}</span>
+                    <span>-{formatPrice(order.giftCardAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span>{tx("Left to pay", "Babayaran pa")}</span>
+                    <span>{formatPrice(order.amountDue)}</span>
+                  </div>
+                </>
+              )}
               <p className="pt-1 text-xs text-gray-400">
                 {order.paymentMethod === "cod" && order.deliveryType === "pickup"
                   ? "Cash on pickup"

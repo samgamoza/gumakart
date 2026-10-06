@@ -56,6 +56,8 @@ export const checkoutSchema = z.object({
   fulfillment: z.enum(["delivery", "pickup"]).default("delivery"),
   sessionKey: z.string().min(8).max(64).optional(),
   couponCode: z.string().trim().max(64).optional(),
+  /** Phase 17: gift card / store credit code (pays as much as its balance covers). */
+  giftCardCode: z.string().trim().max(24).optional(),
   /** Unticked by default: "Text me reminders about this order". */
   smsConsent: z.boolean().optional().default(false),
   customer: z.object({
@@ -106,7 +108,7 @@ function trackingUrl(tenantSlug: string, orderNumber: string, accessToken: strin
  * fails the checkout.
  */
 async function sendOrderConfirmationSms(
-  order: { id: string; tenantId: string; orderNumber: string; total: string },
+  order: { id: string; tenantId: string; orderNumber: string; total: string; amountDue?: string; giftCardAmount?: string; paidInFull?: boolean },
   phone: string,
   link: string,
   meta: { shopName: string; paymentMethod: string; deliveryType: string; automations?: Record<string, boolean | undefined> | null }
@@ -115,7 +117,8 @@ async function sendOrderConfirmationSms(
   const message = orderCreatedSms({
     shopName: meta.shopName,
     orderNumber: order.orderNumber,
-    total: order.total,
+    // Phase 17: part paid by gift card → the text says what's still to pay.
+    total: Number(order.giftCardAmount ?? 0) > 0 && !order.paidInFull ? order.amountDue ?? order.total : order.total,
     paymentMethod: meta.paymentMethod,
     deliveryType: meta.deliveryType,
     orderUrl: link,
@@ -346,6 +349,7 @@ export async function placeOrder(
       smsMarketingConsent: body.smsConsent,
       checkoutLinkId: ctx.checkoutLinkId ?? null,
       utmJson: ctx.utm ?? null,
+      giftCardCode: body.giftCardCode || null,
     });
 
     // Phase 12: a signed-in Guma ID buyer whose verified number is on the order gets it
@@ -405,6 +409,20 @@ export async function placeOrder(
       succeeded: adapter === "cod",
     });
 
+    // Phase 17: the gift card / store credit covered everything — nothing left to pay.
+    if (order.paidInFull) {
+      await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken), { ...smsMeta, paymentMethod: "gift_card" });
+      await pushSellerNewCodOrder(order.tenantId, order.orderNumber, order.total).catch((error) => console.error("[checkout] Seller push failed:", error));
+      return NextResponse.json({
+        orderNumber: order.orderNumber,
+        orderUrl: orderPath(body.tenantSlug, order.orderNumber, order.accessToken),
+        status: order.status,
+        paymentMethod: "gift_card",
+        adapter: "gift_card",
+        totals: { subtotal: order.subtotal, discount: order.discount, tax: order.tax, deliveryFee: order.deliveryFee, total: order.total, giftCard: order.giftCardAmount, amountDue: order.amountDue },
+      });
+    }
+
     if (adapter === "cod") {
       await sendOrderConfirmationSms(order, body.customer.phone, trackingUrl(body.tenantSlug, order.orderNumber, order.accessToken), smsMeta);
 
@@ -424,6 +442,8 @@ export async function placeOrder(
           tax: order.tax,
           deliveryFee: order.deliveryFee,
           total: order.total,
+          giftCard: order.giftCardAmount,
+          amountDue: order.amountDue,
         },
       });
     }
@@ -439,14 +459,14 @@ export async function placeOrder(
       await recordManualPaymentIntent({
         orderId: order.id,
         tenantId: order.tenantId,
-        amount: order.total,
+        amount: order.amountDue,
         methodType: method,
         orderNumber: order.orderNumber,
       });
 
       const payInstructions = buildManualEwalletInstructions({
         method,
-        amount: formatPhp(Number(order.total)),
+        amount: formatPhp(Number(order.amountDue)),
         orderNumber: order.orderNumber,
         receiving: paymentsSettings.receiving,
       });
@@ -470,6 +490,8 @@ export async function placeOrder(
           tax: order.tax,
           deliveryFee: order.deliveryFee,
           total: order.total,
+          giftCard: order.giftCardAmount,
+          amountDue: order.amountDue,
         },
       });
     }
@@ -482,7 +504,7 @@ export async function placeOrder(
     }
 
     const started = await startOnlinePayment({
-      amountCentavos: order.totalCentavos,
+      amountCentavos: order.amountDueCentavos,
       description: `Order ${order.orderNumber} — ${tenant.name}`,
       method: body.paymentMethod as Exclude<CheckoutPaymentMethod, "cod" | "bank">,
       metadata: { order_number: order.orderNumber, tenant: body.tenantSlug, order_id: order.id },
@@ -495,7 +517,7 @@ export async function placeOrder(
       orderId: order.id,
       tenantId: order.tenantId,
       gatewayIntentId: started.paymentIntentId,
-      amount: order.total,
+      amount: order.amountDue,
       methodType: body.paymentMethod,
       checkoutUrl: started.redirectUrl,
       checkoutSessionId: started.checkoutSessionId,

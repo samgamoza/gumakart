@@ -106,6 +106,9 @@ export function orderCreatedSms(c: OrderSmsContext): string {
   const total = smsPeso(c.total);
   const pickup = c.deliveryType === "pickup";
   const track = c.orderUrl ? ` ${c.orderUrl}` : "";
+  if (c.paymentMethod === "gift_card") {
+    return `${shop}: Salamat sa order! #${c.orderNumber} - ${total}, bayad na gamit ang gift card/store credit. Ite-text ka namin kapag ready na.${track}`;
+  }
   if (c.paymentMethod === "cod") {
     return pickup
       ? `${shop}: Salamat sa order! #${c.orderNumber} - ${total}, bayad pag-pickup. Ite-text ka namin kapag ready na.${track}`
