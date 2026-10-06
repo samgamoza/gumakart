@@ -205,7 +205,10 @@ export function InventoryManager() {
       <DemandPanel />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Count what&apos;s on the shelf, or update many items at once with a spreadsheet.
+          Count what&apos;s on the shelf, or update many items at once with a spreadsheet.{" "}
+          <Link href="/products/labels" className="font-medium text-primary hover:underline" data-testid="labels-link">
+            Print barcode labels
+          </Link>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <a

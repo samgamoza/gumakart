@@ -1,7 +1,7 @@
--- 0042_phase2_constrain — run ONLY after phase2-verify.sql returns 0 rows for
+-- 0043_phase2_constrain — run ONLY after phase2-verify.sql returns 0 rows for
 -- V1–V4 on production (docs/PHASE-2-MIGRATION-SPEC.md §7 step 4).
 -- To apply: move this file into packages/db/drizzle/, add a journal entry
--- (idx 42) and run `pnpm --filter @gumakart/db migrate`.
+-- (idx 43) and run `pnpm --filter @gumakart/db migrate`.
 
 ALTER TABLE "orders" ALTER COLUMN "order_state" SET DEFAULT 'open';--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "payment_state" SET DEFAULT 'unpaid';--> statement-breakpoint

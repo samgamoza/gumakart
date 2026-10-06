@@ -11,6 +11,14 @@ import {
   useTenantSettings,
 } from "@/components/settings/settings-forms";
 
+type AreaKey = "metro_manila" | "luzon" | "visayas" | "mindanao";
+const AREAS: Array<[AreaKey, string]> = [
+  ["metro_manila", "Metro Manila"],
+  ["luzon", "Rest of Luzon"],
+  ["visayas", "Visayas"],
+  ["mindanao", "Mindanao"],
+];
+
 function previewDeliveryFee(subtotal: number, flatRate: number, freeDeliveryMin: number): number {
   if (freeDeliveryMin > 0 && subtotal >= freeDeliveryMin) return 0;
   return flatRate;
@@ -33,6 +41,8 @@ export function DeliverySettingsPage() {
   const [pickupEnabled, setPickupEnabled] = useState(true);
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
+  /** Phase 24: own-delivery fee per area ("" = use the flat fee). */
+  const [areaRates, setAreaRates] = useState<Record<AreaKey, string>>({ metro_manila: "", luzon: "", visayas: "", mindanao: "" });
 
   useEffect(() => {
     if (!settings) return;
@@ -45,6 +55,13 @@ export function DeliverySettingsPage() {
     setPickupEnabled(settings.settings.delivery?.pickupEnabled ?? true);
     setDeliveryNotes(settings.settings.delivery?.deliveryNotes ?? "");
     setPickupAddress(settings.settings.delivery?.pickupAddress ?? "");
+    const ar = settings.settings.delivery?.areaRates ?? {};
+    setAreaRates({
+      metro_manila: ar.metro_manila != null ? String(ar.metro_manila) : "",
+      luzon: ar.luzon != null ? String(ar.luzon) : "",
+      visayas: ar.visayas != null ? String(ar.visayas) : "",
+      mindanao: ar.mindanao != null ? String(ar.mindanao) : "",
+    });
   }, [settings]);
 
   const previewSubtotal = 499;
@@ -162,6 +179,32 @@ export function DeliverySettingsPage() {
               onChange={(e) => setFlatRate(e.target.value)}
             />
           </SettingsField>
+          {provider === "manual" && (
+            <div className="rounded-xl border border-border/60 p-3" data-testid="area-rates">
+              <p className="text-sm font-medium">Fee by area (optional)</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                For J&amp;T, LBC, Flash or Ninja Van pricing. Leave blank to use the flat fee there. Based on the buyer&apos;s
+                province at checkout; anywhere not listed pays the flat fee.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {AREAS.map(([key, label]) => (
+                  <label key={key} className="block text-xs text-muted-foreground">
+                    {label}
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="decimal"
+                      placeholder={flatRate || "0"}
+                      className={`${inputClassName()} mt-1`}
+                      value={areaRates[key]}
+                      onChange={(e) => setAreaRates((r) => ({ ...r, [key]: e.target.value }))}
+                      data-testid={`area-${key}`}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           <SettingsField label="Free delivery above (₱)" hint="0 = never free. Buyers see “Add ₱X more for free delivery” in the cart and checkout, and it applies even when Lalamove/Grab quotes a price (you cover the courier).">
             <input
               type="number"
@@ -206,6 +249,9 @@ export function DeliverySettingsPage() {
                   pickupEnabled,
                   deliveryNotes,
                   pickupAddress,
+                  areaRates: Object.fromEntries(
+                    AREAS.filter(([k]) => areaRates[k].trim() !== "" && Number.isFinite(Number(areaRates[k]))).map(([k]) => [k, Number(areaRates[k])])
+                  ),
                 },
               },
             })

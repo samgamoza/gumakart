@@ -7,6 +7,8 @@ import {
   normalizeShippingJson,
   resolveShippingFee,
   shippingFromLegacyDelivery,
+  phAreaOf,
+  cleanAreaRates,
 } from "./tenant-shipping";
 
 describe("shippingFromLegacyDelivery", () => {
@@ -106,5 +108,33 @@ describe("Phase 17b: free delivery wins, and the nudge", () => {
     assert.equal(freeDeliveryNudge(650, 500)!.remaining, 0);
     assert.equal(freeDeliveryNudge(100, null), null);
     assert.equal(freeDeliveryNudge(0, 500), null);
+  });
+});
+
+describe("Phase 24: fee by area", () => {
+  it("knows the four areas, with Mindanao checked before Luzon", () => {
+    assert.equal(phAreaOf("Metro Manila"), "metro_manila");
+    assert.equal(phAreaOf("Cebu"), "visayas");
+    assert.equal(phAreaOf("Samar (Western Samar)"), "visayas");
+    assert.equal(phAreaOf("Davao del Sur"), "mindanao");
+    assert.equal(phAreaOf("City of Isabela"), "mindanao", "not Luzon's Isabela");
+    assert.equal(phAreaOf("Isabela"), "luzon");
+    assert.equal(phAreaOf("Cavite"), "luzon");
+    assert.equal(phAreaOf(""), null);
+    assert.deepEqual(cleanAreaRates({ luzon: 150, visayas: -1, mindanao: Number.NaN }), { luzon: 150 });
+  });
+
+  it("legacy own-delivery settings charge by area, everyone else the flat rate, free-above still wins", () => {
+    const shipping = shippingFromLegacyDelivery({ provider: "manual", flatRate: 99, freeDeliveryMin: 3000, areaRates: { metro_manila: 80, luzon: 150, visayas: 180, mindanao: 200 } });
+    const fee = (province: string, subtotal = 500) => resolveShippingFee({ shipping, subtotal, province }).fee;
+    assert.equal(fee("Metro Manila"), 80);
+    assert.equal(fee("Pampanga"), 150);
+    assert.equal(fee("Iloilo"), 180);
+    assert.equal(fee("Davao del Sur"), 200);
+    assert.equal(fee("City of Isabela"), 200);
+    assert.equal(fee("Somewhere else"), 99);
+    assert.equal(fee("Cebu", 3500), 0);
+    const plain = shippingFromLegacyDelivery({ provider: "manual", flatRate: 99 });
+    assert.equal(resolveShippingFee({ shipping: plain, subtotal: 100, province: "Cebu" }).fee, 99, "no areas = flat as before");
   });
 });

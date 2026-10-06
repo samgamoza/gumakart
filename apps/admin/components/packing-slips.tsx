@@ -54,6 +54,7 @@ export function PackingSlips() {
       </div>
       {error && <p className="p-6 text-sm text-red-700">{error}</p>}
       <div className="mx-auto max-w-[720px] px-6 py-6">
+        {slips && slips.length > 0 && params.get("pick") === "1" ? <PickList slips={slips} shop={shop} /> : null}
         {slips?.map((s) => (
           <section key={s.id} className="slip mb-10 border border-black p-6" data-testid="packing-slip">
             <div className="flex items-start justify-between gap-4 border-b border-black pb-3">
@@ -115,5 +116,64 @@ export function PackingSlips() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Phase 24: one pick list for the whole batch — every item to take off the shelf, grouped, with the
+ * orders it goes into. Printed first, on its own page.
+ */
+function PickList({ slips, shop }: { slips: Slip[]; shop: string }) {
+  const map = new Map<string, { title: string; sku: string | null; qty: number; orders: string[] }>();
+  for (const s of slips) {
+    for (const i of s.items) {
+      const key = `${i.sku ?? ""}|${i.title}`;
+      const row = map.get(key) ?? { title: i.title, sku: i.sku, qty: 0, orders: [] };
+      row.qty += i.quantity;
+      row.orders.push(i.quantity > 1 ? `${s.orderNumber}×${i.quantity}` : s.orderNumber);
+      map.set(key, row);
+    }
+  }
+  const rows = [...map.values()].sort((a, b) => (a.sku ?? a.title).localeCompare(b.sku ?? b.title));
+  const units = rows.reduce((a, r) => a + r.qty, 0);
+  return (
+    <section className="slip mb-10 border border-black p-6" data-testid="pick-list">
+      <div className="flex items-start justify-between gap-4 border-b border-black pb-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest">Pick list</p>
+          <p className="text-xl font-bold">{shop}</p>
+        </div>
+        <div className="text-right text-sm">
+          <p className="font-semibold">
+            {slips.length} order{slips.length === 1 ? "" : "s"} · {units} pcs
+          </p>
+          <p className="text-xs">{new Date().toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+        </div>
+      </div>
+      <table className="mt-4 w-full text-sm">
+        <thead>
+          <tr className="border-b border-black text-left text-xs uppercase tracking-wide">
+            <th className="w-8 py-1.5">✓</th>
+            <th className="py-1.5">Item</th>
+            <th className="py-1.5">SKU</th>
+            <th className="py-1.5 text-right">Qty</th>
+            <th className="py-1.5 pl-3">Orders</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.sku}|${r.title}`} className="border-b border-gray-300 align-top">
+              <td className="py-2">
+                <span className="inline-block h-4 w-4 border border-black" />
+              </td>
+              <td className="py-2 font-medium">{r.title}</td>
+              <td className="py-2 font-mono text-xs">{r.sku ?? "—"}</td>
+              <td className="py-2 text-right text-base font-bold">{r.qty}</td>
+              <td className="py-2 pl-3 font-mono text-[11px] leading-snug">{r.orders.join(", ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }

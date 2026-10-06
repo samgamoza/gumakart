@@ -45,6 +45,7 @@ export interface OrderMessagingContext {
   paymentState: string;
   fulfillmentState: string;
   courier: string | null;
+  trackingNumber: string | null;
   createdAt: Date;
 }
 
@@ -65,7 +66,7 @@ export async function getOrderMessagingContext(orderId: string): Promise<OrderMe
     .limit(1);
   if (!row) return null;
   const [delivery] = await db
-    .select({ provider: deliveries.provider })
+    .select({ provider: deliveries.provider, courierName: deliveries.courierName, trackingNumber: deliveries.trackingNumber })
     .from(deliveries)
     .where(eq(deliveries.orderId, orderId))
     .orderBy(desc(deliveries.bookedAt))
@@ -90,7 +91,9 @@ export async function getOrderMessagingContext(orderId: string): Promise<OrderMe
     orderState: facts.orderState,
     paymentState: facts.paymentState,
     fulfillmentState: facts.fulfillmentState,
-    courier: delivery ? (COURIER_NAMES[delivery.provider] ?? delivery.provider) || null : null,
+    courier: delivery ? delivery.courierName || (COURIER_NAMES[delivery.provider] ?? delivery.provider) || null : null,
+    // Phase 24: parcel courier waybill number, when the seller entered one.
+    trackingNumber: delivery?.trackingNumber ?? null,
     createdAt: row.order.createdAt,
   };
 }

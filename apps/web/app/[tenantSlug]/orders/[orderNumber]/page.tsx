@@ -355,7 +355,18 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
 
         {delivery && !isCancelled && (
           <Card>
-            <h2 className="font-semibold">{tx("Your rider", "Ang rider mo")}</h2>
+            <h2 className="font-semibold">
+              {delivery.trackingNumber ? tx("Shipped", "Naipadala na") : tx("Your rider", "Ang rider mo")}
+            </h2>
+            {delivery.trackingNumber ? (
+              <div className="mt-3 space-y-1 text-sm" data-testid="waybill">
+                <p className="font-medium">{delivery.courierName ?? tx("Courier", "Courier")}</p>
+                <p className="text-gray-600">
+                  {tx("Tracking no.", "Tracking no.")} <span className="font-mono font-semibold text-gray-900">{delivery.trackingNumber}</span>
+                </p>
+                <p className="text-xs text-gray-500">{tx("Track it on the courier's website or app.", "I-track sa website o app ng courier.")}</p>
+              </div>
+            ) : null}
             {delivery.driverName ? (
               <div className="mt-3 space-y-1 text-sm">
                 <p className="font-medium">

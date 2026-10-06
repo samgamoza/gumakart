@@ -129,6 +129,8 @@ export const API_RULES: ApiRule[] = [
   { pattern: new RegExp(`^/api/orders/${ID}/edit$`), permission: "orders.edit" },
   { pattern: new RegExp(`^/api/orders/${ID}/returns$`), permission: "orders.refund" },
   { pattern: /^\/api\/orders\/(tags|slips)$/, methods: READ, permission: "orders.view" },
+  // Phase 24: bulk "mark packed" is the same packing work as the one-by-one button.
+  { pattern: /^\/api\/orders\/bulk$/, methods: ["POST"], permission: "orders.fulfil" },
   // PATCH actions: cancel / reject_payment are checked again inside the route.
   { pattern: new RegExp(`^/api/orders/${ID}$`), methods: ["PATCH"], permission: "orders.fulfil" },
   { pattern: /^\/api\/orders(\/[^/]+)?$/, methods: READ, permission: "orders.view" },
@@ -142,6 +144,7 @@ export const API_RULES: ApiRule[] = [
   { pattern: /^\/api\/categories$/, methods: WRITE, permission: "products.edit" },
   { pattern: /^\/api\/inventory\/(count|import)$/, permission: "stock.adjust" },
   { pattern: /^\/api\/inventory\/cost$/, permission: "products.edit" },
+  { pattern: /^\/api\/inventory\/barcodes$/, permission: "products.edit" },
   { pattern: /^\/api\/inventory(\/export)?$/, methods: READ, permission: "products.view" },
 
   // Selling

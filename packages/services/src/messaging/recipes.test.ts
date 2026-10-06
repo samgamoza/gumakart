@@ -10,6 +10,7 @@ import {
   outForDeliverySms,
   paymentConfirmedSms,
   readyForPickupSms,
+  riderBookedSms,
   reviewRequestSms,
   sellerNewOrderSms,
   smsPeso,
@@ -136,4 +137,11 @@ test("Phase 22: back-in-stock text is ASCII with the shop name and link", () => 
   assert.ok(body.startsWith("Tess Lifestyle PH: May stock na ulit ang Pina Tote"));
   assert.ok(body.includes("(Small)"));
   assert.ok(body.endsWith("https://kart.guma.one/tess/products/tote"));
+});
+
+test("Phase 24: parcel waybill text carries the courier and tracking number", () => {
+  const body = riderBookedSms({ ...base, courier: "J&T Express", trackingNumber: "JT 7788 9900" });
+  assert.ok(ascii(body), body);
+  assert.ok(body.includes("Naipadala na ang order #TES-0001 via J&T Express. Tracking no. JT77889900."));
+  assert.ok(!riderBookedSms({ ...base, courier: "Lalamove" }).includes("Tracking no."));
 });

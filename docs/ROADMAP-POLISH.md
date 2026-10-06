@@ -37,7 +37,8 @@ were verified on 2026-10-06 and can go stale.
 | 32 | Buyer referrals "give ₱50, get ₱50" (store credit) + Suki win-back SMS audience (migration `0039_referrals`) — `docs/PHASE-32-NOTES.md` | Approved (`7feead1`) |
 | 33 | Compare couriers, fill a listing from a photo, background-removal cap, next-30-days forecast — `docs/PHASE-33-NOTES.md` | Approved (`b098ed4`) |
 | 23 | Verified reviews: buyer stars/text/photos, seller reply/hide/report, storefront stars + trust bar, ops review reports, opt-in SMS ask (migration `0040_reviews`) — `docs/PHASE-23-NOTES.md` | Approved (`e8e6d1f`) |
-| **22** | **Back-in-stock alerts, wishlists, pre-orders (no deposits yet) (migration `0041_demand`)** — `docs/PHASE-22-NOTES.md` | **Built, in review** |
+| **22** | **Back-in-stock alerts, wishlists, pre-orders (no deposits yet) (migration `0041_demand`)** — `docs/PHASE-22-NOTES.md` | **Built, in review** (`4161ff5`) |
+| **24** | **Batch pick list + mark packed, barcode/price labels, parcel courier tracking numbers (aggregator ready to hook), fee by area (migration `0042_fulfilment`)** — `docs/PHASE-24-NOTES.md` | **Built, in review** |
 
 ## The launch track (not code: Sam's to-dos)
 
@@ -110,7 +111,7 @@ against invented numbers.
 
 **Data:** a `product_reviews` table, with one review per order item.
 
-### Phase 24 — Faster fulfilment (M–L)
+### Phase 24 — Faster fulfilment (M–L) · ✅ built (`docs/PHASE-24-NOTES.md`; aggregator waybill booking ready to hook up)
 
 **Why.** Packing 50 orders after a live sale is where sellers lose a night.
 
@@ -288,7 +289,7 @@ These are the follow-ups gathered from the Phase 18–21 notes.
 | Load test before the first big SMS campaign or live sale | Roadmap ops track | Every-minute cron, outbox, Neon connection limits |
 | External uptime monitor on `kart.guma.one/api/status` | Phase 16 | Free UptimeRobot |
 | Rotate `AUTH_SECRET` only together with a 2FA reset | Phase 21 | It keys the stored authenticator secrets |
-| Move `drizzle-pending/0042_phase2_constrain.sql` into the journal after a clean week of `phase2-verify.sql` | Phase 2 | Renumber it whenever a phase adds a migration |
+| Move `drizzle-pending/0043_phase2_constrain.sql` into the journal after a clean week of `phase2-verify.sql` | Phase 2 | Renumber it whenever a phase adds a migration |
 | Self-serve ops password reset (deliberately absent) | Phase 19 | Revisit only together with Phase 28's ops 2FA reset |
 
 ## Not planned (on purpose)

@@ -6,6 +6,8 @@ export interface TenantDeliverySettings {
   deliveryNotes?: string;
   /** Full store address used as the courier pickup point (geocoded for quotes). */
   pickupAddress?: string;
+  /** Phase 24: own-delivery fee per area; anywhere else pays flatRate. */
+  areaRates?: { metro_manila?: number; luzon?: number; visayas?: number; mindanao?: number };
 }
 
 export interface TenantNotificationSettings {

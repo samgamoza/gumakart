@@ -40,6 +40,15 @@ const patchSchema = z.object({
           pickupEnabled: z.boolean().optional(),
           deliveryNotes: z.string().max(500).optional(),
           pickupAddress: z.string().max(500).optional(),
+          areaRates: z
+            .object({
+              metro_manila: z.number().min(0).max(99999).optional(),
+              luzon: z.number().min(0).max(99999).optional(),
+              visayas: z.number().min(0).max(99999).optional(),
+              mindanao: z.number().min(0).max(99999).optional(),
+            })
+            .strict()
+            .optional(),
         })
         .optional(),
       notifications: z

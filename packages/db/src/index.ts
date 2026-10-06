@@ -31,6 +31,7 @@ export {
   lowStockThresholdOf,
   getLowStockThreshold,
   listInventory,
+  assignMissingBarcodes,
   getLowStockSummary,
   applyStockChanges,
   inventoryToCsv,

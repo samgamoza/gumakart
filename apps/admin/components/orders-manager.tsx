@@ -195,6 +195,9 @@ function canRefund(order: OrderRow): boolean {
   return order.paymentState === "paid" && !IN_TRANSIT.has(order.fulfillmentState);
 }
 
+/** Phase 24: couriers that give a waybill number (must match the assign-rider API list). */
+const PARCEL_COURIERS: string[] = ["J&T Express", "LBC", "Flash Express", "Ninja Van", "2GO", "Other courier"];
+
 function canBook(order: OrderRow): boolean {
   return (
     order.deliveryType === "delivery" &&
@@ -220,6 +223,10 @@ export function OrdersManager() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabId>("all");
+  /** Phase 24: orders ticked for batch printing / packing (To pack and To ship tabs). */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => setSelected(new Set()), [tab]);
   const [tagFilter, setTagFilter] = useState("");
   const [toolsFor, setToolsFor] = useState<string | null>(null);
   // Dashboard to-do tiles link here as /orders?tab=to_confirm etc.
@@ -240,6 +247,7 @@ export function OrdersManager() {
     driverPhone: "",
     driverPlateNumber: "",
     trackingUrl: "",
+    trackingNumber: "",
   });
 
   const load = useCallback(async (silent = false) => {
@@ -294,6 +302,36 @@ export function OrdersManager() {
     }
   }
 
+  /** Phase 24: mark the ticked orders packed in one go (each through the normal order service). */
+  async function markSelectedPacked() {
+    setBulkBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/orders/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_ready", orderIds: [...selected] }),
+      });
+      const d = await res.json();
+      if (!d.ok) {
+        setError(d.error ?? "Could not update the orders.");
+        return;
+      }
+      const skipped = (d.skipped as Array<{ orderNumber: string; reason: string }>) ?? [];
+      setNotice(
+        `${d.done.length} order${d.done.length === 1 ? "" : "s"} marked packed.` +
+          (skipped.length ? ` Not changed: ${skipped.map((x) => `${x.orderNumber} (${x.reason})`).join(", ")}.` : "")
+      );
+      setSelected(new Set());
+      await load(true);
+    } catch {
+      setError("Network error while updating the orders.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function submitAssignRider() {
     if (!assignOrder) return;
     setAssignSaving(true);
@@ -311,7 +349,9 @@ export function OrdersManager() {
         return;
       }
       setNotice(
-        `Rider ${assignForm.driverName} assigned on ${assignOrder.orderNumber} (${assignForm.courierLabel}).`
+        PARCEL_COURIERS.includes(assignForm.courierLabel)
+          ? `${assignOrder.orderNumber} shipped via ${assignForm.courierLabel} · ${assignForm.trackingNumber.replace(/\s+/g, "").toUpperCase()}.`
+          : `Rider ${assignForm.driverName} assigned on ${assignOrder.orderNumber} (${assignForm.courierLabel}).`
       );
       setAssignOrder(null);
       await load(true);
@@ -428,7 +468,7 @@ export function OrdersManager() {
         })}
       </div>
 
-      {(allTags.length > 0 || (tab === "to_pack" && slipIds.length > 0)) && (
+      {(allTags.length > 0 || ((tab === "to_pack" || tab === "to_ship") && slipIds.length > 0)) && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {allTags.length > 0 && (
             <select
@@ -446,14 +486,38 @@ export function OrdersManager() {
             </select>
           )}
           {slipIds.length > 0 && (tab === "to_pack" || tab === "to_ship") && (
-            <a
-              href={`/orders/slips?ids=${slipIds.join(",")}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
-            >
-              🖨️ Print packing slips ({slipIds.length})
-            </a>
+            <div className="flex flex-wrap items-center gap-2" data-testid="batch-bar">
+              <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.size > 0 && slipIds.every((id) => selected.has(id))}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(slipIds) : new Set())}
+                  aria-label="Select all"
+                  data-testid="select-all"
+                />
+                {selected.size > 0 ? `${selected.size} selected` : "Select"}
+              </label>
+              <a
+                href={`/orders/slips?pick=1&ids=${(selected.size ? [...selected] : slipIds).join(",")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+                data-testid="print-batch"
+              >
+                🖨️ Pick list + slips ({selected.size || slipIds.length})
+              </a>
+              {tab === "to_pack" && selected.size > 0 && (
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => void markSelectedPacked()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                  data-testid="bulk-packed"
+                >
+                  {bulkBusy ? "Saving…" : `Mark ${selected.size} packed`}
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -515,6 +579,22 @@ export function OrdersManager() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
+                      {(tab === "to_pack" || tab === "to_ship") && order.orderState !== "cancelled" && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${order.orderNumber}`}
+                          checked={selected.has(order.id)}
+                          onChange={(e) =>
+                            setSelected((cur) => {
+                              const next = new Set(cur);
+                              if (e.target.checked) next.add(order.id);
+                              else next.delete(order.id);
+                              return next;
+                            })
+                          }
+                          data-testid="order-select"
+                        />
+                      )}
                       <p className="font-semibold">{order.customerName}</p>
                       <span className="text-xs text-muted-foreground">
                         · {relativeTime(order.createdAt)}
@@ -647,6 +727,7 @@ export function OrdersManager() {
                               driverPhone: "",
                               driverPlateNumber: "",
                               trackingUrl: "",
+                              trackingNumber: "",
                             });
                           }}
                           className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted"
@@ -733,7 +814,7 @@ export function OrdersManager() {
       {assignOrder && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-xl">
-            <h3 className="font-display text-lg font-bold">Assign rider</h3>
+            <h3 className="font-display text-lg font-bold">Assign rider or courier</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               For Angkas, Move It, Grab booked outside the app, or your own rider —{" "}
               {assignOrder.orderNumber}.
@@ -754,8 +835,27 @@ export function OrdersManager() {
                   <option>Lalamove (manual)</option>
                   <option>Own rider</option>
                   <option>Other</option>
+                  <optgroup label="Parcel couriers (waybill)">
+                    {PARCEL_COURIERS.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </label>
+              {PARCEL_COURIERS.includes(assignForm.courierLabel) ? (
+                <label className="block text-xs font-medium text-muted-foreground">
+                  Waybill / tracking number
+                  <input
+                    className="mt-1 h-10 w-full rounded-lg border border-border px-3 font-mono text-sm uppercase"
+                    value={assignForm.trackingNumber}
+                    onChange={(e) => setAssignForm((f) => ({ ...f, trackingNumber: e.target.value }))}
+                    placeholder="e.g. 7801234567890"
+                    data-testid="tracking-number"
+                  />
+                  <span className="mt-1 block text-[11px]">The buyer gets it by text and on their order page.</span>
+                </label>
+              ) : (
+              <>
               <label className="block text-xs font-medium text-muted-foreground">
                 Rider name
                 <input
@@ -799,6 +899,8 @@ export function OrdersManager() {
                   placeholder="https://"
                 />
               </label>
+              </>
+              )}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button

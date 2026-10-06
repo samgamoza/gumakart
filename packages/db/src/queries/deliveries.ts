@@ -142,6 +142,9 @@ export interface OrderDeliveryInfo {
   driverLng: string | null;
   driverLocationAt: Date | null;
   trackingUrl: string | null;
+  /** Phase 24: parcel courier and waybill number (null for riders). */
+  courierName: string | null;
+  trackingNumber: string | null;
   bookedAt: Date | null;
   pickedUpAt: Date | null;
   deliveredAt: Date | null;
@@ -222,11 +225,15 @@ export async function getOrderForDeliveryBooking(
 
 export interface UpsertManualDeliveryInput {
   orderId: string;
-  driverName: string;
-  driverPhone: string;
+  /** Rider details (Angkas, own rider…). Optional for parcel couriers with a tracking number. */
+  driverName?: string | null;
+  driverPhone?: string | null;
   driverPlateNumber?: string;
   trackingUrl?: string;
   courierLabel?: string;
+  /** Phase 24: parcel courier waybill. */
+  courierName?: string | null;
+  trackingNumber?: string | null;
 }
 
 /**
@@ -254,8 +261,10 @@ export async function upsertManualDeliveryForOrder(
       .set({
         provider: "manual",
         status: statusLabel,
-        driverName: input.driverName,
-        driverPhone: input.driverPhone,
+        driverName: input.driverName ?? null,
+        driverPhone: input.driverPhone ?? null,
+        ...(input.courierName !== undefined ? { courierName: input.courierName } : {}),
+        ...(input.trackingNumber !== undefined ? { trackingNumber: input.trackingNumber } : {}),
         ...(input.driverPlateNumber !== undefined
           ? { driverPlateNumber: input.driverPlateNumber }
           : {}),
@@ -277,15 +286,21 @@ export async function upsertManualDeliveryForOrder(
       provider: "manual",
       providerOrderId,
       status: statusLabel,
-      driverName: input.driverName,
-      driverPhone: input.driverPhone,
+      driverName: input.driverName ?? null,
+      driverPhone: input.driverPhone ?? null,
       driverPlateNumber: input.driverPlateNumber,
       trackingUrl: input.trackingUrl,
+      courierName: input.courierName ?? null,
+      trackingNumber: input.trackingNumber ?? null,
       bookedAt: new Date(),
     })
     .returning({ id: deliveries.id });
   if (!row) throw new Error("Failed to create manual delivery");
-  await applyCourierFulfillmentUpdate(input.orderId, "booked", "Rider assigned by seller");
+  await applyCourierFulfillmentUpdate(
+    input.orderId,
+    "booked",
+    input.trackingNumber ? `Shipped via ${input.courierName ?? "courier"} · ${input.trackingNumber}` : "Rider assigned by seller"
+  );
   return { deliveryId: row.id, providerOrderId, status: statusLabel };
 }
 
@@ -308,6 +323,8 @@ export async function getDeliveryForOrder(orderId: string): Promise<OrderDeliver
     driverLng: row.driverLng,
     driverLocationAt: row.driverLocationAt,
     trackingUrl: row.trackingUrl,
+    courierName: row.courierName,
+    trackingNumber: row.trackingNumber,
     bookedAt: row.bookedAt,
     pickedUpAt: row.pickedUpAt,
     deliveredAt: row.deliveredAt,

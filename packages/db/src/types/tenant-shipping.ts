@@ -1,3 +1,4 @@
+import { cleanAreaRates, PH_AREA_LABELS, PH_AREA_ORDER, PH_AREA_PROVINCES, type PhAreaRates } from "./ph-areas";
 /**
  * Tenant shipping configuration — draft and published share the same shape.
  * Storefront reads shipping_published_json (with settings_json.delivery fallback).
@@ -292,6 +293,8 @@ export function shippingFromLegacyDelivery(delivery: {
   pickupEnabled?: boolean;
   deliveryNotes?: string;
   pickupAddress?: string;
+  /** Phase 24: fee per area (Metro Manila / Luzon / Visayas / Mindanao); others pay flatRate. */
+  areaRates?: PhAreaRates;
 } | null | undefined): TenantShippingJson {
   const provider = delivery?.provider ?? "manual";
   const flatRate = asNumber(delivery?.flatRate, 89);
@@ -311,13 +314,19 @@ export function shippingFromLegacyDelivery(delivery: {
       etaMinutes: { min: 45, max: 120 },
     });
   } else {
+    // Phase 24: area zones first (checked in PH_AREA_ORDER), then the flat rate for everywhere else.
+    const areaRates = cleanAreaRates(delivery?.areaRates);
+    const areas = PH_AREA_ORDER.filter((a) => areaRates[a] != null);
     methods.push({
       id: "flat-default",
       type: "flat",
       label: "Standard delivery",
       enabled: true,
-      zones: [],
-      rates: [{ id: "rate-flat", basis: "flat", amount: flatRate }],
+      zones: areas.map((a) => ({ id: `area-${a}`, name: PH_AREA_LABELS[a], match: { provinces: PH_AREA_PROVINCES[a] } })),
+      rates: [
+        ...areas.map((a) => ({ id: `rate-${a}`, zoneId: `area-${a}`, basis: "flat" as const, amount: areaRates[a]! })),
+        { id: "rate-flat", basis: "flat", amount: flatRate },
+      ],
       freeAboveSubtotal: freeMin,
       etaMinutes: { min: 60, max: 180 },
     });
@@ -586,3 +595,4 @@ export function isPickupEnabled(shipping: TenantShippingJson): boolean {
     profile?.methods.some((m) => m.type === "pickup" && m.enabled !== false) ?? false
   );
 }
+export * from "./ph-areas";

@@ -147,3 +147,5 @@ export * from "./channels/meta";
 export * from "./crypto/token-box";
 export * from "./webhooks/sign";
 export * from "./channels/marketplaces";
+// Phase 24: parcel waybills (ready to hook up an aggregator).
+export { createWaybillProvider, type WaybillProvider, type WaybillParcel, type WaybillBooking } from "./delivery/waybill";

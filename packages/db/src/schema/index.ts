@@ -1134,6 +1134,9 @@ export const deliveries = pgTable(
     provider: deliveryProviderEnum("provider").notNull(),
     providerOrderId: varchar("provider_order_id", { length: 255 }),
     status: varchar("status", { length: 50 }),
+    /** Phase 24: parcel courier (J&T Express, LBC…) and its waybill/tracking number. */
+    courierName: varchar("courier_name", { length: 40 }),
+    trackingNumber: varchar("tracking_number", { length: 64 }),
     driverName: varchar("driver_name", { length: 255 }),
     driverPhone: varchar("driver_phone", { length: 20 }),
     driverPlateNumber: varchar("driver_plate_number", { length: 20 }),

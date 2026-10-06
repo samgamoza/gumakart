@@ -373,3 +373,37 @@ export async function planInventoryCsvImport(tenantId: string, csv: string): Pro
   }
   return plan;
 }
+
+/**
+ * Phase 24: give every active variant without a barcode an in-store EAN-13 (prefix 20–29 is
+ * reserved for in-store use, so it never clashes with a maker's barcode). Returns how many were set.
+ */
+export async function assignMissingBarcodes(tenantId: string, variantIds?: string[]): Promise<number> {
+  const db = getDb();
+  const missing = (await db.execute(sql`
+    select v.id from product_variants v join products p on p.id = v.product_id
+    where p.tenant_id = ${tenantId} and v.active and p.status <> 'archived'
+      and (v.barcode is null or v.barcode = '')
+      ${variantIds?.length ? sql`and v.id in (${sql.join(variantIds.map((v) => sql`${v}`), sql`, `)})` : sql``}
+    limit 2000`)) as unknown as Array<{ id: string }>;
+  let assigned = 0;
+  for (const { id } of missing) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const twelve = `2${Math.floor(Math.random() * 10)}${String(Math.floor(Math.random() * 1e10)).padStart(10, "0")}`;
+      const code = `${twelve}${ean13Check(twelve)}`;
+      const clash = (await db.execute(sql`
+        select 1 from product_variants v join products p on p.id = v.product_id
+        where p.tenant_id = ${tenantId} and v.barcode = ${code} limit 1`)) as unknown as unknown[];
+      if (clash.length) continue;
+      await db.execute(sql`update product_variants set barcode = ${code} where id = ${id} and (barcode is null or barcode = '')`);
+      assigned += 1;
+      break;
+    }
+  }
+  return assigned;
+}
+
+function ean13Check(twelve: string): number {
+  const sum = [...twelve].reduce((s, d, i) => s + Number(d) * (i % 2 === 0 ? 1 : 3), 0);
+  return (10 - (sum % 10)) % 10;
+}

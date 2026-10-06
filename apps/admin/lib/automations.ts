@@ -78,6 +78,7 @@ function smsContext(ctx: OrderMessagingContext, extra: Partial<OrderSmsContext> 
     orderUrl: orderUrl(ctx),
     pickupAddress: ctx.settings.delivery?.pickupAddress ?? null,
     courier: ctx.courier,
+    trackingNumber: ctx.trackingNumber,
     codDue: ctx.paymentState === "cod_due",
     ...extra,
   };

@@ -747,8 +747,10 @@ export function PosRegister() {
     // A variant's own SKU/barcode adds that exact size/colour.
     for (const p of products) {
       const v = (p.variants ?? []).find((x) => (x.barcode ?? "").toLowerCase() === q || (x.sku ?? "").toLowerCase() === q);
-      if (v && p.hasOptions) {
-        add(sellableOf(p, v));
+      if (v) {
+        // Phase 24: printed labels carry the variant barcode — simple products have one variant.
+        if (p.hasOptions) add(sellableOf(p, v));
+        else tap(p);
         posBeep(true);
         setQuery("");
         return;

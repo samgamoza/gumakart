@@ -9,9 +9,20 @@ import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
 
 const log = createLogger("orders:assign-rider");
 
-const bodySchema = z.object({
-  driverName: z.string().trim().min(2).max(120),
-  driverPhone: z.string().trim().min(7).max(32),
+/** Phase 24: parcel couriers that give a waybill/tracking number instead of a rider. */
+const PARCEL_COURIERS = ["J&T Express", "LBC", "Flash Express", "Ninja Van", "2GO", "Other courier"] as const;
+
+const bodySchema = z
+  .object({
+  driverName: z.string().trim().max(120).optional().or(z.literal("")).transform((v) => v || undefined),
+  driverPhone: z.string().trim().max(32).optional().or(z.literal("")).transform((v) => v || undefined),
+  trackingNumber: z
+    .string()
+    .trim()
+    .max(64)
+    .optional()
+    .or(z.literal(""))
+    .transform((v) => (v ? v.replace(/\s+/g, "").toUpperCase() : undefined)),
   driverPlateNumber: z.string().trim().max(32).optional(),
   trackingUrl: z
     .string()
@@ -22,7 +33,16 @@ const bodySchema = z.object({
     .or(z.literal(""))
     .transform((v) => (v ? v : undefined)),
   courierLabel: z.string().trim().max(64).optional(),
-});
+  })
+  .superRefine((b, ctx) => {
+    const parcel = PARCEL_COURIERS.includes((b.courierLabel ?? "") as (typeof PARCEL_COURIERS)[number]);
+    if (parcel) {
+      if (!b.trackingNumber || b.trackingNumber.length < 6) ctx.addIssue({ code: "custom", message: "Enter the waybill / tracking number." });
+    } else {
+      if (!b.driverName || b.driverName.length < 2) ctx.addIssue({ code: "custom", message: "Enter the rider's name." });
+      if (!b.driverPhone || b.driverPhone.length < 7) ctx.addIssue({ code: "custom", message: "Enter the rider's phone." });
+    }
+  });
 
 /**
  * Manual / offline courier (Angkas, Move It, own rider, meetup).
@@ -63,6 +83,7 @@ export async function POST(
       driverPlateNumber: body.driverPlateNumber,
       trackingUrl: body.trackingUrl,
       courierLabel: body.courierLabel,
+      ...(body.trackingNumber ? { courierName: body.courierLabel ?? null, trackingNumber: body.trackingNumber } : {}),
     });
 
     return NextResponse.json({
@@ -74,6 +95,7 @@ export async function POST(
         driverName: body.driverName,
         driverPhone: body.driverPhone,
         trackingUrl: body.trackingUrl ?? null,
+        trackingNumber: body.trackingNumber ?? null,
       },
     });
   } catch (error) {

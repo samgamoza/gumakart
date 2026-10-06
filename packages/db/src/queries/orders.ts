@@ -1126,6 +1126,9 @@ export interface OrderTrackingDelivery {
   driverLng: string | null;
   driverLocationAt: Date | null;
   trackingUrl: string | null;
+  /** Phase 24: parcel courier + waybill number. */
+  courierName?: string | null;
+  trackingNumber?: string | null;
 }
 
 export interface OrderTrackingData {
@@ -1290,6 +1293,8 @@ export async function getOrderForTracking(
           driverLng: delivery.driverLng,
           driverLocationAt: delivery.driverLocationAt,
           trackingUrl: delivery.trackingUrl,
+          courierName: delivery.courierName,
+          trackingNumber: delivery.trackingNumber,
         }
       : null,
   };

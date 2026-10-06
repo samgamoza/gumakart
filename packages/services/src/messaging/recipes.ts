@@ -107,6 +107,8 @@ export interface OrderSmsContext {
   pickupAddress?: string | null;
   /** Courier name for "rider booked", e.g. "Lalamove". */
   courier?: string | null;
+  /** Phase 24: parcel waybill number (J&T, LBC…). Switches the text to "shipped". */
+  trackingNumber?: string | null;
   /** Payment still due on handover (COD not yet collected). */
   codDue?: boolean;
 }
@@ -136,6 +138,10 @@ export function paymentConfirmedSms(c: OrderSmsContext): string {
 export function riderBookedSms(c: OrderSmsContext): string {
   const via = c.courier ? ` via ${asciiText(c.courier, 20)}` : "";
   const track = c.orderUrl ? ` Track: ${c.orderUrl}` : "";
+  if (c.trackingNumber) {
+    const no = c.trackingNumber.replace(/[^A-Za-z0-9-]/g, "").slice(0, 40);
+    return `${smsShopName(c.shopName)}: Naipadala na ang order #${c.orderNumber}${via}. Tracking no. ${no}.${track}`;
+  }
   return `${smsShopName(c.shopName)}: May rider na ang order #${c.orderNumber}${via}. Ite-text ka namin kapag paparating na.${track}`;
 }
 
