@@ -12,7 +12,18 @@ export interface GeocodeResult {
 export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
   const query = address.trim();
   if (query.length < 8) return null;
+  const real = await geocodeViaNominatim(query);
+  if (real) return real;
+  // Local browser tests only (GUMA_TEST_GEOCODE=true): a stable Metro Manila point when the map
+  // service can't be reached, so courier mocks can still quote. Never set in production.
+  if (process.env.GUMA_TEST_GEOCODE === "true") {
+    const n = [...query].reduce((a, c) => a + c.charCodeAt(0), 0) % 100;
+    return { lat: (14.55 + n / 2000).toFixed(5), lng: (121.02 + n / 2000).toFixed(5), displayName: `${query} (test point)` };
+  }
+  return null;
+}
 
+async function geocodeViaNominatim(query: string): Promise<GeocodeResult | null> {
   try {
     const url = new URL("https://nominatim.openstreetmap.org/search");
     url.searchParams.set("format", "json");

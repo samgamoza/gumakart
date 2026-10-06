@@ -996,6 +996,10 @@ export {
   getAdvisorFacts,
   getReplyFacts,
   restockLine,
+  getRevenueForecast,
+  forecastRange,
+  FORECAST_MIN_HISTORY_DAYS,
+  type RevenueForecast,
   type RestockSuggestion,
   type AdvisorFactsRow,
 } from "./queries/insights";

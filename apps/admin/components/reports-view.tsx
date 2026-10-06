@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, Table2, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, formatPrice } from "@gumakart/ui";
+import { ForecastCard } from "@/components/ai/forecast-card";
 
 /**
  * Phase 14 — Reports: sales over time, by channel, products, customers, repeat buyers,
@@ -124,6 +125,7 @@ export function ReportsView() {
         {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
+      <ForecastCard />
       {!data ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Building the report…

@@ -2,6 +2,7 @@
 
 import { useShopRole } from "@/lib/use-shop-role";
 import { OrderTools } from "@/components/order-tools";
+import { CourierCompare } from "@/components/courier-compare";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, formatPrice } from "@gumakart/ui";
 
@@ -227,7 +228,8 @@ export function OrdersManager() {
   }, []);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  /** Phase 33 (H7): the order whose courier prices are being compared. */
+  const [compareOrder, setCompareOrder] = useState<OrderRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [assignOrder, setAssignOrder] = useState<OrderRow | null>(null);
   const [assignSaving, setAssignSaving] = useState(false);
@@ -288,31 +290,6 @@ export function OrdersManager() {
       setError("Network error while updating the order.");
     } finally {
       setUpdatingId(null);
-    }
-  }
-
-  async function bookRider(order: OrderRow) {
-    setBookingId(order.id);
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch(`/api/orders/${order.id}/book-delivery`, { method: "POST" });
-      const data = await res.json();
-      if (!data.ok) {
-        setError(data.error ?? "Could not book a rider.");
-        return;
-      }
-      const provider = data.delivery.provider ? String(data.delivery.provider) : "courier";
-      setNotice(
-        data.delivery.trackingUrl
-          ? `${provider} rider booked for ${order.orderNumber} (₱${data.delivery.fee}). Track: ${data.delivery.trackingUrl}`
-          : `${provider} rider booked for ${order.orderNumber} (₱${data.delivery.fee}).`
-      );
-      await load(true);
-    } catch {
-      setError("Network error while booking the rider.");
-    } finally {
-      setBookingId(null);
     }
   }
 
@@ -646,11 +623,14 @@ export function OrdersManager() {
                     {canBook(order) && (
                       <>
                         <button
-                          onClick={() => bookRider(order)}
-                          disabled={bookingId === order.id}
+                          onClick={() => {
+                            setError(null);
+                            setNotice(null);
+                            setCompareOrder(order);
+                          }}
                           className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
                         >
-                          {bookingId === order.id ? "Booking…" : "Book courier"}
+                          Book courier
                         </button>
                         <button
                           onClick={() => {
@@ -733,6 +713,17 @@ export function OrdersManager() {
         </div>
       )}
 
+      {compareOrder && (
+        <CourierCompare
+          order={compareOrder}
+          onClose={() => setCompareOrder(null)}
+          onBooked={(message) => {
+            setCompareOrder(null);
+            setNotice(message);
+            void load(true);
+          }}
+        />
+      )}
       {assignOrder && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="w-full max-w-md rounded-2xl border border-border bg-background p-5 shadow-xl">

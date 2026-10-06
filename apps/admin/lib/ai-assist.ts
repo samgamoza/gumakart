@@ -15,9 +15,28 @@ const DAILY_LIGHT: Record<"free" | "growth" | "pro", number> = { free: 15, growt
 export type AssistOutcome<T> = { ok: true; output: T; model: string } | { ok: false; response: NextResponse };
 
 export async function runAssistForTenant<T>(tenantId: string, task: AssistTask, input: AssistInput): Promise<AssistOutcome<T>> {
+  return runAiForTenant<T>(tenantId, {
+    label: task,
+    pool: task === "captions" ? "generation" : "daily",
+    run: (plan, tokensUsedThisMonth) => runSellerAssist(task, input, { plan, tokensUsedThisMonth }),
+  });
+}
+
+/**
+ * Phase 33: the same plan limits for any AI job. `generation` = a monthly AI generation (captions,
+ * photo → listing); `daily` = the lighter daily allowance.
+ */
+export async function runAiForTenant<T>(
+  tenantId: string,
+  job: {
+    label: string;
+    pool: "generation" | "daily";
+    run: (plan: "free" | "growth" | "pro", tokensUsedThisMonth: number) => Promise<{ output: unknown; tokensUsed: number; model: string }>;
+  }
+): Promise<AssistOutcome<T>> {
   const usage = await getUsageSnapshot(tenantId);
   const plan = normalizePlan(usage.plan);
-  if (task === "captions") {
+  if (job.pool === "generation") {
     const quota = await assertAiQuota(tenantId, "generation");
     if (!quota.allowed) {
       return { ok: false, response: NextResponse.json({ ok: false, error: quota.reason, upgradeRequired: true }, { status: 402 }) };
@@ -37,15 +56,15 @@ export async function runAssistForTenant<T>(tenantId: string, task: AssistTask, 
     }
   }
   try {
-    const result = await runSellerAssist(task, input, { plan, tokensUsedThisMonth: usage.tokensThisMonth });
-    await recordAiUsage(tenantId, { incrementGenerations: task === "captions", tokensUsed: result.tokensUsed }).catch((e) =>
+    const result = await job.run(plan, usage.tokensThisMonth);
+    await recordAiUsage(tenantId, { incrementGenerations: job.pool === "generation", tokensUsed: result.tokensUsed }).catch((e) =>
       console.error("[ai-assist] usage", e)
     );
     return { ok: true, output: result.output as T, model: result.model };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[ai-assist] ${task}`, message);
-    const notSetUp = /not configured|No LLM API key|not allowed in production/i.test(message);
+    console.error(`[ai-assist] ${job.label}`, message);
+    const notSetUp = /not configured|No LLM API key|No vision AI key|not allowed in production/i.test(message);
     return {
       ok: false,
       response: NextResponse.json(

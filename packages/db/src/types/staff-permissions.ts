@@ -122,7 +122,7 @@ export const API_RULES: ApiRule[] = [
   // Orders
   { pattern: new RegExp(`^/api/orders/${ID}/confirm-payment$`), permission: "orders.payments" },
   { pattern: new RegExp(`^/api/orders/${ID}/refund$`), permission: "orders.refund" },
-  { pattern: new RegExp(`^/api/orders/${ID}/(assign-rider|book-delivery)$`), permission: "orders.fulfil" },
+  { pattern: new RegExp(`^/api/orders/${ID}/(assign-rider|book-delivery|delivery-quotes)$`), permission: "orders.fulfil" },
   // Phase 11: notes/tags are packing work; edits change money; returns refund.
   { pattern: new RegExp(`^/api/orders/${ID}/notes$`), permission: "orders.fulfil" },
   { pattern: new RegExp(`^/api/orders/${ID}/after-sale$`), methods: READ, permission: "orders.view" },
@@ -163,6 +163,7 @@ export const API_RULES: ApiRule[] = [
   { pattern: /^\/api\/insights\/restock$/, methods: READ, permission: "products.view" },
   { pattern: /^\/api\/insights\/supplier-note$/, permission: "stock.adjust" },
   { pattern: /^\/api\/insights\/advisor$/, permission: "reports.view" },
+  { pattern: /^\/api\/insights\/forecast$/, methods: READ, permission: "reports.view" },
 
   // Phase 27: Suki loyalty — converting points issues store credit (money), viewing is customer info.
   { pattern: /^\/api\/loyalty\/customers\/[^/]+\/redeem$/, permission: "orders.payments" },

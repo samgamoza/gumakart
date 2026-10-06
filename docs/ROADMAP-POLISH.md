@@ -34,7 +34,8 @@ were verified on 2026-10-06 and can go stale.
 | 21b | Third homepage "Palenke AI" (ops → Frontends), seller dashboard installable as an app | Approved (`5e50563`) |
 | 26, 27 | AI seller assistant; Suki loyalty tiers (migration `0038_loyalty`) | Approved (`fb2c3ca`) |
 | 31 | palenkeAi harvest quick wins: supplier message, new-order chime, POS beep/full screen/58mm, GoTyme label — `docs/PHASE-31-NOTES.md` | Approved (`0d9c454`) |
-| **32** | **Buyer referrals "give ₱50, get ₱50" (store credit) + Suki win-back SMS audience (migration `0039_referrals`)** — `docs/PHASE-32-NOTES.md` | **Built, in review** |
+| 32 | Buyer referrals "give ₱50, get ₱50" (store credit) + Suki win-back SMS audience (migration `0039_referrals`) — `docs/PHASE-32-NOTES.md` | Approved (`7feead1`) |
+| **33** | **Compare couriers, fill a listing from a photo, background-removal cap, next-30-days forecast** — `docs/PHASE-33-NOTES.md` | **Built, in review** |
 
 ## The launch track (not code: Sam's to-dos)
 
@@ -249,20 +250,20 @@ numbers.**
 | Omnichannel messenger CRM | **Suggest replies** in Chats, from real prices and stock | 26 |
 | Suki loyalty tiers + redemption | **Suki loyalty**: server ledger, refunds take points back, store credit only | 27 |
 
-**Next candidates, best value first** (✅ = built: H1/H3/H4/H6 in Phase 31, H5/H8 in Phase 32 — see their notes):
+**Next candidates, best value first** (✅ = built: H1/H3/H4/H6 in Phase 31, H5/H8 in Phase 32, H2/H7/H9/H10 in Phase 33 — see their notes):
 
 | # | Idea (palenkeAi source) | What we'd build | Size | Needs |
 |---|---|---|---|---|
 | H1 ✅ | Supplier reorder note (StockNotificationCenter) | On the restock card: "Draft a message to my supplier" in Taglish with the quantities, copy or share to Messenger/Viber | S | AI key |
-| H2 | Photo → product listing (`analyze-catalog-product`) | Snap a photo → title, Taglish description, category and tags filled in for review | M | Vision-capable AI key |
+| H2 ✅ | Photo → product listing (`analyze-catalog-product`) | Snap a photo → title, Taglish description, category and tags filled in for review | M | Vision-capable AI key |
 | H3 ✅ | New-order sound + browser alert (notificationService) | A chime and a browser notification when an order arrives while the dashboard or POS is open | S | — |
 | H4 ✅ | POS barcode beep + full-screen kiosk (PosSystem) | Scanner beep on add or not-found, a full-screen register button, 58/80 mm receipt width setting | S | — |
 | H5 ✅ | Win-back for Suki (CrmLoyaltyManager) | "Miss ka na namin" campaign preset: lapsed Silver+ buyers with consent, optional store-credit bonus | S | Semaphore |
 | H6 ✅ | GoTyme / bank transfer (PaymentMethods) | Extra manual payment option with account details and proof upload (same flow as GCash/Maya) | S | — |
-| H7 | Courier price comparison (DeliveryRiderEstimator) | Show quotes from every connected courier side by side when booking | M | Courier keys |
+| H7 ✅ | Courier price comparison (DeliveryRiderEstimator) | Show quotes from every connected courier side by side when booking | M | Courier keys |
 | H8 ✅ | Buyer referral codes | "Give ₱50, get ₱50" as store credit, with self-referral blocks | M | — |
-| H9 | AI product photo backgrounds (AiLabs image gen) | Clean white or lifestyle background for a product photo, per-plan monthly cap | M–L | Image model key and cost check |
-| H10 | Revenue forecast (RevenueForecastTab) | Only after shops have 3+ months of history; show a range, never a single invented number | M | History |
+| H9 ½ | AI product photo backgrounds (white background + plan cap done; lifestyle scenes not built) (AiLabs image gen) | Clean white or lifestyle background for a product photo, per-plan monthly cap | M–L | Image model key and cost check |
+| H10 ✅ | Revenue forecast (RevenueForecastTab) | Only after shops have 3+ months of history; show a range, never a single invented number | M | History |
 
 **Not adopting, on purpose:**
 

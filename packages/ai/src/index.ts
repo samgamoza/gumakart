@@ -57,3 +57,12 @@ export { callLlm, resolveEffectiveModel } from "./providers/llm";export {
   type SupplierInput,
   type SupplierOutput,
 } from "./seller-assist";
+// Phase 33 (H2): photo → draft product listing.
+export {
+  buildPhotoListingPrompt,
+  parsePhotoListing,
+  mockPhotoListing,
+  runPhotoListing,
+  type PhotoListing,
+  type PhotoListingInput,
+} from "./product-from-photo";

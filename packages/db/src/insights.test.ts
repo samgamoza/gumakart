@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import { eq, inArray } from "drizzle-orm";
 import { closeDb, getDb, orderItems, orders, products, productVariants, tenants } from "./index";
-import { getAdvisorFacts, getRestockSuggestions, restockLine } from "./queries/insights";
+import { forecastRange, getAdvisorFacts, getRestockSuggestions, getRevenueForecast, restockLine, trendPct } from "./queries/insights";
 
 const url = process.env.DATABASE_URL ?? "";
 if (/neon\.tech|neon\.database|amazonaws|supabase|render\.com/i.test(url)) throw new Error("Refusing to run against a hosted database.");
@@ -95,5 +95,30 @@ describe("reply facts", () => {
     assert.equal(lines[0], "Item fast: ₱100, 6 in stock");
     assert.ok(lines.includes("Item out: ₱100, out of stock"));
     assert.ok(!lines.some((l) => l.startsWith("Item archived")), "archived products are not offered");
+  });
+});
+
+describe("revenue forecast (Phase 33)", () => {
+  it("pure: steady weeks give a tight range around 30 days of sales; noisy weeks a wider one", () => {
+    assert.deepEqual(forecastRange(Array(12).fill(7000)), { low: 30000, high: 30000 });
+    const noisy = forecastRange([2000, 12000, 7000, 3000, 11000, 7000, 2000, 12000, 7000, 3000, 11000, 7000]);
+    assert.ok(noisy.low < 30000 && noisy.high > 30000 && noisy.low >= 0);
+    assert.equal(forecastRange([]).high, 0);
+    assert.equal(trendPct([...Array(8).fill(1000), ...Array(4).fill(1500)]), 50);
+    assert.equal(trendPct([1, 2]), null, "needs 12 weeks");
+  });
+
+  it("waits for 90 days of history, then gives a range", async () => {
+    const early = await getRevenueForecast(tenantId);
+    assert.equal(early.ready, false);
+    if (!early.ready) assert.equal(early.needDays, 90);
+    await order([], { total: "5000", subtotal: "5000" }, 100); // first sale 100 days ago, no items
+    const later = await getRevenueForecast(tenantId);
+    assert.equal(later.ready, true);
+    if (later.ready) {
+      assert.ok(later.low <= later.high);
+      assert.equal(later.basisWeeks, 12);
+      assert.ok(later.last30 > 0);
+    }
   });
 });

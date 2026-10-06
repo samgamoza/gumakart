@@ -138,6 +138,8 @@ export function ProductsManager() {
   const [dragOverPhoto, setDragOverPhoto] = useState(false);
   const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [enhancing, setEnhancing] = useState(false);
+  const [readingPhoto, setReadingPhoto] = useState(false);
+  const [photoChecks, setPhotoChecks] = useState<string[]>([]);
   const [enhancingDescription, setEnhancingDescription] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -428,6 +430,42 @@ export function ProductsManager() {
     setOriginalImageUrl(null);
   }
 
+  /** Phase 33 (H2): photo → draft name and description, for the seller to review. */
+  async function handleFromPhoto() {
+    if (!draft?.imageUrl) return;
+    setError(null);
+    setDescriptionNote(null);
+    setReadingPhoto(true);
+    try {
+      const res = await fetch("/api/products/from-photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: originalImageUrl ?? draft.imageUrl, hint: draft.title.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.error ?? "Could not read the photo.");
+        return;
+      }
+      const listing = data.listing as { title: string; description: string; checks: string[] };
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              title: listing.title,
+              descriptionHtml: plainDescriptionToHtml(listing.description),
+            }
+          : current
+      );
+      setPhotoChecks(listing.checks ?? []);
+      setDescriptionNote("AI wrote this from your photo — check the details, then set your price.");
+    } catch {
+      setError("Network error while reading the photo.");
+    } finally {
+      setReadingPhoto(false);
+    }
+  }
+
   async function handleEnhanceDescription() {
     if (!draft?.title.trim()) {
       setError("Enter a product name first, then enhance the description.");
@@ -654,8 +692,8 @@ export function ProductsManager() {
               {editingId ? "Edit product" : "New product"}
             </h3>
             <p className="mt-1 text-sm text-slate-400">
-              Fill in the basics yourself. Use AI only to enhance the description or suggest a
-              nearby market price.
+              Fill in the basics yourself, or let AI draft the name and description from your
+              photo. Price and stock are always yours.
             </p>
           </div>
 
@@ -730,10 +768,10 @@ export function ProductsManager() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-slate-200">
-                          Remove background (free)
+                          Remove background
                         </p>
                         <p className="text-xs text-slate-500">
-                          Cuts out your product and places it on a clean white background.
+                          Cuts out your product and places it on a clean white background. Uses 1 AI generation.
                         </p>
                       </div>
                       <Button type="button" onClick={handleEnhancePhoto} disabled={enhancing}>
@@ -742,6 +780,25 @@ export function ProductsManager() {
                           : "Remove background"}
                       </Button>
                     </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4" data-testid="from-photo">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-200">Write the listing from this photo (AI)</p>
+                        <p className="text-xs text-slate-500">
+                          Fills the name and description for you to check. Price and stock stay yours. Uses 1 AI generation.
+                        </p>
+                      </div>
+                      <Button type="button" onClick={() => void handleFromPhoto()} disabled={readingPhoto}>
+                        {readingPhoto ? "Reading photo…" : "Fill from photo"}
+                      </Button>
+                    </div>
+                    {photoChecks.length > 0 && (
+                      <p className="mt-2 text-xs text-amber-300" data-testid="from-photo-checks">
+                        Please fill in: {photoChecks.join(", ")}.
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (

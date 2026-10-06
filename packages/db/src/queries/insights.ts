@@ -145,3 +145,73 @@ export async function getReplyFacts(tenantId: string, limit = 15): Promise<strin
     return `${d.title}: ${price}, ${stock > 0 ? `${stock} in stock` : "out of stock"}`;
   });
 }
+
+// ── Phase 33 (H10, palenkeAi "RevenueForecastTab") ─────────────────────────────────────────────
+// Honest version: only after 3 months of history, and always a range from the shop's own weekly
+// sales, never one invented number. Sales = same definition as Reports (not cancelled/voided, minus refunds).
+
+export const FORECAST_MIN_HISTORY_DAYS = 90;
+const FORECAST_WEEKS = 12;
+
+export type RevenueForecast =
+  | { ready: false; historyDays: number; needDays: number }
+  | {
+      ready: true;
+      /** Likely sales for the next 30 days (about 8 in 10 months land inside). */
+      low: number;
+      high: number;
+      basisWeeks: number;
+      /** Actual sales in the last 30 days, for comparison. */
+      last30: number;
+      /** Last 4 weeks vs the 8 before, in % (a fact about the past, not a prediction). */
+      trendPct: number | null;
+    };
+
+/** Pure: weekly totals (oldest first) → 30-day range. Exported for tests. */
+export function forecastRange(weekly: number[]): { low: number; high: number } {
+  const n = weekly.length;
+  if (n === 0) return { low: 0, high: 0 };
+  const mean = weekly.reduce((a, b) => a + b, 0) / n;
+  const sd = n > 1 ? Math.sqrt(weekly.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : mean * 0.5;
+  const weeks = 30 / 7;
+  const center = mean * weeks;
+  const spread = 1.28 * sd * Math.sqrt(weeks); // ~80% band, weeks treated as independent
+  const round = (v: number) => Math.round(v / 100) * 100;
+  return { low: Math.max(0, round(center - spread)), high: Math.max(0, round(center + spread)) };
+}
+
+export function trendPct(weekly: number[]): number | null {
+  if (weekly.length < 12) return null;
+  const recent = weekly.slice(-4).reduce((a, b) => a + b, 0) / 4;
+  const before = weekly.slice(-12, -4).reduce((a, b) => a + b, 0) / 8;
+  if (before <= 0) return null;
+  return Math.round(((recent - before) / before) * 100);
+}
+
+export async function getRevenueForecast(tenantId: string, opts: { now?: Date } = {}): Promise<RevenueForecast> {
+  const now = opts.now ?? new Date();
+  const [first] = await rows<{ first_at: string | null }>(sql`
+    select min(o.created_at) as first_at from orders o where o.tenant_id = ${tenantId} and ${COUNTED}`);
+  const historyDays = first?.first_at ? Math.floor((now.getTime() - new Date(first.first_at).getTime()) / 86_400_000) : 0;
+  if (historyDays < FORECAST_MIN_HISTORY_DAYS) return { ready: false, historyDays, needDays: FORECAST_MIN_HISTORY_DAYS };
+
+  const since = new Date(now.getTime() - FORECAST_WEEKS * 7 * 86_400_000);
+  const data = await rows<{ wk: number; sales: string }>(sql`
+    select floor(extract(epoch from (${now.toISOString()}::timestamptz - o.created_at)) / 604800)::int as wk,
+           sum(o.total - coalesce(o.refunded_amount, 0)) as sales
+    from orders o
+    where o.tenant_id = ${tenantId} and ${COUNTED}
+      and o.created_at >= ${since.toISOString()}::timestamptz and o.created_at < ${now.toISOString()}::timestamptz
+    group by 1`);
+  // wk 0 = the most recent 7 days; build oldest → newest with empty weeks as 0.
+  const weekly = Array.from({ length: FORECAST_WEEKS }, (_, i) => {
+    const wk = FORECAST_WEEKS - 1 - i;
+    return num(data.find((d) => Number(d.wk) === wk)?.sales);
+  });
+  const [last] = await rows<{ sales: string | null }>(sql`
+    select sum(o.total - coalesce(o.refunded_amount, 0)) as sales from orders o
+    where o.tenant_id = ${tenantId} and ${COUNTED}
+      and o.created_at >= ${new Date(now.getTime() - 30 * 86_400_000).toISOString()}::timestamptz
+      and o.created_at < ${now.toISOString()}::timestamptz`);
+  return { ready: true, ...forecastRange(weekly), basisWeeks: FORECAST_WEEKS, last30: r2(num(last?.sales)), trendPct: trendPct(weekly) };
+}

@@ -1,130 +1,42 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  createDeliveryBooking,
-  getOrderForDeliveryBooking,
-  getTenantOwnerContact,
-  getTenantSettings,
-  recordDeliveryQuote,
-} from "@gumakart/db";
-import {
-  createLogger,
-  dispatch,
-  geocodeAddress,
-  IntegrationNotConfiguredError,
-  type DeliveryProviderId,
-} from "@gumakart/services";
+import { createDeliveryBooking, recordDeliveryQuote } from "@gumakart/db";
+import { createLogger, dispatch, IntegrationNotConfiguredError } from "@gumakart/services";
 import { ApiAuthError, requireTenantSession } from "@/lib/api-auth";
+import { BookingError, prepareBooking } from "@/lib/delivery-booking";
 
 const log = createLogger("orders:book-delivery");
 
-function bookingAllowList(
-  preferred: "lalamove" | "grab" | "manual" | undefined
-): DeliveryProviderId[] {
-  if (preferred === "manual") return ["manual"];
-  // BayanGo is only quoted when BAYANGO_ENABLED=true (the adapter gates itself).
-  if (preferred === "grab") return ["grab", "lalamove", "bayango", "manual"];
-  return ["lalamove", "grab", "bayango", "manual"];
-}
+const bodySchema = z
+  .object({ provider: z.enum(["lalamove", "grab", "bayango", "manual"]).optional() })
+  .optional();
 
-/** Books the best available courier (preferred app → failover → manual). */
+/**
+ * Books a courier. With no body: the best available (preferred app → failover → own rider).
+ * Phase 33 (H7): with `{ provider }` from the comparison, books only that courier (no silent switch).
+ */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     const session = await requireTenantSession();
     const { orderId } = await params;
     z.string().uuid().parse(orderId);
+    const raw = await request.text();
+    const body = bodySchema.parse(raw.trim() ? JSON.parse(raw) : undefined);
 
-    const order = await getOrderForDeliveryBooking(session.tenantId, orderId);
-    if (!order) {
-      return NextResponse.json({ ok: false, error: "Order not found." }, { status: 404 });
-    }
-    if (order.deliveryType !== "delivery") {
-      return NextResponse.json(
-        { ok: false, error: "This is a pickup order — no rider needed." },
-        { status: 400 }
-      );
-    }
-    if (order.existingProviderOrderId) {
-      return NextResponse.json(
-        { ok: false, error: "A rider is already booked for this order." },
-        { status: 409 }
-      );
-    }
-    if (order.bookingBlockedReason) {
-      return NextResponse.json({ ok: false, error: order.bookingBlockedReason }, { status: 400 });
-    }
-    if (order.dropoffAddress.trim().length < 10) {
-      return NextResponse.json(
-        { ok: false, error: "The order has no usable delivery address." },
-        { status: 400 }
-      );
-    }
-
-    const tenantSettings = await getTenantSettings(session.tenantId);
-    const delivery = tenantSettings?.settings?.delivery;
-    const preferred = delivery?.provider ?? "lalamove";
-    const pickupAddress = delivery?.pickupAddress?.trim() ?? "";
-    const flatFee = Number(delivery?.flatRate ?? 0) || 0;
-
-    if (preferred !== "manual" && !pickupAddress) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Set your store pickup address first (Settings → Delivery & Shipping).",
-        },
-        { status: 400 }
-      );
-    }
-
-    const pickupForGeocode = pickupAddress || order.dropoffAddress;
-    const [pickup, dropoff] = await Promise.all([
-      geocodeAddress(pickupForGeocode),
-      geocodeAddress(order.dropoffAddress),
-    ]);
-    if (!dropoff || (preferred !== "manual" && !pickup)) {
-      return NextResponse.json(
-        { ok: false, error: "Could not locate the pickup or delivery address on the map." },
-        { status: 400 }
-      );
-    }
-
-    const owner = await getTenantOwnerContact(session.tenantId);
-    const senderPhone =
-      tenantSettings?.settings?.whatsapp?.phone?.trim() || owner.phone || undefined;
-
-    const result = await dispatch(
-      {
-        request: {
-          pickup: {
-            address: pickupAddress || `Store · ${session.tenantName}`,
-            coordinates: pickup
-              ? { lat: String(pickup.lat), lng: String(pickup.lng) }
-              : undefined,
-          },
-          dropoff: {
-            address: order.dropoffAddress,
-            coordinates: { lat: String(dropoff.lat), lng: String(dropoff.lng) },
-          },
-        },
-        recipientName: order.customerName,
-        recipientPhone: order.customerPhone,
-        senderName: session.tenantName,
-        senderPhone,
-        remarks: [order.orderNumber, order.dropoffNotes].filter(Boolean).join(" · "),
-        externalRef: order.orderId,
-        merchant: { externalId: session.tenantId, name: session.tenantName, phone: senderPhone },
-        codAmount: order.codAmount,
-      },
-      {
-        allow: bookingAllowList(preferred),
-        manualFlatFee: flatFee,
-        preferInHouse: process.env.BAYANGO_PREFERRED === "true",
+    const prepared = await prepareBooking(session.tenantId, session.tenantName, orderId);
+    const { order } = prepared;
+    let policy = prepared.policy;
+    if (body?.provider) {
+      if (!policy.allow?.includes(body.provider)) {
+        return NextResponse.json({ ok: false, error: "That courier isn't available for this shop." }, { status: 400 });
       }
-    );
+      policy = { ...policy, allow: [body.provider], preferInHouse: false };
+    }
+
+    const result = await dispatch(prepared.input, policy);
 
     const provider = result.booking.provider;
     if (
@@ -177,8 +89,11 @@ export async function POST(
     if (error instanceof ApiAuthError) {
       return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
     }
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ ok: false, error: "Invalid order id." }, { status: 400 });
+    if (error instanceof BookingError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof z.ZodError || error instanceof SyntaxError) {
+      return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
     }
     if (error instanceof IntegrationNotConfiguredError) {
       log.error("Rider booking blocked — integration not configured", error);

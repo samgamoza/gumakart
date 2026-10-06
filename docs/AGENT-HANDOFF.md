@@ -1,13 +1,14 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–21, 21b, 26, 27, 31, 32 built; 32 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–21, 21b, 26, 27, 31–33 built; 33 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (Phase 32 in review)
+## ▶ Resume here — 2026-10-06 (Phase 33 in review)
 
 **Status.** Phases 8–21 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- Phase 32 buyer referrals (H8, "give ₱50, get ₱50" store credit) + Suki win-back SMS audience (H5). Migration 0039_referrals. In review.
+- Phase 33 harvest rest: compare couriers (H7), fill a listing from a photo (H2), background-removal plan cap (H9), next-30-days forecast (H10). No migration. In review.
+- `7feead1` Phase 32 buyer referrals (H8, "give ₱50, get ₱50" store credit) + Suki win-back SMS audience (H5). Migration 0039_referrals. Approved.
 - `0d9c454` Phase 31 palenkeAi harvest quick wins (H1 supplier message, H3 new-order chime, H4 POS beep/full screen/58mm, H6 GoTyme label). No migration. Approved.
 - `fb2c3ca` Phases 26 + 27: AI seller assistant and Suki loyalty tiers (migration 0038_loyalty). Approved. Built ahead of 22–25 at Sam's request.
 - `5e50563` Phase 21b: third homepage "Palenke AI" (ops → Frontends) + installable seller dashboard. Approved.
@@ -34,7 +35,7 @@ Pushing also switches the admin Worker cron to **every minute**. Check first wit
 
 - ops.guma.one → sign in: every super-admin sets up an authenticator app (phone ready); save the backup codes.
 - admin → Settings → Account: two-step sign-in, Change password.
-- admin → Overview (Ask Guma, restock card), Products/links → Captions, Chats → Suggest replies (needs an AI key on admin), Settings → Suki loyalty (Referrals card), SMS campaigns → Suki win-back.
+- admin → Overview (Ask Guma, restock card), Products/links → Captions, Chats → Suggest replies (needs an AI key on admin), Settings → Suki loyalty (Referrals card), SMS campaigns → Suki win-back, Orders → Book courier (compare), Products → Fill from photo (needs GEMINI or OPENAI key), Reports → Next 30 days.
 - ops → Frontends → Palenke AI (preview /palenke-ai).
 - ops.guma.one → System health and Status page.
 - kart.guma.one/status.
@@ -42,7 +43,7 @@ Pushing also switches the admin Worker cron to **every minute**. Check first wit
 - admin → Gift cards, Settings → Branches, Stock → By branch, POS (deal line, Gift card tender).
 - admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27/31/32-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27/31/32/33-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
 Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**
