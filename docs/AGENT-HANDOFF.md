@@ -51,12 +51,24 @@ Backups: `docs/RUNBOOK-BACKUPS.md`.
 - Reset the Neon password.
 - First restore drill.
 
-**Next phases proposed:**
+**What's next:** the original roadmap (phases 8–15 plus the operations track) is fully built. The
+next step is the launch track (Sam's to-dos above, then a 10–20 merchant beta), not more code.
+Optional polish phases 22–30 and the engineering backlog are written up in
+**`docs/ROADMAP-POLISH.md`** (also the project doc `claude/gumakart-polish-roadmap.md`):
 
-- 17 — Seller polish: deals at POS, multi-branch stock, gift cards/store credit, free-delivery
-  thresholds, saved addresses.
-- 18 — Platform v1.1: product writes in the API, Zapier/Make recipes, agency partner program. The
-  partner program needs a commission decision.
+| Phase | Polish item |
+|---|---|
+| 22 | Back-in-stock alerts, wishlists, pre-orders (recommended first) |
+| 23 | Verified reviews |
+| 24 | Batch packing, labels, waybills |
+| 25 | Real live selling ("mine" claims) |
+| 26 | AI seller assistant |
+| 27 | Loyalty and referrals |
+| 28 | Account security v2 |
+| 29 | Partner commission (waits on Sam) |
+| 30 | Small reach items |
+
+Let beta feedback pick the order.
 
 **Pending Phase 2 constraints:** `packages/db/drizzle-pending/0038_phase2_constrain.sql` (journal idx 38). Move
 it into `drizzle/` only after `phase2-verify.sql` returns 0 rows for a week. Renumber it each time a phase adds
