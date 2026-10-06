@@ -7,6 +7,7 @@ import {
   boolean,
   integer,
   smallint,
+  date,
   bigint,
   decimal,
   jsonb,
@@ -506,6 +507,8 @@ export const products = pgTable(
       unitCustom?: string;
       /** Service pricing chrome: base/minimum vs value range (max in compareAt). */
       servicePriceStyle?: "base_minimum" | "value_range";
+      /** Phase 22: take orders past stock, shipping around this date (YYYY-MM-DD). */
+      preorder?: { enabled?: boolean; shipDate?: string };
     }>(),
     aiGenerated: boolean("ai_generated").default(false),
     /** Phase 9: up to 3 options, e.g. [{ name: "Size", values: ["S","M"] }]. null = no options. */
@@ -748,6 +751,8 @@ export const orderItems = pgTable(
     returnedQty: integer("returned_qty").default(0).notNull(),
     /** Phase 14: the variant's cost price when sold (null = no cost set). */
     unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
+    /** Phase 22: set on pre-order lines (they don't take stock). */
+    preorderShipDate: date("preorder_ship_date"),
   },
   (table) => [
     index("order_items_order_idx").on(table.orderId),
@@ -2524,4 +2529,43 @@ export const productReviews = pgTable(
     index("product_reviews_product_idx").on(table.tenantId, table.productId, table.status),
     index("product_reviews_tenant_idx").on(table.tenantId, table.createdAt),
   ]
+);
+
+// Phase 22: buyer demand capture.
+export const stockAlerts = pgTable(
+  "stock_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    productId: uuid("product_id")
+      .references(() => products.id, { onDelete: "cascade" })
+      .notNull(),
+    variantId: uuid("variant_id").references(() => productVariants.id, { onDelete: "cascade" }),
+    phone: varchar("phone", { length: 20 }),
+    email: varchar("email", { length: 255 }),
+    buyerAccountId: uuid("buyer_account_id").references(() => buyerAccounts.id, { onDelete: "set null" }),
+    status: varchar("status", { length: 10 }).$type<"waiting" | "notified" | "cancelled">().default("waiting").notNull(),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("stock_alerts_waiting_idx").on(table.tenantId, table.productId, table.variantId, table.createdAt)]
+);
+
+export const wishlistItems = pgTable(
+  "wishlist_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    productId: uuid("product_id")
+      .references(() => products.id, { onDelete: "cascade" })
+      .notNull(),
+    buyerAccountId: uuid("buyer_account_id").references(() => buyerAccounts.id, { onDelete: "cascade" }),
+    deviceId: varchar("device_id", { length: 40 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("wishlist_items_tenant_idx").on(table.tenantId, table.productId)]
 );

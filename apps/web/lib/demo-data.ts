@@ -34,6 +34,10 @@ export interface DemoProduct {
   }>;
   /** Phase 23: from published verified reviews only. Absent = no reviews (show nothing). */
   rating?: { average: number; count: number };
+  /** Phase 22: false = sold out (all options). Absent = assume available (demo shops). */
+  available?: boolean;
+  /** Phase 22: on pre-order until this date (YYYY-MM-DD). */
+  preorderShipDate?: string;
 }
 
 export interface DemoTenant {

@@ -147,6 +147,9 @@ export const API_RULES: ApiRule[] = [
   // Selling
   { pattern: /^\/api\/checkout-links(\/|$)/, permission: "links.manage" },
   { pattern: /^\/api\/customers(\/|$)/, permission: "customers.view" },
+  // Phase 22: demand summary with the stock page; waiting buyers' contacts with customers.
+  { pattern: /^\/api\/demand\/waiting\//, methods: READ, permission: "customers.view" },
+  { pattern: /^\/api\/demand$/, methods: READ, permission: "products.view" },
   // Phase 23: everyone who sees customers can read reviews; reply/hide/report is for owners and managers.
   { pattern: /^\/api\/reviews$/, methods: READ, permission: "customers.view" },
   { pattern: /^\/api\/reviews(\/|$)/, permission: "marketing.manage" },

@@ -44,6 +44,7 @@ interface OrderRow {
   total: string;
   giftCardAmount?: string;
   itemsSummary: string;
+  preorderShipDate?: string | null;
   itemCount: number;
   createdAt: string;
   paymentReference?: string | null;
@@ -534,6 +535,11 @@ export function OrdersManager() {
                       {order.paymentState === "cod_due" ? " (collect on delivery)" : ""}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-muted-foreground">{order.itemsSummary}</p>
+                    {order.preorderShipDate ? (
+                      <p className="mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300" data-testid="preorder-badge">
+                        Pre-order — ships ~{order.preorderShipDate}
+                      </p>
+                    ) : null}
                     {((order.tags?.length ?? 0) > 0 || order.staffNote || order.edited || order.voided || Number(order.refundedAmount ?? 0) > 0 || order.invoiceNumber) && (
                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
                         {(order.tags ?? []).map((t) => (

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../client";
 import { getProductRatingSummaries, type RatingSummary } from "./reviews";
+import { activePreorder } from "../types/demand";
 import { categories, productImages, productVariants, products, tenants } from "../schema/index";
 
 export interface StorefrontTenantRecord {
@@ -48,6 +49,12 @@ export interface StorefrontTenantRecord {
     variants: StorefrontVariant[];
     /** Phase 23: published verified reviews only; null when there are none. */
     rating: { average: number; count: number } | null;
+    /** Phase 22: can be bought now (any option in stock, or stock not tracked). */
+    available: boolean;
+    /** Phase 22: the product's only variant (products without options) — used for "Notify me". */
+    defaultVariantId: string | null;
+    /** Phase 22: on pre-order until this date (YYYY-MM-DD); orders go past stock. */
+    preorderShipDate: string | null;
   }>;
   /** Phase 23: shop-wide rating from published reviews; null when there are none. */
   rating: { average: number; count: number } | null;
@@ -171,6 +178,8 @@ async function mapStorefrontTenant(
       optionsJson: products.optionsJson,
       trackInventory: products.trackInventory,
       imageUrl: productVariants.imageUrl,
+      defaultVariantId: productVariants.id,
+      defaultStockQty: productVariants.stockQty,
       categoryName: categories.name,
       categorySlug: categories.slug,
     })
@@ -263,8 +272,14 @@ async function mapStorefrontTenant(
     seoPublishedJson: tenant.seoPublishedJson ?? null,
     checkoutPublishedJson: tenant.checkoutPublishedJson ?? null,
     shippingPublishedJson: tenant.shippingPublishedJson ?? null,
-    products: catalog.map(({ optionsJson, trackInventory: _track, ...p }) => ({
+    products: catalog.map(({ optionsJson, trackInventory, defaultStockQty, ...p }) => ({
       ...p,
+      available:
+        trackInventory === false ||
+        ((optionsJson?.length ?? 0) > 0
+          ? (variantsByProduct.get(p.id) ?? []).some((v) => v.available)
+          : (defaultStockQty ?? 0) > 0),
+      preorderShipDate: activePreorder(p.metadataJson as { preorder?: { enabled?: boolean; shipDate?: string } } | null),
       isMain: Boolean(p.isMain),
       metadataJson: p.metadataJson ?? null,
       options: optionsJson ?? [],

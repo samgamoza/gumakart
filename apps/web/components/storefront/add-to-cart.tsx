@@ -7,6 +7,8 @@ import type { DemoProduct } from "@/lib/demo-data";
 import { cartLineKey, useCart } from "@/lib/cart";
 import { ctaTextColor, solidCtaColor } from "@/lib/color-contrast";
 import { resolveCommerceChrome } from "@gumakart/storefront-themes";
+import { NotifyMe } from "@/components/storefront/notify-me";
+import { WishlistButton } from "@/components/wishlist-button";
 
 export function AddToCartButton({
   tenantSlug,
@@ -41,11 +43,15 @@ export function AddToCartButton({
     [hasVariants, variants, options, picked]
   );
 
+  // Phase 22: pre-order items can be ordered past stock; sold-out items offer "Notify me".
+  const preorder = product.preorderShipDate ?? null;
+  const soldOut = !preorder && (hasVariants ? Boolean(selected) && !selected?.available : product.available === false);
+
   /** Is there an available variant with this value, given the other picks? */
   function valueAvailable(optionName: string, value: string): boolean {
     return variants.some(
       (v) =>
-        v.available &&
+        (v.available || Boolean(preorder)) &&
         v.options[optionName] === value &&
         options.every((o) => o.name === optionName || !picked[o.name] || v.options[o.name] === picked[o.name])
     );
@@ -54,7 +60,7 @@ export function AddToCartButton({
   const lineKey = hasVariants ? (selected?.id ?? "") : product.id;
   const inCart = items.find((item) => cartLineKey(item) === lineKey);
   const Icon = chrome.mode === "service" ? MessageCircle : ShoppingBag;
-  const canAdd = ready && (!hasVariants || Boolean(selected?.available));
+  const canAdd = ready && (hasVariants ? Boolean(selected) && (Boolean(selected?.available) || Boolean(preorder)) : !soldOut);
 
   function handleAdd() {
     if (hasVariants && !selected) return;
@@ -107,7 +113,11 @@ export function AddToCartButton({
             {selected.compareAtPrice && selected.compareAtPrice > selected.price ? (
               <span className="ml-2 text-neutral-400 line-through">{formatPeso(selected.compareAtPrice)}</span>
             ) : null}
-            {selected.available ? null : <span className="ml-2 font-medium text-red-600">Sold out</span>}
+            {selected.available ? null : preorder ? (
+              <span className="ml-2 font-medium text-amber-700">Pre-order</span>
+            ) : (
+              <span className="ml-2 font-medium text-red-600">Sold out</span>
+            )}
           </>
         ) : (
           "This combination isn't available."
@@ -121,17 +131,34 @@ export function AddToCartButton({
       <>
       {picker}
       <div className={`${hasVariants ? "mt-5" : "mt-8"} w-full md:max-w-md`}>
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={!canAdd}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full py-4 text-base font-semibold shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ backgroundColor: bg, color: fg }}
-        >
-          <Icon className="h-5 w-5" />
-          {!ready ? "Loading…" : hasVariants && !selected?.available ? "Sold out" : chrome.addLabel}
-        </button>
-        {chrome.ctaHint ? (
+        {preorder ? (
+          <p className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" data-testid="preorder-note">
+            <span className="font-semibold">Pre-order</span> — ships around {formatShipDate(preorder)}. You can order now.
+          </p>
+        ) : null}
+        {soldOut && ready ? (
+          <NotifyMe tenantSlug={tenantSlug} productId={product.id} variantId={hasVariants ? (selected?.id ?? null) : null} accent={bg} accentText={fg} />
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={!canAdd}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full py-4 text-base font-semibold shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: bg, color: fg }}
+            >
+              <Icon className="h-5 w-5" />
+              {!ready ? "Loading…" : hasVariants && !selected ? "Pick an option" : preorder ? "Pre-order now" : chrome.addLabel}
+            </button>
+            <WishlistButton tenantSlug={tenantSlug} productId={product.id} size="lg" />
+          </div>
+        )}
+        {soldOut && ready ? (
+          <div className="mt-3 flex justify-center">
+            <WishlistButton tenantSlug={tenantSlug} productId={product.id} size="lg" withLabel />
+          </div>
+        ) : null}
+        {chrome.ctaHint && !soldOut ? (
           <p className="mt-2 text-center text-xs text-neutral-500">{chrome.ctaHint}</p>
         ) : null}
       </div>
@@ -185,4 +212,8 @@ export function AddToCartButton({
 
 function formatPeso(amount: number): string {
   return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount).replace(/\.00$/, "");
+}
+
+function formatShipDate(d: string): string {
+  return new Date(`${d}T00:00:00Z`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }

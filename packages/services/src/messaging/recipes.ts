@@ -211,6 +211,12 @@ export function isRecipeEnabled(
   return automations?.[recipe] !== false;
 }
 
+/** Phase 22: the buyer asked to be told when a sold-out item is back. ASCII only. */
+export function backInStockSms(input: { shopName: string; productTitle: string; variantTitle?: string | null; url: string }): string {
+  const what = asciiText(input.variantTitle ? `${input.productTitle} (${input.variantTitle})` : input.productTitle, 50);
+  return `${smsShopName(input.shopName)}: May stock na ulit ang ${what}! Order na habang meron pa: ${input.url}`;
+}
+
 /** Phase 23: "Kumusta ang order mo?" with the order link (where the review form is). ASCII only. */
 export function reviewRequestSms(c: OrderSmsContext): string {
   return `${smsShopName(c.shopName)}: Kumusta ang order #${c.orderNumber}? I-rate ang items mo dito, salamat! ${c.orderUrl ?? ""}`.trim();

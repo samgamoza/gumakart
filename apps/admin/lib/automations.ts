@@ -40,6 +40,7 @@ import {
   type OrderSmsContext,
 } from "@gumakart/services";
 import { storefrontBaseUrl } from "@/lib/utils";
+import { sendBackInStockAlerts } from "@/lib/stock-alerts";
 
 /**
  * Phase 4 — automatic SMS.
@@ -298,6 +299,8 @@ export interface TimedRunResult {
   unpaid: { considered: number; sent: number; skipped: number };
   /** Phase 23: "rate your order" texts. */
   reviews: { considered: number; sent: number; skipped: number };
+  /** Phase 22: back-in-stock alerts. */
+  backInStock: { considered: number; sent: number; waiting: number };
 }
 
 /** Timed recipes 6 and 7. Safe to run every 5 minutes. */
@@ -307,6 +310,7 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
     recovery: { considered: 0, sent: 0, skipped: 0 },
     unpaid: { considered: 0, sent: 0, skipped: 0 },
     reviews: { considered: 0, sent: 0, skipped: 0 },
+    backInStock: { considered: 0, sent: 0, waiting: 0 },
   };
   if (result.quietHours) return result;
 
@@ -385,6 +389,12 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
     if (outcome?.status === "sent") result.unpaid.sent += 1;
     else result.unpaid.skipped += 1;
   }
+
+  // Phase 22 — back-in-stock alerts the buyers asked for.
+  result.backInStock = await sendBackInStockAlerts(webBase()).catch((error) => {
+    console.error("[automations] back-in-stock", error);
+    return result.backInStock;
+  });
 
   // Phase 23 — ask for a review 2 days after delivery (opt-in recipe; consent; once per order).
   for (const orderId of await listReviewRequestCandidates(now, 50)) {

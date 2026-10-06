@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { getDb } from "../client";
 import { recordStockMovement } from "./stock-ledger";
+import { activePreorder } from "../types/demand";
 import { insertOutboxEvent } from "./outbox";
 import { getDefaultLocationId } from "./locations";
 import {
@@ -116,7 +117,7 @@ export interface CreatedOrder {
   couponCode: string | null;
   /** Secret for the buyer's order link (?t=…). Never log it. */
   accessToken: string;
-  items: Array<{ title: string; quantity: number; unitPrice: string; lineTotal: string }>;
+  items: Array<{ title: string; quantity: number; unitPrice: string; lineTotal: string; preorderShipDate?: string | null }>;
   /** Phase 17: paid with a gift card / store credit, and what's left to pay. */
   giftCardAmount: string;
   amountDue: string;
@@ -178,6 +179,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         status: products.status,
         basePrice: products.basePrice,
         trackInventory: products.trackInventory,
+        metadataJson: products.metadataJson,
         variantId: productVariants.id,
         variantTitle: productVariants.title,
         variantPrice: productVariants.price,
@@ -211,6 +213,8 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       quantity: number;
       unitPriceCentavos: number;
       unitCost: string | null;
+      /** Phase 22: pre-order lines skip stock and carry the expected ship date. */
+      preorderShipDate: string | null;
     }> = [];
 
     const byProduct = new Map<string, (typeof catalog)[number]>();
@@ -237,7 +241,8 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         throw new OrderError(`Pick a size or option for "${first.title}".`, "PRODUCT_UNAVAILABLE");
       }
       byProduct.set(row.variantId ?? productId, row);
-      if (row.trackInventory && row.variantId !== null && (row.stockQty ?? 0) < quantity) {
+      const preorderShipDate = activePreorder(row.metadataJson);
+      if (!preorderShipDate && row.trackInventory && row.variantId !== null && (row.stockQty ?? 0) < quantity) {
         throw new OrderError(
           `Not enough stock for "${row.title}${row.hasOptions ? ` (${row.variantTitle})` : ""}" (only ${row.stockQty ?? 0} left).`,
           "OUT_OF_STOCK"
@@ -255,6 +260,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         quantity,
         unitPriceCentavos,
         unitCost: row.costPrice ?? null,
+        preorderShipDate,
       });
     }
 
@@ -478,6 +484,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         unitPrice: fromCentavos(line.unitPriceCentavos),
         lineTotal: fromCentavos(line.unitPriceCentavos * line.quantity),
         unitCost: line.unitCost,
+        preorderShipDate: line.preorderShipDate,
       }))
     );
 
@@ -588,7 +595,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
     // nothing surfaces the shortfall until someone goes to pack the order.
     for (const line of lines) {
       const row = byProduct.get(line.variantId ?? line.productId);
-      if (row?.trackInventory && line.variantId) {
+      if (row?.trackInventory && line.variantId && !line.preorderShipDate) {
         const decremented = await tx
           .update(productVariants)
           .set({ stockQty: sql`${productVariants.stockQty} - ${line.quantity}` })
@@ -811,6 +818,7 @@ export interface TenantOrderListItem {
   /** Phase 17: part paid by gift card / store credit. */
   giftCardAmount: string;
   itemsSummary: string;
+  preorderShipDate: string | null;
   itemCount: number;
   createdAt: Date;
   paymentReference: string | null;
@@ -860,6 +868,7 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       orderId: orderItems.orderId,
       title: orderItems.titleSnapshot,
       quantity: orderItems.quantity,
+      preorderShipDate: orderItems.preorderShipDate,
     })
     .from(orderItems)
     .where(
@@ -869,10 +878,10 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       )
     );
 
-  const itemsByOrder = new Map<string, Array<{ title: string; quantity: number }>>();
+  const itemsByOrder = new Map<string, Array<{ title: string; quantity: number; preorderShipDate?: string | null }>>();
   for (const item of items) {
     const list = itemsByOrder.get(item.orderId) ?? [];
-    list.push({ title: item.title, quantity: item.quantity });
+    list.push({ title: item.title, quantity: item.quantity, preorderShipDate: item.preorderShipDate });
     itemsByOrder.set(item.orderId, list);
   }
 
@@ -957,6 +966,12 @@ export async function listOrdersForTenant(tenantId: string): Promise<TenantOrder
       itemsSummary: orderItemsList
         .map((item) => `${item.quantity}× ${item.title}`)
         .join(", "),
+      // Phase 22: earliest expected ship date among pre-order lines (null = no pre-order items).
+      preorderShipDate:
+        orderItemsList
+          .map((item) => item.preorderShipDate)
+          .filter((d): d is string => Boolean(d))
+          .sort()[0] ?? null,
       createdAt: row.createdAt,
       paymentReference: payMeta?.reference ?? null,
       paymentProofUrl: payMeta?.proofUrl ?? null,
@@ -1134,7 +1149,7 @@ export interface OrderTrackingData {
   giftCardAmount: string;
   amountDue: string;
   createdAt: Date;
-  items: Array<{ title: string; quantity: number; unitPrice: string; lineTotal: string }>;
+  items: Array<{ title: string; quantity: number; unitPrice: string; lineTotal: string; preorderShipDate?: string | null }>;
   history: Array<{ status: OrderStatus; note: string | null; createdAt: Date }>;
   delivery: OrderTrackingDelivery | null;
   /** "paymongo" when the buyer pays on PayMongo's page, "manual" for direct transfer. */
@@ -1257,6 +1272,7 @@ export async function getOrderForTracking(
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineTotal: item.lineTotal,
+      preorderShipDate: item.preorderShipDate ?? null,
     })),
     history: history.map((entry) => ({
       status: entry.status as OrderStatus,

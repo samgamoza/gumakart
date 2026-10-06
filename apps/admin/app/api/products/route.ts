@@ -36,6 +36,9 @@ const createSchema = z.object({
       unitType: z.enum(["pc", "box", "other"]).optional(),
       unitCustom: z.string().max(40).optional(),
       servicePriceStyle: z.enum(["base_minimum", "value_range"]).optional(),
+      preorder: z
+        .object({ enabled: z.boolean().optional(), shipDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })
+        .optional(),
     })
     .nullable()
     .optional(),

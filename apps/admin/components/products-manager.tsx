@@ -42,7 +42,7 @@ interface ProductRow {
   aiGenerated: boolean;
   imageUrl: string | null;
   isMain?: boolean;
-  metadataJson?: ProductPricingMeta | null;
+  metadataJson?: (ProductPricingMeta & { preorder?: { enabled?: boolean; shipDate?: string } }) | null;
   /** Phase 9: sizes/colours. stockQty is the total across variants. */
   hasOptions?: boolean;
   variantCount?: number;
@@ -65,6 +65,9 @@ interface ProductDraft {
   unitType: ProductUnitType;
   unitCustom: string;
   servicePriceStyle: ServicePriceStyle;
+  /** Phase 22: pre-order toggle + expected ship date (YYYY-MM-DD). */
+  preorderEnabled: boolean;
+  preorderShipDate: string;
 }
 
 interface ShopContext {
@@ -88,6 +91,8 @@ const EMPTY_DRAFT: ProductDraft = {
   unitType: "pc",
   unitCustom: "",
   servicePriceStyle: "base_minimum",
+  preorderEnabled: false,
+  preorderShipDate: "",
 };
 
 const STOREFRONT_URL =
@@ -269,6 +274,8 @@ export function ProductsManager() {
       unitType: product.metadataJson?.unitType ?? "pc",
       unitCustom: product.metadataJson?.unitCustom ?? "",
       servicePriceStyle: product.metadataJson?.servicePriceStyle ?? "base_minimum",
+      preorderEnabled: product.metadataJson?.preorder?.enabled === true,
+      preorderShipDate: product.metadataJson?.preorder?.shipDate ?? "",
     });
   }
 
@@ -586,7 +593,17 @@ export function ProductsManager() {
       return;
     }
 
-    const metadataJson = buildPricingMeta(draft);
+    if (draft.preorderEnabled && !/^\d{4}-\d{2}-\d{2}$/.test(draft.preorderShipDate)) {
+      setError("Pick the expected ship date for the pre-order.");
+      setSaving(false);
+      return;
+    }
+    // Phase 22: the pre-order setting rides along with the pricing metadata.
+    const pricingMeta = buildPricingMeta(draft);
+    const metadataJson =
+      draft.preorderEnabled || draft.preorderShipDate
+        ? { ...(pricingMeta ?? {}), preorder: { enabled: draft.preorderEnabled, ...(draft.preorderShipDate ? { shipDate: draft.preorderShipDate } : {}) } }
+        : pricingMeta;
     const stockQty =
       pricingKind === "service" ? Math.max(Number(draft.stockQty) || 999, 1) : Number(draft.stockQty) || 0;
     const comparePayload =
@@ -1050,6 +1067,40 @@ export function ProductsManager() {
                 </label>
               )}
             </div>
+
+            {pricingKind !== "service" && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4" data-testid="preorder-settings">
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={draft.preorderEnabled}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, preorderEnabled: e.target.checked } : d))}
+                    data-testid="preorder-enabled"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-200">Take pre-orders</span>
+                    <span className="block text-xs text-slate-500">
+                      Buyers can order even with 0 stock; the order shows &quot;Pre-order — ships ~date&quot;. Pre-orders don&apos;t take
+                      stock. It turns off by itself after the ship date.
+                    </span>
+                  </span>
+                </label>
+                {draft.preorderEnabled && (
+                  <label className="mt-3 block max-w-xs">
+                    <span className="mb-1 block text-xs font-medium text-slate-300">Expected ship date</span>
+                    <input
+                      type="date"
+                      min={new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10)}
+                      value={draft.preorderShipDate}
+                      onChange={(e) => setDraft((d) => (d ? { ...d, preorderShipDate: e.target.value } : d))}
+                      className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm"
+                      data-testid="preorder-date"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
 
             {editingHasOptions && (
               <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">

@@ -2,7 +2,7 @@
 
 import { sizedImageUrl } from "@/lib/image-sizes";
 import Link from "next/link";
-import { MessageCircle, ShoppingBag } from "lucide-react";
+import { Heart, MessageCircle, ShoppingBag } from "lucide-react";
 import type { DemoTenant } from "@/lib/demo-data";
 import { useCart } from "@/lib/cart";
 import { whatsappChatUrl } from "@/lib/storefront-settings";
@@ -56,6 +56,14 @@ export function ShopShell({
           </Link>
 
           <div className="flex shrink-0 items-center gap-2 md:gap-3">
+            <Link
+              href={`/${tenant.slug}/saved`}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 transition hover:bg-neutral-50"
+              aria-label="Saved items"
+              data-testid="saved-link"
+            >
+              <Heart className="h-5 w-5" />
+            </Link>
             <Link
               href={`/${tenant.slug}/checkout`}
               className="relative flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 transition hover:bg-neutral-50"

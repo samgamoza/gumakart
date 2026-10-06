@@ -7,11 +7,13 @@ import {
   messagingOptOuts,
   orderItems,
   orders,
+  stockAlerts,
   tenants,
   type BuyerAddressJson,
 } from "../schema/index";
 import { factsOf } from "./order-lifecycle";
 import { orderBucketOf } from "./order-state";
+import { exportBuyerDemand } from "./demand";
 
 /**
  * Phase 12 — Guma ID: one verified mobile number recognised at every Guma Kart shop.
@@ -382,24 +384,33 @@ export async function setBuyerShopReminders(buyer: { phone: string }, tenantId: 
 export async function exportBuyerData(buyerId: string): Promise<Record<string, unknown> | null> {
   const buyer = await getBuyer(buyerId);
   if (!buyer) return null;
-  const [addresses, orderList, shops] = await Promise.all([listBuyerAddresses(buyerId), listBuyerOrders(buyer, 200), listBuyerShops(buyer)]);
+  const [addresses, orderList, shops, demand] = await Promise.all([
+    listBuyerAddresses(buyerId),
+    listBuyerOrders(buyer, 200),
+    listBuyerShops(buyer),
+    exportBuyerDemand(buyerId),
+  ]);
   return {
     exportedAt: new Date().toISOString(),
     account: { phone: buyer.phone, name: buyer.name, email: buyer.email, preferredPayment: buyer.preferredPayment, createdAt: buyer.createdAt },
     addresses: addresses.map((a) => ({ label: a.label, recipient: a.recipient, address: a.address, isDefault: a.isDefault })),
     orders: orderList.map((o) => ({ shop: o.shopName, orderNumber: o.orderNumber, createdAt: o.createdAt, total: o.total, refunded: o.refunded, items: o.itemsSummary, status: o.bucket })),
     reminderTexts: shops.map((s) => ({ shop: s.shopName, on: !s.remindersOff })),
+    savedItems: demand.saved,
+    backInStockAlerts: demand.alerts,
     note: "Orders belong to the shops you bought from; deleting your Guma ID unlinks them but the shops keep their records.",
   };
 }
 
-/** Deletes the Guma ID: account, addresses and codes. Shops keep their orders (unlinked). */
+/** Deletes the Guma ID: account, addresses, codes, saved items and stock alerts. Shops keep their orders (unlinked). */
 export async function deleteBuyerAccount(buyerId: string): Promise<void> {
   const db = getDb();
   await db.transaction(async (tx) => {
     const [b] = await tx.select().from(buyerAccounts).where(eq(buyerAccounts.id, buyerId)).for("update");
     if (!b) return;
     await tx.update(orders).set({ buyerAccountId: null }).where(eq(orders.buyerAccountId, buyerId));
+    // Phase 22: saved items cascade with the account; back-in-stock alerts hold contact details, so remove them.
+    await tx.delete(stockAlerts).where(eq(stockAlerts.buyerAccountId, buyerId));
     await tx.delete(buyerOtpCodes).where(eq(buyerOtpCodes.phone, b.phone));
     await tx.delete(buyerAccounts).where(eq(buyerAccounts.id, buyerId));
   });

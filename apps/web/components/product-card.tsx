@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DemoProduct } from "@/lib/demo-data";
 import { RatingStars } from "@/components/rating-stars";
+import { WishlistButton } from "@/components/wishlist-button";
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat("en-PH", {
@@ -37,6 +38,7 @@ export function ProductCard({
           {product.compareAtPrice && (
             <Badge className="absolute left-1 top-1 px-1.5 py-0 text-[10px]">Sale</Badge>
           )}
+          <WishlistButton tenantSlug={tenantSlug} productId={product.id} className="absolute bottom-1 right-1 !h-7 !w-7" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
           <div>
@@ -44,6 +46,11 @@ export function ProductCard({
               {product.title}
             </h3>
             <RatingStars rating={product.rating} className="mt-0.5 text-muted-foreground" />
+            {product.preorderShipDate ? (
+              <span className="mt-0.5 block text-[11px] font-medium text-amber-700">Pre-order</span>
+            ) : product.available === false ? (
+              <span className="mt-0.5 block text-[11px] font-medium text-red-600">Sold out</span>
+            ) : null}
             <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
               {product.shortDescription}
             </p>

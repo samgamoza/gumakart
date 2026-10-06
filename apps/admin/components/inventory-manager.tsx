@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Download, Loader2, Search, Upload, X } from "lucide-react";
 import { Button, Card } from "@gumakart/ui";
 import { useShopRole } from "@/lib/use-shop-role";
+import { DemandPanel } from "@/components/demand-panel";
 
 /**
  * Phase 9 — Stock page. One row per sellable item (product, or each size/colour).
@@ -44,6 +45,7 @@ const peso = (n: number) =>
 
 export function InventoryManager() {
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [waiting, setWaiting] = useState<Record<string, number>>({});
   const [threshold, setThreshold] = useState(3);
   const [thresholdDraft, setThresholdDraft] = useState("3");
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +75,10 @@ export function InventoryManager() {
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/inventory", { cache: "no-store" });
-      const data = (await res.json()) as { ok: boolean; error?: string; rows?: Row[]; threshold?: number };
+      const data = (await res.json()) as { ok: boolean; error?: string; rows?: Row[]; threshold?: number; waiting?: Record<string, number> };
       if (!data.ok) throw new Error(data.error ?? "Could not load stock.");
       setRows(data.rows ?? []);
+      setWaiting(data.waiting ?? {});
       setThreshold(data.threshold ?? 3);
       setThresholdDraft(String(data.threshold ?? 3));
     } catch (e) {
@@ -199,6 +202,7 @@ export function InventoryManager() {
 
   return (
     <div className="space-y-4">
+      <DemandPanel />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Count what&apos;s on the shelf, or update many items at once with a spreadsheet.
@@ -392,6 +396,11 @@ export function InventoryManager() {
                         }`}
                       >
                         {r.stockQty}
+                        {waiting[r.variantId] ? (
+                          <span className="block text-[11px] font-medium text-violet-300" data-testid="waiting-count">
+                            {waiting[r.variantId]} waiting
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-1.5">
                         <div className="flex items-center gap-2">

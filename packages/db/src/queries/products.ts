@@ -9,6 +9,8 @@ export type ProductMetadataJson = {
   unitType?: "pc" | "box" | "other";
   unitCustom?: string;
   servicePriceStyle?: "base_minimum" | "value_range";
+  /** Phase 22: pre-order (orders go past stock; ships around shipDate). */
+  preorder?: { enabled?: boolean; shipDate?: string };
 };
 
 export interface ProductListItem {

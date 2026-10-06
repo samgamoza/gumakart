@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   abandonedCheckoutSms,
+  backInStockSms,
   deliveredSms,
   isQuietHours,
   isRecipeEnabled,
@@ -127,4 +128,12 @@ test("Phase 23: review request is ASCII, carries the order link, and is opt-in",
   assert.equal(isRecipeEnabled({}, "review_request"), false);
   assert.equal(isRecipeEnabled({ review_request: true }, "review_request"), true);
   assert.equal(isRecipeEnabled({}, "delivered"), true, "others stay on by default");
+});
+
+test("Phase 22: back-in-stock text is ASCII with the shop name and link", () => {
+  const body = backInStockSms({ shopName: "Tess Lifestyle PH", productTitle: "Piña Tote ✨", variantTitle: "Small", url: "https://kart.guma.one/tess/products/tote" });
+  assert.ok(ascii(body), body);
+  assert.ok(body.startsWith("Tess Lifestyle PH: May stock na ulit ang Pina Tote"));
+  assert.ok(body.includes("(Small)"));
+  assert.ok(body.endsWith("https://kart.guma.one/tess/products/tote"));
 });

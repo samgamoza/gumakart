@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   getOrderLoyalty,
   getReviewableItems,
+  shipDateLabel,
   getOrderForTracking,
   getTenantStorefrontBySlug,
   resolveTenantPaymentsSettings,
@@ -406,6 +407,11 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
                 <div key={`${item.title}-${item.quantity}`} className="flex justify-between">
                   <span className="text-gray-600">
                     {item.quantity}× {item.title}
+                    {item.preorderShipDate ? (
+                      <span className="mt-0.5 block text-xs font-medium text-amber-700" data-testid="order-preorder">
+                        {tx("Pre-order", "Pre-order")} — {tx("ships", "ipapadala")} ~{shipDateLabel(item.preorderShipDate)}
+                      </span>
+                    ) : null}
                   </span>
                   <span>{formatPrice(item.lineTotal)}</span>
                 </div>

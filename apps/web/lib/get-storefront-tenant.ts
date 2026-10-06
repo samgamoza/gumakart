@@ -33,6 +33,8 @@ function mapDbTenantToDemo(
       isMain: Boolean(product.isMain),
       tags: product.isMain ? ["featured", "bestseller"] : [],
       ...(product.rating ? { rating: product.rating } : {}),
+      available: product.available,
+      ...(product.preorderShipDate ? { preorderShipDate: product.preorderShipDate } : {}),
       pricingMeta: product.metadataJson
         ? {
             unitType: product.metadataJson.unitType,

@@ -1060,3 +1060,21 @@ export {
   type PublicReview,
   type ReportedReviewRow,
 } from "./queries/reviews";
+
+// Phase 22: buyer demand capture (back-in-stock alerts, wishlists, pre-orders).
+export {
+  DemandError,
+  createStockAlert,
+  listAlertsToSend,
+  markAlertNotified,
+  getWaitingCountsByVariant,
+  listWaitingContacts,
+  getDemandSummary,
+  setWishlisted,
+  listWishlist,
+  claimDeviceWishlist,
+  isValidDeviceId,
+  type AlertToSend,
+  type DemandSummary,
+} from "./queries/demand";
+export { activePreorder, shipDateLabel, manilaToday, type PreorderSettings } from "./types/demand";
