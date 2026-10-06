@@ -116,7 +116,7 @@ function SuggestField({
             onChangeText(event.target.value);
             setOpen(true);
           }}
-          className="h-11 w-full rounded-xl border border-orange-300 bg-orange-50 px-4 pr-9 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30 disabled:opacity-50"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 pr-9 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)] disabled:opacity-50"
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
           {loading ? (
@@ -334,7 +334,7 @@ export function PhAddressFields({
           value={value.street1}
           onChange={(event) => onChange({ ...value, street1: event.target.value })}
           autoComplete="address-line1"
-          className="h-11 w-full rounded-xl border border-orange-300 bg-orange-50 px-4 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
         />
         {showErrors && errors?.street1 ? (
           <p className="mt-1 text-xs text-red-600">{errors.street1}</p>
@@ -351,7 +351,7 @@ export function PhAddressFields({
           value={value.street2}
           onChange={(event) => onChange({ ...value, street2: event.target.value })}
           autoComplete="address-line2"
-          className="h-11 w-full rounded-xl border border-orange-300 bg-orange-50 px-4 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
         />
       </div>
 

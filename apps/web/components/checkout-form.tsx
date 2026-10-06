@@ -1,5 +1,6 @@
 "use client";
 
+import { ctaTextColor } from "@/lib/color-contrast";
 import { readReferral } from "@/lib/referral-capture";
 import { GiftCardInput, type AppliedGiftCard } from "@/components/gift-card-input";
 import { storedUtm } from "@/components/storefront/attribution-capture";
@@ -78,10 +79,14 @@ function formatPrice(amount: number, currency = "PHP"): string {
 export function CheckoutForm({
   tenantSlug,
   storeSettings,
+  accent = "#7c3aed",
 }: {
   tenantSlug: string;
   storeSettings: StorefrontStoreSettings;
+  /** Phase 34: the shop's own accent (contrast-safe), instead of a fixed marketplace orange. */
+  accent?: string;
 }) {
+  const accentStyle = { "--shop-accent": accent, "--shop-accent-ink": ctaTextColor(accent) } as React.CSSProperties;
   const cart = useCart(tenantSlug);
   const checkout = storeSettings.checkout;
 
@@ -475,7 +480,7 @@ export function CheckoutForm({
       )}
       <div className="flex items-end justify-between gap-4 border-t border-stone-200 pt-3">
         <span className="text-sm font-semibold text-stone-800">{giftApplied > 0 ? "Babayaran" : "Total Payment"}</span>
-        <span className="text-xl font-bold tracking-tight text-[#ee4d2d]" data-testid="summary-due">
+        <span className="text-xl font-bold tracking-tight text-[var(--shop-accent,#7c3aed)]" data-testid="summary-due">
           {formatPrice(amountDue, storeSettings.currency)}
         </span>
       </div>
@@ -490,9 +495,9 @@ export function CheckoutForm({
 
   if (cart.ready && cart.items.length === 0) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f5f5] p-6 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-100">
-          <ShoppingBag className="h-7 w-7 text-[#ee4d2d]" />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6 text-center" style={accentStyle}>
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_12%,white)]">
+          <ShoppingBag className="h-7 w-7 text-[var(--shop-accent,#7c3aed)]" />
         </div>
         <h1 className="mt-4 text-xl font-bold text-stone-900">Your cart is empty</h1>
         <p className="mt-2 max-w-xs text-sm text-stone-500">
@@ -501,7 +506,7 @@ export function CheckoutForm({
         <Link href={`/${tenantSlug}`} className="mt-6">
           <Button
             size="lg"
-            className="gap-2 bg-[#ee4d2d] text-white hover:bg-[#d73211]"
+            className="gap-2 bg-[var(--shop-accent,#7c3aed)] text-[var(--shop-accent-ink,#fff)] hover:bg-[#d73211]"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to shop
@@ -512,7 +517,7 @@ export function CheckoutForm({
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] pb-28 lg:pb-10">
+    <div className="min-h-screen bg-slate-50 pb-28 lg:pb-10" style={accentStyle}>
       <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
           <Link
@@ -531,7 +536,7 @@ export function CheckoutForm({
           </div>
           <div className="hidden text-right text-xs text-stone-500 sm:block">
             <p className="font-semibold text-stone-800">{cart.count} item{cart.count === 1 ? "" : "s"}</p>
-            <p className="font-bold text-[#ee4d2d]">
+            <p className="font-bold text-[var(--shop-accent,#7c3aed)]">
               {formatPrice(amountDue, storeSettings.currency)}
             </p>
           </div>
@@ -547,9 +552,9 @@ export function CheckoutForm({
           )}
 
           {/* Products */}
-          <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)]">
             <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ee4d2d] text-[11px] font-bold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--shop-accent,#7c3aed)] text-[11px] font-bold text-[var(--shop-accent-ink,#fff)]">
                 1
               </span>
               <h2 className="text-sm font-bold text-stone-900">
@@ -580,7 +585,7 @@ export function CheckoutForm({
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-medium text-stone-900">{item.title}</p>
                     {item.variantTitle ? <p className="text-xs text-stone-500">{item.variantTitle}</p> : null}
-                    <p className="mt-0.5 text-sm font-bold text-[#ee4d2d]">
+                    <p className="mt-0.5 text-sm font-bold text-[var(--shop-accent,#7c3aed)]">
                       {formatPrice(item.price, storeSettings.currency)}
                     </p>
                   </div>
@@ -616,9 +621,9 @@ export function CheckoutForm({
 
           {/* Fulfillment */}
           {storeSettings.delivery.pickupEnabled && (
-            <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)]">
               <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ee4d2d] text-[11px] font-bold text-white">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--shop-accent,#7c3aed)] text-[11px] font-bold text-[var(--shop-accent-ink,#fff)]">
                   2
                 </span>
                 <h2 className="text-sm font-bold text-stone-900">Delivery Option</h2>
@@ -629,17 +634,17 @@ export function CheckoutForm({
                   onClick={() => setFulfillment("delivery")}
                   className={`relative rounded-lg border-2 p-3 text-left transition ${
                     fulfillment === "delivery"
-                      ? "border-[#ee4d2d] bg-orange-50"
+                      ? "border-[var(--shop-accent,#7c3aed)] bg-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_7%,white)]"
                       : "border-stone-200 bg-white hover:border-stone-300"
                   }`}
                 >
                   {fulfillment === "delivery" && (
-                    <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#ee4d2d]">
+                    <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--shop-accent,#7c3aed)]">
                       <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                     </span>
                   )}
                   <MapPin
-                    className={`h-5 w-5 ${fulfillment === "delivery" ? "text-[#ee4d2d]" : "text-stone-400"}`}
+                    className={`h-5 w-5 ${fulfillment === "delivery" ? "text-[var(--shop-accent,#7c3aed)]" : "text-stone-400"}`}
                   />
                   <p className="mt-2 text-sm font-bold text-stone-900">Delivery</p>
                   <p className="mt-0.5 text-[11px] text-stone-500">Ship to your address</p>
@@ -649,17 +654,17 @@ export function CheckoutForm({
                   onClick={() => setFulfillment("pickup")}
                   className={`relative rounded-lg border-2 p-3 text-left transition ${
                     fulfillment === "pickup"
-                      ? "border-[#ee4d2d] bg-orange-50"
+                      ? "border-[var(--shop-accent,#7c3aed)] bg-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_7%,white)]"
                       : "border-stone-200 bg-white hover:border-stone-300"
                   }`}
                 >
                   {fulfillment === "pickup" && (
-                    <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#ee4d2d]">
+                    <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--shop-accent,#7c3aed)]">
                       <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                     </span>
                   )}
                   <Store
-                    className={`h-5 w-5 ${fulfillment === "pickup" ? "text-[#ee4d2d]" : "text-stone-400"}`}
+                    className={`h-5 w-5 ${fulfillment === "pickup" ? "text-[var(--shop-accent,#7c3aed)]" : "text-stone-400"}`}
                   />
                   <p className="mt-2 text-sm font-bold text-stone-900">Store Pickup</p>
                   <p className="mt-0.5 text-[11px] font-medium text-emerald-700">No shipping fee</p>
@@ -669,9 +674,9 @@ export function CheckoutForm({
           )}
 
           {/* Contact + address */}
-          <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)]">
             <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ee4d2d] text-[11px] font-bold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--shop-accent,#7c3aed)] text-[11px] font-bold text-[var(--shop-accent-ink,#fff)]">
                 {storeSettings.delivery.pickupEnabled ? "3" : "2"}
               </span>
               <h2 className="text-sm font-bold text-stone-900">
@@ -684,10 +689,10 @@ export function CheckoutForm({
                   {!gidOpen ? (
                     <button type="button" className="flex w-full items-center justify-between gap-2 text-left" onClick={() => setGidOpen(true)}>
                       <span>⚡ <strong>May Guma ID ka?</strong> <span className="text-stone-500">Auto-fill ang detalye mo.</span></span>
-                      <span className="font-semibold text-[#ee4d2d] underline">Sign in</span>
+                      <span className="font-semibold text-[var(--shop-accent,#7c3aed)] underline">Sign in</span>
                     </button>
                   ) : (
-                    <GumaIdSignIn compact accent="#ee4d2d" defaultPhone={phone} onSignedIn={() => gid.refresh()} />
+                    <GumaIdSignIn compact accent={accent} defaultPhone={phone} onSignedIn={() => gid.refresh()} />
                   )}
                 </div>
               )}
@@ -735,7 +740,7 @@ export function CheckoutForm({
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     autoComplete="name"
-                    className="h-11 w-full rounded-md border border-orange-300 bg-orange-50 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
                   />
                 </div>
                 {touched && fieldErrors.name && (
@@ -754,7 +759,7 @@ export function CheckoutForm({
                     onChange={(event) => setPhone(event.target.value)}
                     inputMode="tel"
                     autoComplete="tel"
-                    className="h-11 w-full rounded-md border border-orange-300 bg-orange-50 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
                   />
                 </div>
                 {touched && fieldErrors.phone && (
@@ -768,7 +773,7 @@ export function CheckoutForm({
                     type="checkbox"
                     checked={smsConsent}
                     onChange={(event) => setSmsConsent(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-orange-600"
+                    className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-[var(--shop-accent,#7c3aed)]"
                   />
                   <span>
                     Text me reminders about this order (e.g. if I don&apos;t finish paying). Every
@@ -786,7 +791,7 @@ export function CheckoutForm({
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   autoComplete="email"
-                  className="h-11 w-full rounded-md border border-orange-300 bg-orange-50 px-3 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
                 />
                 {touched && fieldErrors.email && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
@@ -817,19 +822,19 @@ export function CheckoutForm({
                   placeholder="e.g. Near barangay hall, blue gate"
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
-                  className="h-11 w-full rounded-md border border-orange-300 bg-orange-50 px-3 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-stone-900 placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
                 />
               </div>
               {gid.buyer ? (
                 fulfillment === "delivery" && !fromSaved && (
                   <label className="flex items-start gap-2 text-xs text-stone-600">
-                    <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-orange-600" />
+                    <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-[var(--shop-accent,#7c3aed)]" />
                     <span>I-save ang address na ito sa Guma ID ko.</span>
                   </label>
                 )
               ) : (
                 <label className="flex items-start gap-2 text-xs text-stone-600" data-testid="remember-me">
-                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-orange-600" />
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-[var(--shop-accent,#7c3aed)]" />
                   <span>
                     Tandaan ang detalye ko sa device na ito para mabilis sa susunod. <span className="text-stone-400">(Sa phone/computer mo lang naka-save. Huwag i-check kung shared ang device.)</span>
                   </span>
@@ -839,9 +844,9 @@ export function CheckoutForm({
           </section>
 
           {/* Payment */}
-          <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)]">
             <div className="flex items-center gap-2 border-b border-stone-100 px-4 py-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ee4d2d] text-[11px] font-bold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--shop-accent,#7c3aed)] text-[11px] font-bold text-[var(--shop-accent-ink,#fff)]">
                 {storeSettings.delivery.pickupEnabled ? "4" : "3"}
               </span>
               <h2 className="text-sm font-bold text-stone-900">Payment Method</h2>
@@ -856,7 +861,7 @@ export function CheckoutForm({
                     onClick={() => setPayment(m.id)}
                     className={`relative flex items-center gap-3 rounded-lg border-2 px-3 py-3 text-left transition ${
                       selected
-                        ? "border-[#ee4d2d] bg-orange-50"
+                        ? "border-[var(--shop-accent,#7c3aed)] bg-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_7%,white)]"
                         : "border-stone-200 bg-white hover:border-stone-300"
                     }`}
                   >
@@ -870,7 +875,7 @@ export function CheckoutForm({
                     <span
                       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
                         selected
-                          ? "border-[#ee4d2d] bg-[#ee4d2d]"
+                          ? "border-[var(--shop-accent,#7c3aed)] bg-[var(--shop-accent,#7c3aed)]"
                           : "border-stone-300 bg-white"
                       }`}
                     >
@@ -883,9 +888,9 @@ export function CheckoutForm({
           </section>
 
           {/* Voucher */}
-          <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)]">
             <div className="flex items-center gap-2 px-4 py-3">
-              <Tag className="h-4 w-4 text-[#ee4d2d]" />
+              <Tag className="h-4 w-4 text-[var(--shop-accent,#7c3aed)]" />
               <h2 className="text-sm font-bold text-stone-900">Shop Voucher</h2>
             </div>
             <div className="border-t border-stone-100 px-4 py-3">
@@ -894,7 +899,7 @@ export function CheckoutForm({
                   placeholder="Enter voucher / coupon code"
                   value={couponCode}
                   onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
-                  className="h-11 min-w-0 flex-1 rounded-md border border-orange-300 bg-orange-50 px-3 text-sm font-semibold tracking-wide text-stone-900 placeholder:font-normal placeholder:tracking-normal placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
+                  className="h-11 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold tracking-wide text-stone-900 placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400 outline-none focus:border-[var(--shop-accent,#7c3aed)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
                 />
                 {totals.couponCode && (
                   <span className="inline-flex h-11 items-center rounded-md bg-emerald-50 px-3 text-xs font-bold text-emerald-700">
@@ -909,7 +914,7 @@ export function CheckoutForm({
           </section>
 
           {/* Mobile-only summary (desktop uses sticky sidebar) */}
-          <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm lg:hidden">
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)] lg:hidden">
             <div className="border-b border-stone-100 px-4 py-3">
               <h2 className="text-sm font-bold text-stone-900">Payment Details</h2>
             </div>
@@ -932,14 +937,14 @@ export function CheckoutForm({
         {/* Desktop sticky summary */}
         <aside className="hidden lg:block">
           <div className="sticky top-[4.5rem] space-y-3">
-            <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)]">
               <div className="border-b border-stone-100 px-4 py-3">
                 <h2 className="text-sm font-bold text-stone-900">Order Summary</h2>
               </div>
               <div className="px-4 py-3">{summaryBlock}</div>
               <div className="border-t border-stone-100 p-4">
                 <Button
-                  className="h-12 w-full gap-2 bg-[#ee4d2d] text-base font-bold text-white hover:bg-[#d73211] disabled:opacity-60"
+                  className="h-12 w-full gap-2 bg-[var(--shop-accent,#7c3aed)] text-base font-bold text-[var(--shop-accent-ink,#fff)] hover:bg-[#d73211] disabled:opacity-60"
                   size="lg"
                   onClick={handleCheckout}
                   disabled={!canPlaceOrder}
@@ -968,12 +973,12 @@ export function CheckoutForm({
         <div className="mx-auto flex max-w-5xl items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] text-stone-500">{giftApplied > 0 ? "Babayaran" : "Total Payment"}</p>
-            <p className="truncate text-lg font-bold leading-tight text-[#ee4d2d]">
+            <p className="truncate text-lg font-bold leading-tight text-[var(--shop-accent,#7c3aed)]">
               {formatPrice(amountDue, storeSettings.currency)}
             </p>
           </div>
           <Button
-            className="h-12 min-w-[9.5rem] shrink-0 gap-2 bg-[#ee4d2d] px-5 text-sm font-bold text-white hover:bg-[#d73211] disabled:opacity-60"
+            className="h-12 min-w-[9.5rem] shrink-0 gap-2 bg-[var(--shop-accent,#7c3aed)] px-5 text-sm font-bold text-[var(--shop-accent-ink,#fff)] hover:bg-[#d73211] disabled:opacity-60"
             size="lg"
             onClick={handleCheckout}
             disabled={!canPlaceOrder}

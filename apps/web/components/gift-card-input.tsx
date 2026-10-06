@@ -26,7 +26,7 @@ export function GiftCardInput({
   const [error, setError] = useState<string | null>(null);
   const field =
     tone === "orange"
-      ? "border-orange-300 bg-orange-50 focus:border-orange-500 focus:ring-orange-400/30"
+      ? "border-slate-200 bg-white focus:border-[var(--shop-accent,#7c3aed)] focus:ring-[color-mix(in_srgb,var(--shop-accent,#7c3aed)_22%,transparent)]"
       : "border-stone-300 bg-white focus:border-stone-500 focus:ring-stone-400/30";
 
   async function apply() {
@@ -68,7 +68,7 @@ export function GiftCardInput({
           placeholder="Gift card / store credit (GC-XXXX-XXXX)"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
-          className={`h-11 min-w-0 flex-1 rounded-md border px-3 font-mono text-sm tracking-wide text-stone-900 outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-stone-500 focus:ring-2 ${field}`}
+          className={`h-11 min-w-0 flex-1 rounded-md border px-3 font-mono text-sm tracking-wide text-stone-900 outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-400 focus:ring-2 ${field}`}
           data-testid="giftcard-input"
         />
         <button
