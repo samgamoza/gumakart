@@ -160,6 +160,8 @@ export {
   getPlatformSetting,
   setPlatformSetting,
   getActiveLanding,
+  parseActiveLanding,
+  ACTIVE_LANDINGS,
   setActiveLanding,
   getPlatformOpsSettings,
   updatePlatformOpsSettings,

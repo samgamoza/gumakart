@@ -12,6 +12,7 @@ import {
   reviewKycSession,
   recordTemplateIntelligenceEvent,
   setActiveLanding,
+  ACTIVE_LANDINGS,
   setShopCategoryStatus,
   setTemplateStockStatus,
   setTenantPlan,
@@ -404,7 +405,7 @@ export async function setActiveLandingAction(value: ActiveLanding): Promise<Acti
       actorEmail: session.email,
       action: "active_landing_changed",
       entityType: "platform_setting",
-      entityLabel: value === "frontend2" ? "Guma One.ai" : "GumaKart",
+      entityLabel: ACTIVE_LANDINGS[value],
       metadata: { key: "active_landing", value },
     });
     revalidatePath("/frontends");

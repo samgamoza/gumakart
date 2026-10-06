@@ -23,6 +23,12 @@ const OPTIONS: {
     desc: "The Guma One.ai landing — dark, animated, anti-“PM sent” social-commerce story.",
     previewPath: "/guma-one-ai",
   },
+  {
+    id: "frontend3",
+    name: "Palenke AI",
+    desc: "The Palenke AI landing — bright violet SaaS look, chat-to-checkout story, interactive checkout demo.",
+    previewPath: "/palenke-ai",
+  },
 ];
 
 export function FrontendSwitcher({
@@ -67,7 +73,7 @@ export function FrontendSwitcher({
         {error && <span className="text-rose-600">{error}</span>}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {OPTIONS.map((opt) => {
           const isActive = current === opt.id;
           return (

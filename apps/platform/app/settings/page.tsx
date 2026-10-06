@@ -1,4 +1,4 @@
-import { getPlatformOpsSettings } from "@gumakart/db";
+import { ACTIVE_LANDINGS, getPlatformOpsSettings } from "@gumakart/db";
 import { getTwoFactorStatus } from "@gumakart/auth";
 import { getIntegrationReport } from "@gumakart/services";
 import { requireSuperAdmin } from "@/lib/session";
@@ -85,9 +85,7 @@ export default async function SettingsPage() {
           message: c.message,
           severity: c.severity,
         }))}
-        activeLandingLabel={
-          ops.activeLanding === "frontend2" ? "Guma One.ai" : "GumaKart"
-        }
+        activeLandingLabel={ACTIVE_LANDINGS[ops.activeLanding]}
       />
     </PlatformShell>
   );

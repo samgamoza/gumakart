@@ -3,7 +3,18 @@ import { getDb } from "../client";
 import { platformSettings } from "../schema/index";
 
 /** Which marketing landing the public "/" route renders. */
-export type ActiveLanding = "frontend1" | "frontend2";
+export type ActiveLanding = "frontend1" | "frontend2" | "frontend3";
+
+/** Every public homepage the ops console can make live, with its display name. */
+export const ACTIVE_LANDINGS: Record<ActiveLanding, string> = {
+  frontend1: "GumaKart",
+  frontend2: "Guma One.ai",
+  frontend3: "Palenke AI",
+};
+
+export function parseActiveLanding(value: string | null | undefined): ActiveLanding {
+  return value && value in ACTIVE_LANDINGS ? (value as ActiveLanding) : "frontend1";
+}
 export const ACTIVE_LANDING_KEY = "active_landing";
 
 /** Ops console Settings — stored in platform_settings (env remains fallback). */
@@ -59,10 +70,11 @@ export async function setPlatformSetting(key: string, value: string): Promise<vo
 /** Active landing, defaulting to frontend1 (GumaKart) when unset. */
 export async function getActiveLanding(): Promise<ActiveLanding> {
   const value = await getPlatformSetting(ACTIVE_LANDING_KEY);
-  return value === "frontend2" ? "frontend2" : "frontend1";
+  return parseActiveLanding(value);
 }
 
 export async function setActiveLanding(value: ActiveLanding): Promise<void> {
+  if (!(value in ACTIVE_LANDINGS)) throw new Error(`Unknown landing: ${String(value)}`);
   await setPlatformSetting(ACTIVE_LANDING_KEY, value);
 }
 
@@ -100,7 +112,7 @@ export async function getPlatformOpsSettings(): Promise<PlatformOpsSettings> {
     paymentsMode: parsePaymentsMode(map.get(PAYMENTS_MODE_KEY)),
     helpdeskNotifyEmail: (map.get(HELPDESK_NOTIFY_EMAIL_KEY) ?? "").trim(),
     supportContactEmail: (map.get(SUPPORT_CONTACT_EMAIL_KEY) ?? "").trim(),
-    activeLanding: map.get(ACTIVE_LANDING_KEY) === "frontend2" ? "frontend2" : "frontend1",
+    activeLanding: parseActiveLanding(map.get(ACTIVE_LANDING_KEY)),
   };
 }
 

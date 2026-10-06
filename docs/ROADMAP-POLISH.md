@@ -30,7 +30,8 @@ were verified on 2026-10-06 and can go stale.
 | 18 | Agency partners (no commission) + API v1.1 | Approved |
 | 19 | Go-live hardening: forgot password, route audit, schema guard, smoke suite | Approved |
 | 20 | Storefront speed (images, fonts, code split) | Approved (LIVE badge: leave as is) |
-| **21** | **Two-step sign-in (required for ops, optional for sellers), Change password, last theme images** | **Built, in review — `2562889`, migration `0037_two_factor`** |
+| 21 | Two-step sign-in (required for ops, optional for sellers), Change password, last theme images | Live (deploy #20, `df6d24c`) |
+| **21b** | **Third homepage "Palenke AI" (ops → Frontends), seller dashboard installable as an app** | **Built, in review** |
 
 ## The launch track (not code: Sam's to-dos)
 
