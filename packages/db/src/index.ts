@@ -985,3 +985,5 @@ export {
   type PartnerStatus,
   type ShopPartnerView,
 } from "./queries/partners";
+export { MIGRATION_HEAD } from "./migration-head";
+export { getSchemaStatus, isApplied, type SchemaStatus } from "./queries/schema-status";

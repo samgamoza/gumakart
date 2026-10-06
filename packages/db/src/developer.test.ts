@@ -213,7 +213,7 @@ describe("webhooks", () => {
     assert.ok(names.includes("customer.created"));
     assert.ok(!names.includes("order.paid"), "not subscribed → no event");
 
-    const r = await fanOutWebhookEvents();
+    const r = await fanOutWebhookEvents({ tenantId: shop.id });
     assert.ok(r.events >= 4);
     const deliveries = await listWebhookDeliveries(shop.id, endpointId);
     assert.equal(deliveries.length, r.deliveries);
@@ -222,7 +222,7 @@ describe("webhooks", () => {
     assert.equal(payload.type, "order.created");
     assert.equal(payload.shop.slug, shop.slug);
     assert.equal(payload.data.object.id, o.id);
-    assert.equal((await fanOutWebhookEvents()).events, 0, "each event fans out once");
+    assert.equal((await fanOutWebhookEvents({ tenantId: shop.id })).events, 0, "each event fans out once");
   });
 
   it("retries failures on a schedule, then succeeds and resets the streak", async () => {
@@ -263,7 +263,7 @@ describe("webhooks", () => {
     await db.update(webhookEndpoints).set({ consecutiveFailures: WEBHOOK_DISABLE_AFTER - 1 }).where(eq(webhookEndpoints.id, endpointId));
     await apiSetStock(shop.id, [{ sku: `MUG-${run}`, stock: 26 }], { note: "x" });
     await apiSetStock(shop.id, [{ sku: `MUG-${run}`, stock: 27 }], { note: "x" });
-    await fanOutWebhookEvents();
+    await fanOutWebhookEvents({ tenantId: shop.id });
     const due = (await claimDueDeliveries({ limit: 100 })).filter((d) => d.tenantId === shop.id);
     assert.equal(due.length, 2);
     await recordDeliveryResult(due[0]!, { ok: false, statusCode: 404, error: "HTTP 404", ms: 3 });
@@ -275,7 +275,7 @@ describe("webhooks", () => {
 
     // Off → no new events; back on → streak reset.
     await apiSetStock(shop.id, [{ sku: `MUG-${run}`, stock: 28 }], { note: "x" });
-    assert.equal((await fanOutWebhookEvents()).events, 0);
+    assert.equal((await fanOutWebhookEvents({ tenantId: shop.id })).events, 0);
     await updateWebhookEndpoint(shop.id, endpointId, { active: true });
     const [on] = await listWebhookEndpoints(shop.id);
     assert.equal(on!.active, true);

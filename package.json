@@ -19,7 +19,10 @@
     "test:seo": "pnpm --filter @gumakart/db test && pnpm --filter @gumakart/events test && pnpm --filter @gumakart/ai test",
     "test:checkout": "pnpm --filter @gumakart/db test && pnpm --filter @gumakart/events test && pnpm --filter @gumakart/ai test",
     "test:shipping": "pnpm --filter @gumakart/db test && pnpm --filter @gumakart/events test && pnpm --filter @gumakart/ai test",
-    "brand-guard:scan": "node scripts/brand-guard-scan.mjs"
+    "brand-guard:scan": "node scripts/brand-guard-scan.mjs",
+    "db:status": "pnpm --filter @gumakart/db status",
+    "test:routes": "node --test scripts/route-audit.test.mjs",
+    "test:smoke": "node e2e/smoke.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

@@ -16,7 +16,7 @@ import { AuthError } from "./types";
  * (proof the email is verified) that /api/auth/signup requires.
  */
 
-export type EmailCodePurpose = "signup" | "verify";
+export type EmailCodePurpose = "signup" | "verify" | "reset";
 
 export const EMAIL_CODE_TTL_SECONDS = 10 * 60;
 export const EMAIL_CODE_RESEND_SECONDS = 60;
@@ -185,13 +185,17 @@ export function verificationCodeEmail(code: string, purpose: EmailCodePurpose): 
 } {
   const minutes = Math.round(EMAIL_CODE_TTL_SECONDS / 60);
   const intro =
-    purpose === "signup" ? "Use this code to finish creating your Guma Kart shop:" : "Use this code to verify your Guma Kart email:";
+    purpose === "signup"
+      ? "Use this code to finish creating your Guma Kart shop:"
+      : purpose === "reset"
+        ? "Use this code to reset your Guma Kart password:"
+        : "Use this code to verify your Guma Kart email:";
   const subject = `${code} is your Guma Kart code`;
-  const text = `${intro}\n\n${code}\n\nIt expires in ${minutes} minutes. If you didn't ask for this, you can ignore this email.`;
+  const text = `${intro}\n\n${code}\n\nIt expires in ${minutes} minutes. ${purpose === "reset" ? "If you didn't ask for this, ignore this email — your password stays the same." : "If you didn't ask for this, you can ignore this email."}`;
   const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0f172a">
   <p style="font-size:15px">${intro}</p>
   <p style="font-size:32px;font-weight:700;letter-spacing:8px;margin:24px 0;color:#1d4ed8">${code}</p>
-  <p style="font-size:13px;color:#475569">It expires in ${minutes} minutes. If you didn't ask for this, you can ignore this email.</p>
+  <p style="font-size:13px;color:#475569">It expires in ${minutes} minutes. ${purpose === "reset" ? "If you didn't ask for this, ignore this email — your password stays the same." : "If you didn't ask for this, you can ignore this email."}</p>
   <p style="font-size:12px;color:#94a3b8;margin-top:32px">Guma Kart · Your business. One smart cart.</p>
 </div>`;
   return { subject, text, html };

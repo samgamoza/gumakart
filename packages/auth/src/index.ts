@@ -41,6 +41,8 @@ export {
   authenticateGoogleUser,
   completeGoogleShopSetup,
   registerPartnerUser,
+  canResetPassword,
+  resetPasswordWithCode,
   sessionTokenForUser,
   revokeAllSessions,
   isSessionCurrent,

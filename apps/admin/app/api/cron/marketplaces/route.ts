@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { listSyncingMarketplaceAccounts } from "@gumakart/db";
 import { syncMarketplaceAccount } from "@/lib/marketplace-sync";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
 
 /** Phase 13: Shopee/Lazada stock push + order import for every connected shop. Every 5 min. */
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
     const accounts = await listSyncingMarketplaceAccounts(50);
     let pushed = 0;

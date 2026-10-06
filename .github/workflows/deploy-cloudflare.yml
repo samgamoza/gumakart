@@ -24,6 +24,10 @@ on:
         type: choice
         options: [all, web, admin, platform]
         default: all
+      skip_schema_check:
+        description: "Deploy even if Neon is missing a migration (emergencies only)"
+        type: boolean
+        default: false
   push:
     branches: [main, master, "wip/**"]
     paths:
@@ -87,6 +91,26 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      # Phase 19: every API route has an auth guard (or a reasoned public entry).
+      - name: Route auth audit
+        if: steps.pick.outputs.run == 'true'
+        run: node --test scripts/route-audit.test.mjs
+
+      # Phase 19: never ship code ahead of its migration. The live admin app shares the database,
+      # so it can say whether Neon already has the newest migration in this commit. No DB
+      # credentials are needed here. Run `pnpm db:migrate` (DATABASE_URL = Neon) to fix a failure.
+      - name: Database has this commit's migrations
+        if: steps.pick.outputs.run == 'true' && github.event.inputs.skip_schema_check != 'true'
+        run: |
+          read -r tag when < <(node -e "const j=require('./packages/db/drizzle/meta/_journal.json');const e=j.entries.at(-1);console.log(e.tag, e.when)")
+          resp=$(curl -s -w '\n%{http_code}' "https://admin.guma.one/api/health/schema?when=$when" || true)
+          code=$(echo "$resp" | tail -n1); body=$(echo "$resp" | head -n -1)
+          echo "newest migration in this commit: $tag ($when) -> HTTP $code $body"
+          if [ "$code" = "404" ]; then echo "::warning::The live app doesn't have the schema check yet (first deploy with it). Make sure $tag is applied on Neon."; exit 0; fi
+          if echo "$body" | grep -q '"applied":true'; then exit 0; fi
+          if [ "$code" = "200" ]; then echo "::error::Neon is missing migration $tag. Run 'pnpm db:migrate' against Neon, then re-run this workflow."; exit 1; fi
+          echo "::warning::Couldn't check the schema (HTTP $code). Deploying anyway; confirm $tag is applied on Neon."
 
       - name: Install
         if: steps.pick.outputs.run == 'true'

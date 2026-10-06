@@ -5,7 +5,7 @@ import { canOpenPage, homeFor, shopRoleOf } from "@gumakart/db/staff-permissions
 
 // "/pos" is reachable by cashiers who only have a POS PIN cookie (no seller
 // session); every /api/pos route checks the owner session or that cookie itself.
-const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/kyc/mobile", "/pos", "/invite", "/partners/join"];
+const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/kyc/mobile", "/pos", "/invite", "/partners/join", "/forgot-password"];
 
 const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
@@ -40,6 +40,10 @@ const PUBLIC_API_PREFIXES = [
   // Phase 18: partner signup and the public "who is this partner code" lookup.
   "/api/partners/signup",
   "/api/partners/code",
+  // Phase 19: forgot password (the emailed code is the credential).
+  "/api/auth/password/",
+  // Phase 19: schema check for the CI pre-deploy guard (booleans only).
+  "/api/health/schema",
 ];
 
 /** Phase 18: what a partner's own session (no shop) may open. */

@@ -510,6 +510,49 @@ export async function completeGoogleShopSetup(input: CompleteGoogleShopInput): P
   return { user: sessionUser, sessionToken };
 }
 
+/** Phase 19: roles that sign in with a password on the seller app (not ops, not buyers). */
+const RESETTABLE_ROLES = new Set(["seller_owner", "seller_staff", "partner"]);
+
+async function resettableUser(rawEmail: string) {
+  const [u] = await getDb().select().from(users).where(eq(users.email, normalizeEmail(rawEmail))).limit(1);
+  if (!u || !RESETTABLE_ROLES.has(u.role) || u.status !== "active") return null;
+  if (u.role === "seller_staff" && (!u.tenantId || !u.staffRole)) return null;
+  if (u.role !== "partner" && !u.tenantId) return null;
+  return u;
+}
+
+/** Phase 19: may this email get a reset code? (The route answers the same either way.) */
+export async function canResetPassword(rawEmail: string): Promise<boolean> {
+  return Boolean(await resettableUser(rawEmail));
+}
+
+/**
+ * Phase 19: set a new password after the emailed reset code. Signs out every other session
+ * (session_version bump) and returns a fresh session for this device.
+ */
+export async function resetPasswordWithCode(input: { email: string; code: string; password: string }): Promise<{ user: SessionUser; sessionToken: string }> {
+  // Check the password first so a weak one doesn't burn the code.
+  const strength = validatePasswordStrength(input.password);
+  if (!strength.ok) throw new AuthError(strength.reason, "WEAK_PASSWORD");
+  const { verifyEmailCode } = await import("./email-code");
+  await verifyEmailCode(input.email, "reset", input.code);
+  const u = await resettableUser(input.email);
+  if (!u) throw new AuthError("This code has expired. Request a new one.", "CODE_EXPIRED");
+  const passwordHash = await hashPassword(input.password);
+  await getDb()
+    .update(users)
+    .set({
+      passwordHash,
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+      // They just proved they own the inbox.
+      emailVerifiedAt: u.emailVerifiedAt ?? new Date(),
+    })
+    .where(eq(users.id, u.id));
+  const fresh = await sessionTokenForUser(u.id);
+  if (!fresh) throw new Error("Could not start a session after the reset.");
+  return fresh;
+}
+
 /** Phase 18: a partner account (no shop). The partners row is created by @gumakart/db. */
 export async function registerPartnerUser(input: {
   email: string;

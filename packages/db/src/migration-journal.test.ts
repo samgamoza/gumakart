@@ -100,3 +100,11 @@ describe("drizzle migration journal", () => {
     );
   });
 });
+
+describe("Phase 19: MIGRATION_HEAD follows the journal", () => {
+  it("names the newest journal entry (update src/migration-head.ts with each new migration)", async () => {
+    const { MIGRATION_HEAD } = await import("./migration-head");
+    const last = readJournal().entries.at(-1)!;
+    assert.deepEqual({ tag: MIGRATION_HEAD.tag, when: MIGRATION_HEAD.when }, { tag: last.tag, when: last.when });
+  });
+});

@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { DEFAULT_UNPAID_EXPIRY_HOURS, expireUnpaidOrders } from "@gumakart/db";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
 
 function expiryHours(): number {
   const raw = Number(process.env.ORDER_UNPAID_EXPIRY_HOURS);
@@ -19,7 +15,7 @@ function expiryHours(): number {
  * already sent payment details wait for the seller.
  */
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   const result = await expireUnpaidOrders({ defaultHours: expiryHours() });

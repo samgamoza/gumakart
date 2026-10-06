@@ -395,13 +395,13 @@ export async function createTestDelivery(tenantId: string, endpointId: string): 
  * Turns new events into deliveries: freezes one payload per event (the current state of the
  * order / variant / customer) and queues it for every active endpoint subscribed right now.
  */
-export async function fanOutWebhookEvents(options: { limit?: number } = {}): Promise<{ events: number; deliveries: number }> {
+export async function fanOutWebhookEvents(options: { limit?: number; /** Tests only: one shop's events. */ tenantId?: string } = {}): Promise<{ events: number; deliveries: number }> {
   const db = getDb();
   return db.transaction(async (tx) => {
     const due = await tx
       .select()
       .from(webhookEvents)
-      .where(isNull(webhookEvents.fannedOutAt))
+      .where(options.tenantId ? and(isNull(webhookEvents.fannedOutAt), eq(webhookEvents.tenantId, options.tenantId)) : isNull(webhookEvents.fannedOutAt))
       .orderBy(asc(webhookEvents.createdAt))
       .limit(options.limit ?? 200)
       .for("update", { skipLocked: true });

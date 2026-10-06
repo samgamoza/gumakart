@@ -2,12 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { captureError } from "@/lib/errors";
 import { reportAndMonitor } from "@/lib/ops-monitor";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
 
 const bodySchema = z.object({
   runs: z
@@ -27,7 +23,7 @@ const bodySchema = z.object({
 
 /** Phase 16: the cron worker reports each tick's job runs here; then the alert rules run. */
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
     const { runs } = bodySchema.parse(await request.json().catch(() => ({})));
     const result = await reportAndMonitor(runs.map((r) => ({ ...r, startedAt: new Date(r.startedAt) })));
@@ -41,6 +37,6 @@ export async function POST(request: Request) {
 
 /** GET runs the alert rules only (handy in dev, where no cron worker runs). */
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   return NextResponse.json({ ok: true, ...(await reportAndMonitor([])) });
 }

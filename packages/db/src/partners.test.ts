@@ -206,7 +206,7 @@ describe("platform v1.1: product writes and webhooks", () => {
     assert.equal(p.variants[0]!.sku, `CDL-${run}`);
     assert.equal(p.variants[0]!.stock, 7);
     await assert.rejects(apiCreateProduct(shopA.id, { title: "Bad", price: 300, compare_at_price: 200 }), ApiInputError);
-    const r = await fanOutWebhookEvents();
+    const r = await fanOutWebhookEvents({ tenantId: shopA.id });
     assert.ok(r.events >= 1);
     const [ev] = await db.select().from(webhookEvents).where(and(eq(webhookEvents.tenantId, shopA.id), eq(webhookEvents.event, "product.created")));
     const payload = ev!.payloadJson as { data: { object: { id: string; title: string } } };

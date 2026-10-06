@@ -90,6 +90,11 @@ export function LoginForm() {
             placeholder="••••••••"
           />
         </AuthField>
+        <div className="-mt-2 text-right">
+          <Link href="/forgot-password" className="text-xs text-slate-400 underline hover:text-white" data-testid="forgot-link">
+            Forgot password?
+          </Link>
+        </div>
 
         <AuthSubmitButton loading={loading}>Sign in</AuthSubmitButton>
       </form>

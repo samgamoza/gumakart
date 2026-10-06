@@ -2,12 +2,8 @@ import { NextResponse } from "next/server";
 import { outboxBacklog, relayOutbox } from "@gumakart/db";
 import { inngest, isInngestConfigured } from "@gumakart/events";
 import { handleOrderEvent } from "@/lib/automations";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
 
 /**
  * Outbox relay (every minute). Order events are written inside the same
@@ -21,7 +17,7 @@ function isAuthorized(request: Request): boolean {
  * order event log.
  */
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   const live = isInngestConfigured();

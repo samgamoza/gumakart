@@ -1,13 +1,14 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–18 built; Phase 18 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–19 built; Phase 19 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (Phase 18 in review)
+## ▶ Resume here — 2026-10-06 (Phase 19 in review)
 
-**Status.** Phases 8–18 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
+**Status.** Phases 8–19 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- Phase 18 agency partners (no commission yet) + platform v1.1 (product writes, product webhooks, Zapier/Make recipes). In review.
+- Phase 19 go-live hardening: forgot password, route auth audit (CI), deploy schema guard (CI + `pnpm db:status`), smoke suite (`e2e/`). In review.
+- `1a362cc` Phase 18 agency partners (no commission yet) + platform v1.1. Approved.
 - `cd59bf9` Phase 17b leftovers: free-delivery nudge (+ live-quote fix), remembered buyer details. Approved.
 - `da89610` Phase 17 seller polish: deals at the POS, gift cards & store credit, branch stock. Approved.
 - `f521677` Phase 16 operations: monitoring/alerts, status page, billing lifecycle, backups drill,
@@ -20,7 +21,8 @@ Sam pushes; Cloudflare Workers deploy on push.
 **Before pushing (Sam):** `pnpm --filter @gumakart/db migrate` against Neon. Neon has 0026–0031; this
 applies **0032_growth**, **0033_platform**, **0034_operations**, **0035_seller_polish** and **0036_partners**.
 Pending Phase 2 constraints are now `drizzle-pending/0037_phase2_constrain.sql`. The agent sandbox cannot reach Neon.
-Pushing also switches the admin Worker cron to **every minute**.
+Pushing also switches the admin Worker cron to **every minute**. Check first with `pnpm db:status`
+(DATABASE_URL = Neon); from the deploy after Phase 19, CI blocks a deploy whose migration isn't on Neon.
 
 **Then check live:**
 
@@ -30,7 +32,7 @@ Pushing also switches the admin Worker cron to **every minute**.
 - admin → Gift cards, Settings → Branches, Stock → By branch, POS (deal line, Gift card tender).
 - admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13/14/15/16/17/18-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
 Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**
