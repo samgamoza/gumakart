@@ -10,7 +10,7 @@ import {
 import { LinkCheckout, type LinkCheckoutData, type LinkPaymentOption } from "@/components/link-checkout/link-checkout";
 import { LinkUnavailable } from "@/components/link-checkout/link-unavailable";
 import { closedLinkMessage } from "@/lib/checkout-link-guard";
-import { resolveStorefrontSettings } from "@/lib/storefront-settings";
+import { resolveDelivery, resolveStorefrontSettings } from "@/lib/storefront-settings";
 import { isPreviewBot, utmFromSearchParams } from "@/lib/utm";
 
 export const dynamic = "force-dynamic";
@@ -114,6 +114,7 @@ export default async function CheckoutLinkPage({ params, searchParams }: PagePro
     checkout: settings.checkout,
     couponCode: link.couponCode,
     minOrderAmount: settings.minOrderAmount,
+    freeDeliveryAbove: deliveryAllowed ? resolveDelivery(1, settings).freeAbove ?? null : null,
     requireEmail: Boolean(settings.checkout.customer?.requireEmail),
     utm: utmFromSearchParams(query),
   };

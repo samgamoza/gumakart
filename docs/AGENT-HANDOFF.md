@@ -7,7 +7,8 @@
 
 **Status.** Phases 8–17 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- Phase 17 seller polish: deals at the POS, gift cards & store credit, branch stock. In review.
+- Phase 17b leftovers: free-delivery nudge (+ live-quote fix), remembered buyer details, Guma ID address picker. In review.
+- `da89610` Phase 17 seller polish: deals at the POS, gift cards & store credit, branch stock. Approved.
 - `f521677` Phase 16 operations: monitoring/alerts, status page, billing lifecycle, backups drill,
   help centre. Approved.
 - `146c9d0` Phase 15 platform: approved 2026-10-06.

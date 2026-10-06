@@ -213,6 +213,22 @@ export function computeDeliveryFee(
   return resolved.fee;
 }
 
+/** Phase 17b: the resolved shipping (fee, free flag, free minimum) for this cart and address. */
+export function resolveDelivery(
+  subtotal: number,
+  settings: StorefrontStoreSettings,
+  address?: { city?: string; barangay?: string; province?: string; postalCode?: string }
+) {
+  return resolveShippingFee({
+    shipping: settings.shipping,
+    subtotal,
+    city: address?.city,
+    barangay: address?.barangay,
+    province: address?.province,
+    postalCode: address?.postalCode,
+  });
+}
+
 export function deliveryProviderLabel(provider: StorefrontStoreSettings["delivery"]["provider"]) {
   switch (provider) {
     case "lalamove":

@@ -90,3 +90,40 @@ No new secrets.
 - **Online orders don't choose a branch.** They take from the main branch, then spill to other branches (largest first) if the main one runs out. Pick-up-at-branch is a later step.
 - **An oversell at one branch spills to the others.** The shop-wide total stays right, but a branch's number can drop when another branch sold. A count at that branch fixes it.
 - **Gift card PINs, physical card printing and selling gift cards online** are not in this phase. Cards are issued by the seller, for example after they're paid in cash.
+
+---
+
+## Phase 17b — leftovers: free-delivery nudge, remembered buyer details
+
+There's no migration and no new secret.
+
+### Free delivery
+
+- **Nudge.** Buyers see "Dagdagan ng ₱X para LIBRE ang delivery" with a progress bar in three places:
+  - storefront checkout
+  - checkout links (shown before an address is entered)
+  - the experience-theme cart drawer
+
+  Once the order qualifies, it changes to "Libre na ang delivery mo!". It shows nothing when the shop has no minimum.
+- **Bug fix.** A live Lalamove/Grab quote used to override the seller's free-delivery minimum, so the buyer was charged anyway. Now free delivery wins (the seller covers the courier).
+  - Fixed in `place-order` (server) and `/api/delivery/quote`, plus the checkout preview.
+  - The rule lives in `checkoutDeliveryFee()` (`@gumakart/db/shipping`) and has unit tests.
+- **Cart drawer.** It used to hard-code "free over ₱500, else ₱89" for every shop. It now uses the shop's own delivery rules (labelled "Delivery (estimate)").
+- **Admin.** The "Free delivery above" field in Settings → Delivery now explains both behaviours.
+
+### Saved details
+
+- **Remember on this device** (works without Guma ID or SMS).
+  - It's an opt-in checkbox on both checkouts: "Tandaan ang detalye ko sa device na ito". It warns against using it on shared phones.
+  - The buyer's name, mobile, email and address are kept in that browser only (`localStorage` key `guma-buyer:v1`, which expires after 1 year). They're never sent to the server.
+  - On the next checkout the form is prefilled, with a "Hindi ako ito — burahin" button that erases the details.
+  - Signing in to Guma ID takes priority over the device details.
+- **Guma ID on the storefront checkout.** It now has the same features as checkout links:
+  - a picker for saved addresses when the buyer has more than one
+  - "I-save ang address na ito sa Guma ID ko" for a new address
+
+### Limits
+
+- Addresses typed at the storefront checkout don't record a region code. So on a checkout link the street is filled, but the region, province and city need picking again. The opposite direction (link to storefront) fills everything.
+- The remembered details are shared by every Guma shop on that browser, because they're the buyer's own data on their own device. They aren't shared with sellers.
+- In the integration suite, one run of 7 had a single failure that didn't recur in 6 reruns (all 151 pass). Keep an eye on it.

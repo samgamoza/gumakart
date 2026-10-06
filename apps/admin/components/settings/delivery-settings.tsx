@@ -162,7 +162,7 @@ export function DeliverySettingsPage() {
               onChange={(e) => setFlatRate(e.target.value)}
             />
           </SettingsField>
-          <SettingsField label="Free delivery above (₱)">
+          <SettingsField label="Free delivery above (₱)" hint="0 = never free. Buyers see “Add ₱X more for free delivery” in the cart and checkout, and it applies even when Lalamove/Grab quotes a price (you cover the courier).">
             <input
               type="number"
               min="0"

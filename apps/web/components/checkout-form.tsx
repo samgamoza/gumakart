@@ -23,12 +23,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { cartLineKey, useCart } from "@/lib/cart";
 import { GumaIdSignIn } from "@/components/guma-id/sign-in";
-import { maskPhone, useGumaId } from "@/components/guma-id/use-guma-id";
+import { maskPhone, toKartAddress, useGumaId } from "@/components/guma-id/use-guma-id";
 import type { StorefrontStoreSettings } from "@/lib/storefront-settings";
 import {
-  computeDeliveryFee,
   deliveryProviderLabel,
+  resolveDelivery,
 } from "@/lib/storefront-settings";
+import { checkoutDeliveryFee } from "@gumakart/db/shipping";
+import { FreeDeliveryNudge } from "@/components/free-delivery-nudge";
+import { forgetRememberedBuyer, kartToPh, phToKart, readRememberedBuyer, saveRememberedBuyer } from "@/lib/remembered-buyer";
 import {
   computeCheckoutTotals,
   isPaymentMethodEnabled,
@@ -110,6 +113,35 @@ export function CheckoutForm({
   const gid = useGumaId();
   const [gidOpen, setGidOpen] = useState(false);
   const [gidFilled, setGidFilled] = useState(false);
+  // Phase 17b: which Guma ID address is in the form (null = typed a new one), and save-new opt.
+  const [fromSaved, setFromSaved] = useState<string | null>(null);
+  const [saveAddress, setSaveAddress] = useState(true);
+  // Phase 17b: details remembered on this device (no Guma ID needed).
+  const [remember, setRemember] = useState(false);
+  const [fromDevice, setFromDevice] = useState(false);
+  useEffect(() => {
+    if (!gid.loaded || gid.buyer) return;
+    const r = readRememberedBuyer();
+    if (!r) return;
+    setName((n) => n || r.name);
+    setPhone((p) => p || r.phone);
+    setEmail((e) => e || r.email);
+    if (r.address) {
+      const a = kartToPh(r.address);
+      setPhAddress((cur) => (cur.street1 ? cur : a));
+    }
+    setRemember(true);
+    setFromDevice(true);
+  }, [gid.loaded, gid.buyer]);
+  function forgetDevice() {
+    forgetRememberedBuyer();
+    setRemember(false);
+    setFromDevice(false);
+    setName("");
+    setPhone("");
+    setEmail("");
+    setPhAddress({ street1: "", street2: "", barangay: "", city: "", province: "", provinceCode: "", cityCode: "" });
+  }
   useEffect(() => {
     if (!gid.buyer || gidFilled) return;
     setGidFilled(true);
@@ -119,6 +151,7 @@ export function CheckoutForm({
     if (b.email) setEmail((e) => e || b.email || "");
     const def = gid.addresses.find((a) => a.isDefault) ?? gid.addresses[0];
     if (def) {
+      setFromSaved(def.id);
       setPhAddress((cur) =>
         cur.street1
           ? cur
@@ -242,11 +275,9 @@ export function CheckoutForm({
   ]);
 
   const subtotal = cart.subtotal;
-  const deliveryFee =
-    fulfillment === "pickup"
-      ? 0
-      : liveQuote?.fee ??
-        computeDeliveryFee(subtotal, storeSettings, { city, barangay, province });
+  // Phase 17b: free delivery (the seller's minimum) wins over a live courier quote.
+  const delivery = resolveDelivery(subtotal, storeSettings, { city, barangay, province });
+  const deliveryFee = fulfillment === "pickup" ? 0 : checkoutDeliveryFee(delivery, liveQuote?.fee);
   const totals = computeCheckoutTotals({
     subtotal,
     deliveryFee,
@@ -336,6 +367,23 @@ export function CheckoutForm({
       }
 
       cart.clear();
+      // Phase 17b: remember (or forget) this buyer on this device, as they chose.
+      if (remember && !gid.buyer) {
+        saveRememberedBuyer({ name: name.trim(), phone: cleanPhone, email: email.trim(), address: fulfillment === "delivery" ? phToKart(phAddress) : readRememberedBuyer()?.address ?? null });
+      } else if (!remember) {
+        forgetRememberedBuyer();
+      }
+      // Guma ID: keep a new delivery address for next time (best effort, 3s max).
+      if (gid.buyer && fulfillment === "delivery" && saveAddress && !fromSaved) {
+        await Promise.race([
+          fetch("/api/id/addresses", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ address: phToKart(phAddress), makeDefault: gid.addresses.length === 0 }),
+          }).catch(() => null),
+          new Promise((r) => setTimeout(r, 3000)),
+        ]);
+      }
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       } else if (data.orderUrl) {
@@ -366,12 +414,13 @@ export function CheckoutForm({
           : `${deliveryProviderLabel(storeSettings.delivery.provider)} · live quote`
         : quoting
           ? `${deliveryProviderLabel(storeSettings.delivery.provider)} · quoting…`
-          : totals.deliveryFee === 0 && storeSettings.delivery.freeDeliveryMin > 0
+          : totals.deliveryFee === 0 && delivery.free
             ? `${deliveryProviderLabel(storeSettings.delivery.provider)} (free)`
             : deliveryProviderLabel(storeSettings.delivery.provider);
 
   const summaryBlock = (
     <div className="space-y-3 text-sm">
+      {fulfillment === "delivery" && <FreeDeliveryNudge subtotal={subtotal} freeAbove={delivery.freeAbove} />}
       <div className="flex justify-between gap-4">
         <span className="text-stone-500">
           Merchandise Subtotal ({cart.count} item{cart.count === 1 ? "" : "s"})
@@ -641,7 +690,39 @@ export function CheckoutForm({
                 </div>
               )}
               {gid.buyer && (
-                <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">✓ Guma ID: {maskPhone(gid.buyer.phone)} — na-fill na ang detalye mo.</p>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  <span>✓ Guma ID: {maskPhone(gid.buyer.phone)} — na-fill na ang detalye mo.</span>
+                  {gid.addresses.length > 1 && fulfillment === "delivery" && (
+                    <select
+                      className="h-8 rounded-md border border-emerald-300 bg-white px-2 text-sm text-stone-800"
+                      value={fromSaved ?? ""}
+                      onChange={(e) => {
+                        const a = gid.addresses.find((x) => x.id === e.target.value);
+                        if (a) {
+                          setPhAddress(kartToPh(toKartAddress(a.address)));
+                          setFromSaved(a.id);
+                        } else setFromSaved(null);
+                      }}
+                      aria-label="Saved address"
+                      data-testid="gid-address-picker"
+                    >
+                      <option value="">Bagong address</option>
+                      {gid.addresses.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label || a.address.city || "Address"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+              {fromDevice && !gid.buyer && (
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900" data-testid="remembered-banner">
+                  <span>Na-fill mula sa huling order mo sa device na ito.</span>
+                  <button type="button" className="shrink-0 font-semibold underline" onClick={forgetDevice}>
+                    Hindi ako ito — burahin
+                  </button>
+                </div>
               )}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-stone-600">Full name</label>
@@ -737,6 +818,21 @@ export function CheckoutForm({
                   className="h-11 w-full rounded-md border border-orange-300 bg-orange-50 px-3 text-sm text-stone-900 placeholder:text-stone-500 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-400/30"
                 />
               </div>
+              {gid.buyer ? (
+                fulfillment === "delivery" && !fromSaved && (
+                  <label className="flex items-start gap-2 text-xs text-stone-600">
+                    <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-orange-600" />
+                    <span>I-save ang address na ito sa Guma ID ko.</span>
+                  </label>
+                )
+              ) : (
+                <label className="flex items-start gap-2 text-xs text-stone-600" data-testid="remember-me">
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-stone-300 accent-orange-600" />
+                  <span>
+                    Tandaan ang detalye ko sa device na ito para mabilis sa susunod. <span className="text-stone-400">(Sa phone/computer mo lang naka-save. Huwag i-check kung shared ang device.)</span>
+                  </span>
+                </label>
+              )}
             </div>
           </section>
 

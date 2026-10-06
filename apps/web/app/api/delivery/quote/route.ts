@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getTenantStorefrontBySlug } from "@gumakart/db";
-import { resolveShippingFee } from "@gumakart/db/shipping";
+import { checkoutDeliveryFee } from "@gumakart/db/shipping";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
 import { getCheckoutDeliveryQuote } from "@/lib/delivery-quote";
-import {
-  computeDeliveryFee,
-  resolveStorefrontSettings,
-} from "@/lib/storefront-settings";
+import { resolveDelivery, resolveStorefrontSettings } from "@/lib/storefront-settings";
 
 const quoteSchema = z.object({
   tenantSlug: z.string().min(1).max(64),
   address: z.string().trim().min(10).max(500),
-  /** Cart subtotal in PHP, used only for the flat-rate fallback. */
+  /** Cart subtotal in PHP: flat-rate fallback and the free-delivery minimum. */
   subtotal: z.number().min(0).max(9999999).optional(),
   /** Structured parts so the fallback fee uses the same zones as checkout. */
   city: z.string().trim().max(120).optional(),
@@ -45,6 +42,8 @@ export async function POST(request: Request) {
       tenant.checkoutPublishedJson,
       tenant.shippingPublishedJson
     );
+    const parts = { city: body.city, barangay: body.barangay, province: body.province };
+    const resolved = resolveDelivery(body.subtotal ?? 0, settings, parts);
     const quote = await getCheckoutDeliveryQuote(settings, body.address);
 
     if (quote) {
@@ -52,24 +51,21 @@ export async function POST(request: Request) {
         ok: true,
         live: true,
         provider: quote.provider,
-        fee: quote.fee,
+        // Phase 17b: free delivery is the seller's promise — it wins over the courier price.
+        fee: checkoutDeliveryFee(resolved, quote.fee),
+        free: resolved.free,
+        freeAbove: resolved.freeAbove ?? null,
         etaMinutes: quote.etaMinutes ?? null,
       });
     }
-
-    const parts = { city: body.city, barangay: body.barangay, province: body.province };
-    const fee = computeDeliveryFee(body.subtotal ?? 0, settings, parts);
-    const resolved = resolveShippingFee({
-      shipping: settings.shipping,
-      subtotal: body.subtotal ?? 0,
-      ...parts,
-    });
 
     return NextResponse.json({
       ok: true,
       live: false,
       provider: settings.delivery.provider,
-      fee,
+      fee: resolved.fee,
+      free: resolved.free,
+      freeAbove: resolved.freeAbove ?? null,
       etaMinutes: resolved.etaMinutes?.max ?? resolved.etaMinutes?.min ?? null,
     });
   } catch (error) {

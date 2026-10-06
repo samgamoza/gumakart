@@ -113,7 +113,7 @@ function TenantV0StoreBody({ tenant }: { tenant: DemoTenant }) {
         />
       )}
       <MessengerWidget />
-      <TenantCheckoutDrawer />
+      <TenantCheckoutDrawer storeSettings={tenant.storeSettings} />
     </div>
   );
 }

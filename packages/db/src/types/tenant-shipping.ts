@@ -414,6 +414,8 @@ export interface ResolvedShippingFee {
   etaMinutes: ShippingEta | null;
   free: boolean;
   provider: ShippingCourierProvider | null;
+  /** The chosen method's free-delivery minimum (null = none). Phase 17b. */
+  freeAbove?: number | null;
 }
 
 function zoneMatches(
@@ -483,8 +485,11 @@ export function resolveShippingFee(input: ResolveShippingFeeInput): ResolvedShip
       etaMinutes: method && "etaMinutes" in method ? method.etaMinutes ?? null : null,
       free: true,
       provider: null,
+      freeAbove: null,
     };
   }
+
+  const freeAbove = (method.freeAboveSubtotal ?? 0) > 0 ? method.freeAboveSubtotal! : null;
 
   if (method.type === "courier") {
     const free =
@@ -496,6 +501,7 @@ export function resolveShippingFee(input: ResolveShippingFeeInput): ResolvedShip
       etaMinutes: method.etaMinutes ?? null,
       free,
       provider: method.provider,
+      freeAbove,
     };
   }
 
@@ -509,6 +515,7 @@ export function resolveShippingFee(input: ResolveShippingFeeInput): ResolvedShip
       etaMinutes: method.etaMinutes ?? null,
       free: true,
       provider: null,
+      freeAbove,
     };
   }
 
@@ -541,7 +548,33 @@ export function resolveShippingFee(input: ResolveShippingFeeInput): ResolvedShip
     etaMinutes: method.etaMinutes ?? null,
     free: false,
     provider: null,
+    freeAbove,
   };
+}
+
+/**
+ * Phase 17b: the delivery fee a buyer pays. Free delivery is the seller's promise, so it wins over a
+ * live courier quote (the seller absorbs the courier cost); otherwise the live quote, else the table.
+ */
+export function checkoutDeliveryFee(resolved: Pick<ResolvedShippingFee, "fee" | "free">, liveFee?: number | null): number {
+  if (resolved.free) return 0;
+  return liveFee != null && Number.isFinite(liveFee) ? Math.max(0, liveFee) : resolved.fee;
+}
+
+export interface FreeDeliveryNudge {
+  threshold: number;
+  /** Pesos still to add (0 once reached). */
+  remaining: number;
+  /** 0–1 for a progress bar. */
+  progress: number;
+  reached: boolean;
+}
+
+/** "Dagdagan ng ₱X para libre ang delivery" — null when the shop has no free-delivery minimum. */
+export function freeDeliveryNudge(subtotal: number, freeAbove: number | null | undefined): FreeDeliveryNudge | null {
+  if (!freeAbove || freeAbove <= 0 || !Number.isFinite(subtotal) || subtotal <= 0) return null;
+  const remaining = Math.max(0, Math.round((freeAbove - subtotal) * 100) / 100);
+  return { threshold: freeAbove, remaining, progress: Math.min(1, subtotal / freeAbove), reached: remaining === 0 };
 }
 
 export function isPickupEnabled(shipping: TenantShippingJson): boolean {

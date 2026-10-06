@@ -7,12 +7,16 @@ import { CheckCircle2, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react"
 import { formatPrice } from "@/lib/store-data";
 import { cn } from "@/lib/utils";
 import { useTenantV0Cart } from "./tenant-cart-provider";
+import { FreeDeliveryNudge } from "@/components/free-delivery-nudge";
+import { resolveDelivery, type StorefrontStoreSettings } from "@/lib/storefront-settings";
 
-export function TenantCheckoutDrawer() {
+export function TenantCheckoutDrawer({ storeSettings }: { storeSettings?: StorefrontStoreSettings }) {
   const { items, count, subtotal, isOpen, closeCart, setQty, remove, tenantSlug } =
     useTenantV0Cart();
   const [step, setStep] = useState<"cart" | "done">("cart");
-  const shipping = subtotal >= 500 || subtotal === 0 ? 0 : 89;
+  // Phase 17b: the shop's own delivery rules (estimate — the address can change it at checkout).
+  const delivery = storeSettings && subtotal > 0 ? resolveDelivery(subtotal, storeSettings) : null;
+  const shipping = delivery ? delivery.fee : 0;
   const total = subtotal + shipping;
 
   const handleClose = () => {
@@ -139,13 +143,14 @@ export function TenantCheckoutDrawer() {
 
         {step === "cart" && items.length > 0 && (
           <div className="border-t border-border p-5">
+            <FreeDeliveryNudge subtotal={subtotal} freeAbove={delivery?.freeAbove} className="mb-3" />
             <div className="mb-3 space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
                 <span className="text-foreground">{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <span>Shipping</span>
+                <span>Delivery (estimate)</span>
                 <span className="text-foreground">
                   {shipping === 0 ? "Free" : formatPrice(shipping)}
                 </span>

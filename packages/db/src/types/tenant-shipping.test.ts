@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  checkoutDeliveryFee,
+  freeDeliveryNudge,
   legacyDeliveryFromShipping,
   normalizeShippingJson,
   resolveShippingFee,
@@ -84,5 +86,25 @@ describe("resolveShippingFee", () => {
       city: "Makati City",
     });
     assert.equal(fee.fee, 70);
+  });
+});
+
+describe("Phase 17b: free delivery wins, and the nudge", () => {
+  const shipping = shippingFromLegacyDelivery({ flatRate: 80, freeDeliveryMin: 500 });
+  it("the resolver reports the method's free minimum", () => {
+    assert.equal(resolveShippingFee({ shipping, subtotal: 100 }).freeAbove, 500);
+    assert.equal(resolveShippingFee({ shipping: shippingFromLegacyDelivery({ flatRate: 80, freeDeliveryMin: 0 }), subtotal: 100 }).freeAbove, null);
+  });
+  it("free delivery beats a live courier quote; otherwise the quote wins", () => {
+    assert.equal(checkoutDeliveryFee(resolveShippingFee({ shipping, subtotal: 600 }), 145), 0);
+    assert.equal(checkoutDeliveryFee(resolveShippingFee({ shipping, subtotal: 300 }), 145), 145);
+    assert.equal(checkoutDeliveryFee(resolveShippingFee({ shipping, subtotal: 300 }), null), 80);
+  });
+  it("nudge: remaining and progress; none without a minimum or an empty cart", () => {
+    assert.deepEqual(freeDeliveryNudge(350, 500), { threshold: 500, remaining: 150, progress: 0.7, reached: false });
+    assert.equal(freeDeliveryNudge(500, 500)!.reached, true);
+    assert.equal(freeDeliveryNudge(650, 500)!.remaining, 0);
+    assert.equal(freeDeliveryNudge(100, null), null);
+    assert.equal(freeDeliveryNudge(0, 500), null);
   });
 });

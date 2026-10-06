@@ -43,8 +43,9 @@ const log = createLogger("checkout");
 import { getCheckoutDeliveryQuote } from "@/lib/delivery-quote";
 import { currentBuyer } from "@/lib/guma-id";
 import { linkOrderToBuyer } from "@gumakart/db";
+import { checkoutDeliveryFee } from "@gumakart/db/shipping";
 import {
-  computeDeliveryFee,
+  resolveDelivery,
   resolveStorefrontSettings,
 } from "@/lib/storefront-settings";
 
@@ -307,16 +308,19 @@ export async function placeOrder(
       body.fulfillment === "delivery" && body.address
         ? await getCheckoutDeliveryQuote(settings, body.address)
         : null;
+    // Phase 17b: the seller's free-delivery minimum wins over a live courier quote.
     const deliveryFee =
       body.fulfillment === "pickup"
         ? 0
-        : liveQuote?.fee ??
-          computeDeliveryFee(estimatedSubtotal, settings, {
-            city: body.city,
-            barangay: body.barangay,
-            province: body.province,
-            postalCode: body.postalCode,
-          });
+        : checkoutDeliveryFee(
+            resolveDelivery(estimatedSubtotal, settings, {
+              city: body.city,
+              barangay: body.barangay,
+              province: body.province,
+              postalCode: body.postalCode,
+            }),
+            liveQuote?.fee
+          );
 
     const order = await createOrderForTenant({
       tenantSlug: body.tenantSlug,

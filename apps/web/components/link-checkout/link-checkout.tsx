@@ -1,6 +1,8 @@
 "use client";
 
 import { GiftCardInput, type AppliedGiftCard } from "@/components/gift-card-input";
+import { FreeDeliveryNudge } from "@/components/free-delivery-nudge";
+import { forgetRememberedBuyer, readRememberedBuyer, saveRememberedBuyer } from "@/lib/remembered-buyer";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, MapPin, Minus, Plus, ShieldCheck, Store, Truck } from "lucide-react";
@@ -43,6 +45,8 @@ export interface LinkCheckoutData {
   checkout: TenantCheckoutJson;
   couponCode: string | null;
   minOrderAmount: number;
+  /** Phase 17b: the shop's free-delivery minimum (null = none). */
+  freeDeliveryAbove?: number | null;
   requireEmail: boolean;
   utm: Record<string, string> | null;
 }
@@ -96,6 +100,35 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   const [saveAddress, setSaveAddress] = useState(true);
   const [fromSaved, setFromSaved] = useState<string | null>(null);
   const prefilled = useRef(false);
+  // Phase 17b: details remembered on this device (no Guma ID needed).
+  const [remember, setRemember] = useState(false);
+  const [fromDevice, setFromDevice] = useState(false);
+  useEffect(() => {
+    if (!gid.loaded || gid.buyer) return;
+    const r = readRememberedBuyer();
+    if (!r) return;
+    setName((n) => n || r.name);
+    setPhone((p) => p || r.phone);
+    setEmail((e) => e || r.email);
+    if (r.address) {
+      const a = r.address;
+      // The region/province/city pickers need codes; without them only the street is filled.
+      setAddress((cur) =>
+        cur.line1 || cur.cityCode ? cur : a.regionCode && a.provinceCode && a.cityCode ? a : { ...EMPTY_ADDRESS, line1: a.line1, landmark: a.landmark }
+      );
+    }
+    setRemember(true);
+    setFromDevice(true);
+  }, [gid.loaded, gid.buyer]);
+  function forgetDevice() {
+    forgetRememberedBuyer();
+    setRemember(false);
+    setFromDevice(false);
+    setName("");
+    setPhone("");
+    setEmail("");
+    setAddress(EMPTY_ADDRESS);
+  }
   useEffect(() => {
     if (!gid.buyer || prefilled.current) return;
     prefilled.current = true;
@@ -271,6 +304,12 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       try {
         window.localStorage.removeItem(`guma-link-session:${data.code}`);
       } catch {}
+      // Phase 17b: remember (or forget) this buyer on this device, as they chose.
+      if (remember && !gid.buyer) {
+        saveRememberedBuyer({ name: name.trim(), phone: phMobile(phone) ?? phone.trim(), email: email.trim(), address: fulfillment === "delivery" ? address : readRememberedBuyer()?.address ?? null });
+      } else if (!remember) {
+        forgetRememberedBuyer();
+      }
       // Guma ID: keep a new delivery address for next time (best effort, 3s max).
       if (gid.buyer && fulfillment === "delivery" && saveAddress && !fromSaved) {
         await Promise.race([
@@ -365,6 +404,7 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
       </section>
       {/* Fees, always above the button */}
       <section className="order-3 m-3 mt-6 lg:mt-3">
+        {fulfillment === "delivery" && <FreeDeliveryNudge subtotal={subtotal} freeAbove={data.freeDeliveryAbove} className="mb-2" />}
         <div className="k-card grid gap-2 p-4 text-sm">
           <Row label={`Items (${data.items.reduce((n, i) => n + (quantities[i.key] ?? i.quantity), 0)})`} value={peso(totals.subtotal)} />
           {totals.discount > 0 && <Row label={totals.discountLabel ?? "Discount"} value={`−${peso(totals.discount)}`} />}
@@ -482,6 +522,14 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
               onChange={(e) => setPhone(e.target.value)}
             />
           </Field>
+          {fromDevice && !gid.buyer && (
+            <div className="flex items-center justify-between gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900" data-testid="remembered-banner">
+              <span>Na-fill mula sa huling order mo sa device na ito.</span>
+              <button type="button" className="shrink-0 font-semibold underline" onClick={forgetDevice}>
+                Hindi ako ito — burahin
+              </button>
+            </div>
+          )}
           {data.requireEmail && (
             <Field label="Email" error={errors.email}>
               <input
@@ -493,6 +541,15 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </Field>
+          )}
+          {!gid.buyer && (
+            <label className="flex items-start gap-2 text-sm text-[color:var(--kart-muted)]" data-testid="remember-me">
+              <input type="checkbox" className="mt-1" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <span>
+                Tandaan ang detalye ko sa device na ito para mabilis sa susunod.{" "}
+                <span className="text-xs opacity-75">(Sa phone mo lang naka-save. Huwag i-check kung shared ang phone.)</span>
+              </span>
+            </label>
           )}
         </div>
       </section>
