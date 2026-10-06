@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Clock, Link2, Loader2, MessageCircle, Package, RotateCcw, Search, Send, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Link2, Loader2, MessageCircle, Package, RotateCcw, Search, Send, Sparkles, X } from "lucide-react";
 import { Button, Card, formatPrice } from "@gumakart/ui";
 
 /**
@@ -254,6 +254,18 @@ function Conversation({ threadId, onBack, onChanged }: { threadId: string; onBac
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState<null | "product" | "link">(null);
   const endRef = useRef<HTMLDivElement>(null);
+  // Phase 26: AI reply suggestions (fill the box; the seller edits and sends).
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+
+  async function suggestReplies() {
+    setSuggesting(true);
+    setError(null);
+    const d = await call<{ replies: string[] }>(`/api/inbox/${threadId}/suggest-replies`, { method: "POST" });
+    setSuggesting(false);
+    if (d.ok) setSuggestions(d.replies);
+    else setError(d.error ?? "Couldn't suggest replies.");
+  }
 
   const load = useCallback(async () => {
     const d = await call<{ thread: ThreadDetail }>(`/api/inbox/${threadId}`);
@@ -379,7 +391,33 @@ function Conversation({ threadId, onBack, onChanged }: { threadId: string; onBac
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium" onClick={() => setPicker("link")}>
               <Link2 className="h-3.5 w-3.5" /> Checkout link
             </button>
+            <button
+              type="button"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-200"
+              onClick={() => void suggestReplies()}
+              disabled={suggesting}
+              data-testid="inbox-suggest"
+            >
+              {suggesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Suggest replies
+            </button>
           </div>
+          {suggestions.length > 0 && (
+            <div className="flex flex-col gap-1.5" data-testid="inbox-suggestions">
+              {suggestions.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    setText(r);
+                    setSuggestions([]);
+                  }}
+                  className="rounded-xl border border-violet-400/20 bg-violet-500/5 px-3 py-2 text-left text-xs text-slate-200 hover:bg-violet-500/15"
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <textarea
               className="guma-field min-h-[44px] flex-1 py-2"

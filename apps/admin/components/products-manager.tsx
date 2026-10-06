@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, formatPrice } from "@gumakart/ui";
 import { ProductVariantsEditor } from "@/components/product-variants-editor";
 import { useShopRole } from "@/lib/use-shop-role";
+import { CaptionsButton } from "@/components/ai/captions-dialog";
 import {
   formatProductPriceLine,
   productPricingKindForCategory,
@@ -149,6 +150,7 @@ export function ProductsManager() {
   const [variantsFor, setVariantsFor] = useState<ProductRow | null>(null);
   const perms = useShopRole();
   const canEdit = perms.can("products.edit");
+  const canMarket = perms.can("marketing.manage");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1168,6 +1170,9 @@ export function ProductsManager() {
                               {main.hasOptions ? "Sizes & colours" : "Add sizes"}
                             </button>
                           )}
+                          {canMarket && main.status === "active" && (
+                            <CaptionsButton productId={main.id} title={main.title} className="inline-flex items-center gap-1 rounded-xl border border-violet-400/30 px-3 py-1.5 text-sm text-violet-200 transition hover:bg-violet-500/10" />
+                          )}
                           {canEdit && (
                             <button
                               type="button"
@@ -1268,6 +1273,9 @@ export function ProductsManager() {
                               >
                                 {product.hasOptions ? "Sizes & colours" : "Add sizes"}
                               </button>
+                            )}
+                            {canMarket && product.status === "active" && (
+                              <CaptionsButton productId={product.id} title={product.title} className="inline-flex items-center gap-1 rounded-xl border border-violet-400/30 px-3 py-1.5 text-sm text-violet-200 transition hover:bg-violet-500/10" />
                             )}
                             {canEdit && (
                               <button

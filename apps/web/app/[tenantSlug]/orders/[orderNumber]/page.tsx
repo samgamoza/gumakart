@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  getOrderLoyalty,
   getOrderForTracking,
   getTenantStorefrontBySlug,
   resolveTenantPaymentsSettings,
@@ -9,6 +10,7 @@ import { Badge, Button, Card } from "@gumakart/ui";
 import { getTenant as getDemoTenant } from "@/lib/demo-data";
 import { OrderAutoRefresh } from "@/components/order-auto-refresh";
 import { GumaIdOrderPrompt } from "@/components/guma-id/order-prompt";
+import { SukiOrderCard } from "@/components/suki-order-card";
 import { ManualPaymentPanel } from "@/components/manual-payment-panel";
 import { MessageSellerButton } from "@/components/storefront/message-seller-button";
 import { resolveStorefrontSettings } from "@/lib/storefront-settings";
@@ -129,6 +131,8 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
     return <OrderLinkRequired tenantSlug={tenantSlug} orderNumber={orderNumber} />;
   }
   const tenant = demoTenant ? null : await getTenantStorefrontBySlug(tenantSlug);
+  // Phase 27: Suki points (null when the shop hasn't turned loyalty on or there's no customer).
+  const suki = order ? await getOrderLoyalty(order.orderId).catch(() => null) : null;
 
   const storeSettings = tenant
     ? resolveStorefrontSettings(
@@ -300,6 +304,8 @@ export default async function OrderTrackingPage({ params, searchParams }: PagePr
             lang={fromLink ? "tl" : "en"}
           />
         ) : null}
+
+        {suki && !isCancelled ? <SukiOrderCard data={suki} /> : null}
 
         {!isCancelled && (
           <Card>

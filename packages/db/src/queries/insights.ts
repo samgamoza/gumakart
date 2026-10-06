@@ -1,0 +1,147 @@
+import { sql } from "drizzle-orm";
+import { getDb } from "../client";
+import { getSalesReport } from "./reports";
+
+/**
+ * Phase 26: shop insights for the AI assistant and the restock card.
+ * Everything here is plain arithmetic on the shop's own orders and stock — the AI only phrases it.
+ */
+
+const rows = async <T>(q: ReturnType<typeof sql>): Promise<T[]> => (await getDb().execute(q)) as unknown as T[];
+const num = (v: unknown) => (v == null ? 0 : Number(v));
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const COUNTED = sql`coalesce(o.order_state::text, 'open') <> 'cancelled' and o.voided_at is null`;
+
+export interface RestockSuggestion {
+  productId: string;
+  variantId: string;
+  title: string;
+  stock: number;
+  /** Units sold (net of returns) in the window. */
+  sold: number;
+  perDay: number;
+  /** null = no recent sales, so no run-out date. */
+  daysLeft: number | null;
+  /** Units to order to cover `coverDays` of sales, after what's on hand. */
+  suggestedQty: number;
+}
+
+/** Pure: turn sales velocity into a restock line. Exported for tests. */
+export function restockLine(input: { stock: number; sold: number; windowDays: number; coverDays: number }) {
+  const perDay = input.windowDays > 0 ? input.sold / input.windowDays : 0;
+  const stock = Math.max(0, input.stock);
+  const daysLeft = perDay > 0 ? Math.floor(stock / perDay) : null;
+  const suggestedQty = perDay > 0 ? Math.max(0, Math.ceil(perDay * input.coverDays - stock)) : 0;
+  return { perDay: Math.round(perDay * 100) / 100, daysLeft, suggestedQty };
+}
+
+/**
+ * Active variants that sold in the last `windowDays` and will run out within `alertDays`
+ * (or are already out), most urgent first. Stock is the variant's total (all branches).
+ */
+export async function getRestockSuggestions(
+  tenantId: string,
+  opts: { windowDays?: number; coverDays?: number; alertDays?: number; limit?: number; now?: Date } = {}
+): Promise<RestockSuggestion[]> {
+  const windowDays = opts.windowDays ?? 30;
+  const coverDays = opts.coverDays ?? 14;
+  const alertDays = opts.alertDays ?? 14;
+  const since = new Date((opts.now ?? new Date()).getTime() - windowDays * 86_400_000);
+  const data = await rows<{ product_id: string; variant_id: string; title: string; variant_title: string; options: unknown; stock: number | null; sold: string }>(sql`
+    select p.id as product_id, v.id as variant_id, p.title, v.title as variant_title, p.options_json as options,
+           coalesce(v.stock_qty, 0) as stock,
+           coalesce(sum(i.quantity - i.returned_qty), 0) as sold
+    from product_variants v
+    join products p on p.id = v.product_id
+    join order_items i on i.variant_id = v.id
+    join orders o on o.id = i.order_id
+    where p.tenant_id = ${tenantId} and p.status = 'active' and v.active
+      and o.tenant_id = ${tenantId} and o.created_at >= ${since.toISOString()}::timestamptz and ${COUNTED}
+    group by p.id, v.id, p.title, v.title, p.options_json, v.stock_qty
+    having coalesce(sum(i.quantity - i.returned_qty), 0) > 0`);
+  return data
+    .map((d) => {
+      const sold = num(d.sold);
+      const stock = num(d.stock);
+      const line = restockLine({ stock, sold, windowDays, coverDays });
+      const hasOptions = Array.isArray(d.options) && d.options.length > 0;
+      return {
+        productId: d.product_id,
+        variantId: d.variant_id,
+        title: hasOptions && d.variant_title ? `${d.title} — ${d.variant_title}` : d.title,
+        stock,
+        sold,
+        ...line,
+      };
+    })
+    .filter((r) => r.daysLeft !== null && r.daysLeft <= alertDays)
+    .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0) || b.perDay - a.perDay)
+    .slice(0, opts.limit ?? 20);
+}
+
+export interface AdvisorFactsRow {
+  shopName: string;
+  periodDays: number;
+  sales: number;
+  orders: number;
+  aov: number;
+  previousSales: number;
+  topProducts: Array<{ title: string; units: number; sales: number }>;
+  restock: Array<{ title: string; stock: number; daysLeft: number | null; suggestedQty: number }>;
+  pendingPayments: number;
+  toShip: number;
+}
+
+/** The facts "Ask Guma" may use — the last 30 days vs the 30 before, top sellers, run-outs, to-dos. */
+export async function getAdvisorFacts(tenantId: string, opts: { periodDays?: number; now?: Date } = {}): Promise<AdvisorFactsRow> {
+  const periodDays = opts.periodDays ?? 30;
+  const to = opts.now ?? new Date();
+  const from = new Date(to.getTime() - periodDays * 86_400_000);
+  const [report, restock, [t], [todo]] = await Promise.all([
+    getSalesReport(tenantId, { from, to }),
+    getRestockSuggestions(tenantId, { windowDays: periodDays, limit: 5, now: to }),
+    rows<{ name: string }>(sql`select name from tenants where id = ${tenantId}`),
+    rows<{ pending: string; to_ship: string }>(sql`
+      select count(*) filter (where o.payment_state = 'pending_verification') as pending,
+             count(*) filter (where coalesce(o.fulfillment_state::text, 'unfulfilled') in ('unfulfilled', 'ready')
+                              and coalesce(o.payment_state::text, 'unpaid') in ('paid', 'cod_due')) as to_ship
+      from orders o where o.tenant_id = ${tenantId} and ${COUNTED} and o.created_at >= ${new Date(to.getTime() - 60 * 86_400_000).toISOString()}::timestamptz`),
+  ]);
+  return {
+    shopName: t?.name ?? "Shop",
+    periodDays,
+    sales: report.kpis.sales,
+    orders: report.kpis.orders,
+    aov: report.kpis.aov,
+    previousSales: report.previous.sales,
+    topProducts: report.products.slice(0, 5).map((p) => ({ title: p.title, units: p.qty, sales: r2(p.sales) })),
+    restock: restock.map((r) => ({ title: r.title, stock: r.stock, daysLeft: r.daysLeft, suggestedQty: r.suggestedQty })),
+    pendingPayments: num(todo?.pending),
+    toShip: num(todo?.to_ship),
+  };
+}
+
+/**
+ * Short product facts for suggested chat replies: name, price (or range) and whether it's in
+ * stock — best sellers of the last 30 days first. Only what the shop has entered.
+ */
+export async function getReplyFacts(tenantId: string, limit = 15): Promise<string[]> {
+  const data = await rows<{ title: string; min_price: string; max_price: string; stock: string }>(sql`
+    select p.title, min(v.price) as min_price, max(v.price) as max_price, coalesce(sum(greatest(v.stock_qty, 0)), 0) as stock,
+           coalesce((select sum(i.quantity) from order_items i join orders o on o.id = i.order_id
+                     where i.product_id = p.id and o.tenant_id = ${tenantId}
+                       and o.created_at >= now() - interval '30 days'), 0) as recent
+    from products p join product_variants v on v.product_id = p.id and v.active
+    where p.tenant_id = ${tenantId} and p.status = 'active'
+    group by p.id, p.title
+    order by recent desc, p.title
+    limit ${limit}`);
+  const peso = (n: number) => `₱${n.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
+  return data.map((d) => {
+    const lo = num(d.min_price);
+    const hi = num(d.max_price);
+    const price = lo === hi ? peso(lo) : `${peso(lo)}–${peso(hi)}`;
+    const stock = num(d.stock);
+    return `${d.title}: ${price}, ${stock > 0 ? `${stock} in stock` : "out of stock"}`;
+  });
+}

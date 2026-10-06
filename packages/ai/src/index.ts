@@ -39,4 +39,19 @@ export type {
   SellerContext,
   TemplateKey,
 } from "./types";
-export { callLlm, resolveEffectiveModel } from "./providers/llm";
+export { callLlm, resolveEffectiveModel } from "./providers/llm";export {
+  buildAssistPrompt,
+  parseAssistOutput,
+  mockAssist,
+  runSellerAssist,
+  assistTaskType,
+  type AssistTask,
+  type AssistInput,
+  type CaptionsInput,
+  type RepliesInput,
+  type AdvisorInput,
+  type AdvisorFacts,
+  type CaptionsOutput,
+  type RepliesOutput,
+  type AdvisorOutput,
+} from "./seller-assist";

@@ -1,4 +1,4 @@
--- 0038_phase2_constrain — run ONLY after phase2-verify.sql returns 0 rows for
+-- 0039_phase2_constrain — run ONLY after phase2-verify.sql returns 0 rows for
 -- V1–V4 on production (docs/PHASE-2-MIGRATION-SPEC.md §7 step 4).
 -- To apply: move this file into packages/db/drizzle/, add a journal entry
 -- (idx 36) and run `pnpm --filter @gumakart/db migrate`.

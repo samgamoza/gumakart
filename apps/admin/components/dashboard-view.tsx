@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Card, formatPrice } from "@gumakart/ui";
 import type { LowStockSummary, SellerToday } from "@gumakart/db";
+import { AskGuma } from "@/components/ai/ask-guma";
+import { RestockCard } from "@/components/ai/restock-card";
 
 /**
  * Plan §10 — "What needs me today?"
@@ -246,6 +248,8 @@ export function DashboardView({ displayName }: { displayName: string }) {
         </Card>
       </section>
 
+      <RestockCard />
+
       {/* Checkout link */}
       <Card className="border-white/10 bg-white/[0.03]">
         <div className="flex items-center gap-2.5">
@@ -372,6 +376,7 @@ export function DashboardView({ displayName }: { displayName: string }) {
           </a>
         )}
       </div>
+      <AskGuma />
     </div>
   );
 }

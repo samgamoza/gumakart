@@ -21,6 +21,8 @@ import {
 import { Card, formatPrice } from "@gumakart/ui";
 import { productImageSrc } from "@/lib/product-image";
 import { SharePostImageButton } from "@/components/share-post-image";
+import { CaptionsButton } from "@/components/ai/captions-dialog";
+import { useShopRole } from "@/lib/use-shop-role";
 
 // ─── Types (mirror the API) ──────────────────────────────────────────────────
 
@@ -838,6 +840,7 @@ function CreateLinkPanel({
 // ─── Share / QR ──────────────────────────────────────────────────────────────
 
 export function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; url: string; onShowQr: () => void }) {
+  const canMarket = useShopRole().can("marketing.manage");
   const { copied, copy } = useCopy();
   const caption = shareCaption(link, url);
   const tip = CHANNELS.find((c) => c.id === link.shareChannel)?.tip ?? CHANNELS[4]!.tip;
@@ -911,6 +914,7 @@ export function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; ur
           <QrCode className="h-4 w-4" /> QR code
         </button>
         <SharePostImageButton code={link.code} items={link.items} url={url} className={ghostBtn} />
+        {canMarket && <CaptionsButton linkId={link.id} title={link.title} className={ghostBtn} />}
       </div>
       <p className="text-xs text-muted-foreground">
         Post image: a square photo with the price, link and QR — ready for your Facebook or IG post.

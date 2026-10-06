@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/seo-permissions.test.ts src/template-skins.test.ts"
+    "test": "tsx --test src/seo-permissions.test.ts src/template-skins.test.ts src/seller-assist.test.ts"
   },
   "dependencies": {
     "@gumakart/plans": "workspace:*",

@@ -61,9 +61,9 @@ const ECOSYSTEM = [
   {
     icon: Sparkles,
     tone: "bg-indigo-50 text-indigo-600",
-    title: "AI that writes like a Pinoy seller",
-    body: "Taglish product descriptions and post captions with your checkout link, plus a shop chatbot that answers price and stock questions. Monthly limits per plan.",
-    chips: ["Taglish copy", "Shop chatbot"],
+    title: "AI that works like a Pinoy seller",
+    body: "Taglish captions with your checkout link, suggested chat replies from your real prices and stock, and “Ask Guma” — an advisor that reads your own sales. Monthly limits per plan.",
+    chips: ["Captions", "Reply suggestions", "Ask Guma"],
   },
 ];
 
@@ -72,10 +72,10 @@ const MORE = [
   { icon: MessageSquare, title: "Messenger & IG inbox", body: "Reply and send checkout links from one inbox (after Meta approval)." },
   { icon: Layers, title: "Shopee & Lazada sync", body: "One stock count across your marketplaces (with partner keys)." },
   { icon: Users, title: "Staff with roles", body: "Manager, staff and cashier logins. No more shared owner password." },
-  { icon: Gift, title: "Gift cards & store credit", body: "Sell and redeem at the counter or online." },
+  { icon: Gift, title: "Suki loyalty tiers", body: "Points on every paid order, Bronze to Platinum, paid out as store credit." },
   { icon: BadgeCheck, title: "Guma ID", body: "Repeat buyers check out in one tap across every Guma shop." },
   { icon: ShieldCheck, title: "Two-step sign-in", body: "Protect your shop with an authenticator app." },
-  { icon: Zap, title: "Reports, deals & SMS", body: "Sales by product and channel, bundles, consent-based SMS campaigns." },
+  { icon: Zap, title: "Reports, deals & SMS", body: "Sales by product and channel, bundles, gift cards, consent-based SMS campaigns." },
 ];
 
 const HOW = [

@@ -27,6 +27,8 @@ export const CRON_JOBS: CronJob[] = [
   { path: "/api/cron/marketplaces", due: every(5), maxGapMinutes: 20 },
   // Phase 14: SMS campaigns (quiet hours respected inside). Every 5 minutes.
   { path: "/api/cron/campaigns", due: every(5), maxGapMinutes: 20 },
+  // Phase 27: Suki loyalty points for paid orders (and take-backs). Every 5 minutes.
+  { path: "/api/cron/loyalty", due: every(5), maxGapMinutes: 20 },
   // Unpaid orders past each shop's window (1–72 h) → cancelled + restocked. Hourly.
   { path: "/api/cron/expire-orders", due: hourlyAt(20), maxGapMinutes: 130 },
   // Wallet: release cleared earnings / payouts (no-op while WALLET_PAYOUTS_ENABLED=false). Hourly.

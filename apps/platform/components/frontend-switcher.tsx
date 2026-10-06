@@ -26,7 +26,7 @@ const OPTIONS: {
   {
     id: "frontend3",
     name: "Palenke AI",
-    desc: "The Palenke AI landing — bright violet SaaS look, chat-to-checkout story, interactive checkout demo.",
+    desc: "The Palenke AI landing — bright violet SaaS look, chat-to-checkout story, AI assistant + Suki loyalty, interactive checkout demo.",
     previewPath: "/palenke-ai",
   },
 ];

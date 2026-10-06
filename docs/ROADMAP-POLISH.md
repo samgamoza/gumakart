@@ -31,7 +31,9 @@ were verified on 2026-10-06 and can go stale.
 | 19 | Go-live hardening: forgot password, route audit, schema guard, smoke suite | Approved |
 | 20 | Storefront speed (images, fonts, code split) | Approved (LIVE badge: leave as is) |
 | 21 | Two-step sign-in (required for ops, optional for sellers), Change password, last theme images | Live (deploy #20, `df6d24c`) |
-| **21b** | **Third homepage "Palenke AI" (ops → Frontends), seller dashboard installable as an app** | **Built, in review** |
+| 21b | Third homepage "Palenke AI" (ops → Frontends), seller dashboard installable as an app | Approved (`5e50563`) |
+| **26** | **AI seller assistant: Ask Guma, restock card, captions, suggested replies** — `docs/PHASE-26-NOTES.md` | **Built, in review** |
+| **27** | **Suki loyalty tiers: points → store credit, Bronze–Platinum** — `docs/PHASE-27-NOTES.md`, migration `0038_loyalty` | **Built, in review** |
 
 ## The launch track (not code: Sam's to-dos)
 
@@ -151,7 +153,7 @@ links.
 **Needs:** Meta app review (page comments permission). TikTok has no comparable open API yet, so its
 claims start manual.
 
-### Phase 26 — AI seller assistant (M)
+### Phase 26 — AI seller assistant (M) · ✅ built (see PHASE-26-NOTES; photo-to-listing still open)
 
 **Why.** Most sellers write listings and captions on their phone between orders.
 
@@ -169,7 +171,7 @@ claims start manual.
 
 **Needs:** AI provider keys and a per-plan monthly usage cap.
 
-### Phase 27 — Repeat buyers: loyalty and referrals (M)
+### Phase 27 — Repeat buyers: loyalty and referrals (M) · ✅ Suki tiers built (PHASE-27-NOTES); buyer referral codes still open
 
 **Why.** Store credit and gift cards exist; a simple loyalty layer turns them into repeat orders.
 
@@ -227,6 +229,48 @@ recorded.
 
 ---
 
+## palenkeAi harvest — what else to adopt (reviewed 2026-10-06)
+
+Sam's Google AI Studio prototype (`D:\All Apps\palenkeAi`) was compared feature by feature. Its look
+and a few ideas were better than Guma Kart's; most of its "features" were demos (orders auto-marked paid,
+random numbers, emails that only log). Rule for adopting anything: **real data, server-side, no invented
+numbers.**
+
+**Adopted so far:**
+
+| palenkeAi idea | In Guma Kart | Phase |
+|---|---|---|
+| Violet SaaS landing ("Stop chatting. Start selling.") | Homepage option 3 "Palenke AI", honest copy | 21b |
+| PWA install guide | Seller dashboard is installable; install section on the landing | 21b |
+| ChatAdvisor (Gemini business advisor) | **Ask Guma**: answers from the shop's own 30-day numbers, shows the numbers used | 26 |
+| Taglish copywriting / post generator | **Captions** for FB/IG/TikTok with the link guaranteed | 26 |
+| AI restock suggestions | **Paubos na** card: plain velocity math, no AI | 26 |
+| Omnichannel messenger CRM | **Suggest replies** in Chats, from real prices and stock | 26 |
+| Suki loyalty tiers + redemption | **Suki loyalty**: server ledger, refunds take points back, store credit only | 27 |
+
+**Next candidates, best value first:**
+
+| # | Idea (palenkeAi source) | What we'd build | Size | Needs |
+|---|---|---|---|---|
+| H1 | Supplier reorder note (StockNotificationCenter) | On the restock card: "Draft a message to my supplier" in Taglish with the quantities, copy or share to Messenger/Viber | S | AI key |
+| H2 | Photo → product listing (`analyze-catalog-product`) | Snap a photo → title, Taglish description, category and tags filled in for review | M | Vision-capable AI key |
+| H3 | New-order sound + browser alert (notificationService) | A chime and a browser notification when an order arrives while the dashboard or POS is open | S | — |
+| H4 | POS barcode beep + full-screen kiosk (PosSystem) | Scanner beep on add or not-found, a full-screen register button, 58/80 mm receipt width setting | S | — |
+| H5 | Win-back for Suki (CrmLoyaltyManager) | "Miss ka na namin" campaign preset: lapsed Silver+ buyers with consent, optional store-credit bonus | S | Semaphore |
+| H6 | GoTyme / bank transfer (PaymentMethods) | Extra manual payment option with account details and proof upload (same flow as GCash/Maya) | S | — |
+| H7 | Courier price comparison (DeliveryRiderEstimator) | Show quotes from every connected courier side by side when booking | M | Courier keys |
+| H8 | Buyer referral codes | "Give ₱50, get ₱50" as store credit, with self-referral blocks | M | — |
+| H9 | AI product photo backgrounds (AiLabs image gen) | Clean white or lifestyle background for a product photo, per-plan monthly cap | M–L | Image model key and cost check |
+| H10 | Revenue forecast (RevenueForecastTab) | Only after shops have 3+ months of history; show a range, never a single invented number | M | History |
+
+**Not adopting, on purpose:**
+
+- **The reseller/MLM network:** B2B and multi-level selling are out of scope, with legal risk.
+- **Auto-"reconciled" payments without a gateway.**
+- **Random likes, viewer counts, ratings or testimonials.**
+- **AI video generation:** cost, and low value for micro-sellers.
+- **The multi-store sandbox switcher:** the partner program already covers agencies.
+
 ## Engineering backlog (fit into any phase, ~20%)
 
 These are the follow-ups gathered from the Phase 18–21 notes.
@@ -240,7 +284,7 @@ These are the follow-ups gathered from the Phase 18–21 notes.
 | Load test before the first big SMS campaign or live sale | Roadmap ops track | Every-minute cron, outbox, Neon connection limits |
 | External uptime monitor on `kart.guma.one/api/status` | Phase 16 | Free UptimeRobot |
 | Rotate `AUTH_SECRET` only together with a 2FA reset | Phase 21 | It keys the stored authenticator secrets |
-| Move `drizzle-pending/0038_phase2_constrain.sql` into the journal after a clean week of `phase2-verify.sql` | Phase 2 | Renumber it whenever a phase adds a migration |
+| Move `drizzle-pending/0039_phase2_constrain.sql` into the journal after a clean week of `phase2-verify.sql` | Phase 2 | Renumber it whenever a phase adds a migration |
 | Self-serve ops password reset (deliberately absent) | Phase 19 | Revisit only together with Phase 28's ops 2FA reset |
 
 ## Not planned (on purpose)

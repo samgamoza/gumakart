@@ -159,6 +159,15 @@ export const API_RULES: ApiRule[] = [
   { pattern: /^\/api\/pos\/device$/, permission: "pos.manage" },
   { pattern: /^\/api\/pos\//, permission: "pos.use" },
 
+  // Phase 26: AI assistant — restock list (no money) and "Ask Guma" (uses sales numbers).
+  { pattern: /^\/api\/insights\/restock$/, methods: READ, permission: "products.view" },
+  { pattern: /^\/api\/insights\/advisor$/, permission: "reports.view" },
+
+  // Phase 27: Suki loyalty — converting points issues store credit (money), viewing is customer info.
+  { pattern: /^\/api\/loyalty\/customers\/[^/]+\/redeem$/, permission: "orders.payments" },
+  { pattern: /^\/api\/loyalty\/customers\/[^/]+$/, methods: READ, permission: "customers.view" },
+  { pattern: /^\/api\/loyalty(\/|$)/, permission: "marketing.manage" },
+
   // Marketing and AI
   { pattern: /^\/api\/(automations|agents|ai|seo|change-requests)(\/|$)/, permission: "marketing.manage" },
   // Phase 14
@@ -213,6 +222,7 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/settings/activity", permission: "activity.view" },
   { prefix: "/settings/payments", permission: "settings.payments" },
   { prefix: "/settings/pos", permission: "pos.manage" },
+  { prefix: "/settings/loyalty", permission: "marketing.manage" },
   { prefix: "/settings/subscription", permission: "billing.manage" },
   { prefix: "/settings/wallet", permission: "billing.manage" },
   { prefix: "/settings/kyc", permission: "billing.manage" },

@@ -1,13 +1,15 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–21 built; Phase 21 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-06 (Phases 8–27 partly: 21b, 26, 27 built; 26 + 27 in review — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (Phase 21 in review)
+## ▶ Resume here — 2026-10-06 (Phases 26 + 27 in review)
 
 **Status.** Phases 8–21 are built and committed on branch `wip/uncommitted-work-2026-08-01`:
 
-- Phase 21 security: two-step sign-in (required for ops, optional for sellers/staff/partners), working Change password + sign out other devices, ops login rate limit + session-version check, last theme background images resized. In review.
+- Phases 26 + 27 (one commit): AI seller assistant (Ask Guma, restock card, captions, suggested replies) and Suki loyalty tiers (migration 0038_loyalty). In review. Built ahead of 22–25 at Sam's request.
+- `5e50563` Phase 21b: third homepage "Palenke AI" (ops → Frontends) + installable seller dashboard. Approved.
+- `2562889` Phase 21 security (2FA etc.). Live (deploy #20 `df6d24c`).
 - `9687508` Phase 20 storefront speed: Cloudflare IMAGES binding, resized photos, self-hosted fonts, per-theme code split. Approved (LIVE badge: leave as is).
 - `43a10f1` Phase 19 go-live hardening. Approved.
 - `1a362cc` Phase 18 agency partners (no commission yet) + platform v1.1. Approved.
@@ -21,8 +23,8 @@
 Sam pushes; Cloudflare Workers deploy on push.
 
 **Before pushing (Sam):** `pnpm --filter @gumakart/db migrate` against Neon. Neon has 0026–0031; this
-applies **0032_growth**, **0033_platform**, **0034_operations**, **0035_seller_polish**, **0036_partners** and **0037_two_factor**.
-Pending Phase 2 constraints are now `drizzle-pending/0038_phase2_constrain.sql`. The agent sandbox cannot reach Neon.
+applies **0032_growth**, **0033_platform**, **0034_operations**, **0035_seller_polish**, **0036_partners**, **0037_two_factor** (all applied 2026-10-06) and now **0038_loyalty**.
+Pending Phase 2 constraints are now `drizzle-pending/0039_phase2_constrain.sql`. The agent sandbox cannot reach Neon.
 Pushing also switches the admin Worker cron to **every minute**. Check first with `pnpm db:status`
 (DATABASE_URL = Neon); from the deploy after Phase 19, CI blocks a deploy whose migration isn't on Neon.
 
@@ -30,13 +32,15 @@ Pushing also switches the admin Worker cron to **every minute**. Check first wit
 
 - ops.guma.one → sign in: every super-admin sets up an authenticator app (phone ready); save the backup codes.
 - admin → Settings → Account: two-step sign-in, Change password.
+- admin → Overview (Ask Guma, restock card), Products/links → Captions, Chats → Suggest replies (needs an AI key on admin), Settings → Suki loyalty.
+- ops → Frontends → Palenke AI (preview /palenke-ai).
 - ops.guma.one → System health and Status page.
 - kart.guma.one/status.
 - admin → /partners/join, /partner, Settings → Partner; ops → Partners (approve).
 - admin → Gift cards, Settings → Branches, Stock → By branch, POS (deal line, Gift card tender).
 - admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
 Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**
@@ -70,7 +74,7 @@ Optional polish phases 22–30 and the engineering backlog are written up in
 
 Let beta feedback pick the order.
 
-**Pending Phase 2 constraints:** `packages/db/drizzle-pending/0038_phase2_constrain.sql` (journal idx 38). Move
+**Pending Phase 2 constraints:** `packages/db/drizzle-pending/0039_phase2_constrain.sql` (journal idx 39). Move
 it into `drizzle/` only after `phase2-verify.sql` returns 0 rows for a week. Renumber it each time a phase adds
 a migration: `git mv` the file and sed the docs.
 
@@ -140,7 +144,7 @@ Also committed in **veyron-pos-saas** (`999833a`, branch `feature/ci-locations-p
 4. Crons: handled by the admin Worker (`apps/admin/cron-worker.ts`, one `*/5` trigger): outbox every 5 min, expire-orders hourly, wallet-settlement hourly, agents as before. `apps/admin/vercel.json` is unused.
 5. Smoke test: COD order; manual GCash order (proof → confirm / "Not received"); book + assign rider; deliver; cancel unpaid; buyer order page via SMS link; draft Preview from admin.
 6. Lalamove: `pnpm --filter @gumakart/services lalamove:check -- https://<web>/api/webhooks/lalamove` with sandbox keys → set `LALAMOVE_WEBHOOK_VARIANT` from the log.
-7. After a clean week of verify queries: move `drizzle-pending/0038_phase2_constrain.sql` into `drizzle/` (journal idx 38) and migrate. Later: a further migration drops legacy columns.
+7. After a clean week of verify queries: move `drizzle-pending/0039_phase2_constrain.sql` into `drizzle/` (journal idx 39) and migrate. Later: a further migration drops legacy columns.
 
 ### Next work when resuming (plan §11)
 - **Phase 3 — Checkout Links** (entity, merchant UI, production checkout from the `/kart` components, abandonment capture, source tracking).
@@ -152,7 +156,7 @@ Also committed in **veyron-pos-saas** (`999833a`, branch `feature/ci-locations-p
 - **Unverified older accounts** are sent to `/verify-email` by the admin middleware (API calls get 403 `EMAIL_UNVERIFIED`) until they enter a code (`POST /api/auth/verify-email/code`). Old `?token=` links still work.
 - Password rule: 8+ chars with a letter and a number, common passwords rejected.
 - **Needs:** run `migrate` against Neon production (0023), and a working sender: `RESEND_API_KEY` + `EMAIL_FROM` on a Resend-verified domain (e.g. `Guma Kart <no-reply@guma.one>`). Without them production refuses to send codes (no silent success); local dev shows the code on screen.
-- The deferred Phase 2 constraint SQL (`drizzle-pending/0038_phase2_constrain.sql`) goes into the journal as **idx 38** (0024 checkout links, 0025 POS Lite, 0026 variants, 0027 staff, 0028 after-sale, 0029 Guma ID, 0030 POS offline, 0031 channels, 0032 growth, 0033 platform, 0034 operations, 0035 seller polish, 0036 partners, 0037 two-factor).
+- The deferred Phase 2 constraint SQL (`drizzle-pending/0039_phase2_constrain.sql`) goes into the journal as **idx 39** (0024 checkout links, 0025 POS Lite, 0026 variants, 0027 staff, 0028 after-sale, 0029 Guma ID, 0030 POS offline, 0031 channels, 0032 growth, 0033 platform, 0034 operations, 0035 seller polish, 0036 partners, 0037 two-factor, 0038 loyalty).
 - Static files (`/brand/*`, images) now bypass the admin/ops auth middleware (the logo was being redirected to /login).
 
 ### Pitfalls learned this session

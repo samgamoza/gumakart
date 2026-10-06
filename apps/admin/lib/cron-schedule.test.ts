@@ -8,7 +8,7 @@ const paths = (iso: string) => dueJobs(at(iso)).map((j) => j.path);
 test("cron schedule (one every-minute trigger)", async (t) => {
   await t.test("outbox and webhooks every minute, 5-minute jobs on :x0/:x5", () => {
     assert.deepEqual(paths("2026-10-06T03:01:00Z"), ["/api/cron/outbox", "/api/cron/webhooks"]);
-    assert.deepEqual(paths("2026-10-06T03:05:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/automations", "/api/cron/marketplaces", "/api/cron/campaigns"]);
+    assert.deepEqual(paths("2026-10-06T03:05:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/automations", "/api/cron/marketplaces", "/api/cron/campaigns", "/api/cron/loyalty"]);
   });
   await t.test("hourly jobs at their minute; daily/weekly at their hour", () => {
     assert.ok(paths("2026-10-06T03:20:00Z").includes("/api/cron/expire-orders"));

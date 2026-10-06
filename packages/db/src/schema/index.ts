@@ -2433,3 +2433,31 @@ export const partnerShops = pgTable(
     index("partner_shops_tenant_idx").on(table.tenantId),
   ]
 );
+
+// ─── Phase 27: Suki loyalty ──────────────────────────────────────────────────
+
+/** One row per points movement; a buyer's balance is the sum. See types/loyalty.ts for the rules. */
+export const loyaltyLedger = pgTable(
+  "loyalty_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    customerId: uuid("customer_id")
+      .references(() => customers.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
+    kind: varchar("kind", { length: 8 }).$type<"earn" | "reverse" | "redeem" | "adjust">().notNull(),
+    points: integer("points").notNull(),
+    tier: varchar("tier", { length: 10 }),
+    earnAmount: decimal("earn_amount", { precision: 12, scale: 2 }),
+    giftCardId: uuid("gift_card_id").references(() => giftCards.id, { onDelete: "set null" }),
+    note: varchar("note", { length: 200 }),
+    actorName: varchar("actor_name", { length: 80 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("loyalty_ledger_customer_idx").on(table.tenantId, table.customerId)]
+);
+

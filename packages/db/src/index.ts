@@ -989,3 +989,28 @@ export {
 } from "./queries/partners";
 export { MIGRATION_HEAD } from "./migration-head";
 export { getSchemaStatus, isApplied, type SchemaStatus } from "./queries/schema-status";
+
+// Phase 26: AI assistant facts and restock suggestions.
+export {
+  getRestockSuggestions,
+  getAdvisorFacts,
+  getReplyFacts,
+  restockLine,
+  type RestockSuggestion,
+  type AdvisorFactsRow,
+} from "./queries/insights";
+
+// Phase 27: Suki loyalty.
+export * from "./types/loyalty";
+export {
+  LoyaltyError,
+  getLoyaltyRules,
+  saveLoyaltySettings,
+  syncLoyaltyPoints,
+  getCustomerLoyalty,
+  redeemLoyaltyPoints,
+  getLoyaltySummary,
+  getOrderLoyalty,
+  type CustomerLoyalty,
+  type LoyaltySummary,
+} from "./queries/loyalty";

@@ -160,6 +160,8 @@ export interface TenantSettingsJson {
   agents?: TenantAgentSettings;
   wallet?: TenantWalletSettings;
   payments?: TenantPaymentsSettings;
+  /** Phase 27: Suki loyalty rules (see types/loyalty.ts). */
+  loyalty?: import("./loyalty").TenantLoyaltySettings;
 }
 
 export interface TenantSettingsRecord {

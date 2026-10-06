@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS = [
   { href: "/settings/staff", label: "Staff & roles", icon: "👥", description: "Invite your team; owner, manager, staff or cashier" },
   { href: "/settings/partner", label: "Partner", icon: "🤝", description: "Let an agency or VA help run your shop" },
   { href: "/settings/activity", label: "Activity", icon: "🕘", description: "Who confirmed payments, changed prices or stock, refunded" },
+  { href: "/settings/loyalty", label: "Suki loyalty", icon: "⭐", description: "Points, tiers and store-credit rewards for repeat buyers" },
   { href: "/settings/pos", label: "POS", icon: "🧾", description: "Cashier PINs, VAT, and shift history" },
   { href: "/settings/notifications", label: "Notifications", icon: "🔔", description: "Email and SMS alerts" },
   { href: "/settings/subscription", label: "Plan", icon: "💳", description: "Your Guma Kart plan" },

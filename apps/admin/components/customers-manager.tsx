@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, formatPrice } from "@gumakart/ui";
+import { CustomerSuki } from "@/components/loyalty/customer-suki";
 
 interface CustomerRow {
   id: string;
@@ -218,6 +219,7 @@ export function CustomersManager() {
                     <p className="text-xs text-muted-foreground">Loading history…</p>
                   ) : (
                     <div className="space-y-2">
+                      <CustomerSuki customerId={c.id} />
                       {detail.email && (
                         <p className="text-xs text-muted-foreground">{detail.email}</p>
                       )}
