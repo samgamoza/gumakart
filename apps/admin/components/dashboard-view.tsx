@@ -105,20 +105,21 @@ export function DashboardView({ displayName }: { displayName: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Greeting */}
+      {/* Greeting — Phase 34 Palenke header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-400">
-            {greeting()}, {displayName.split(" ")[0]}
-          </p>
-          <h2 className="mt-0.5 flex items-center gap-2 font-display text-xl font-bold text-white">
+          <span className="pk-chip">Seller dashboard</span>
+          <h2 className="mt-2 flex items-center gap-2 font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {today.shop.name}
-            {today.shop.status === "active" && <BadgeCheck className="h-4 w-4 text-emerald-400" />}
+            {today.shop.status === "active" && <BadgeCheck className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />}
           </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {greeting()}, {displayName.split(" ")[0]} — here&apos;s your shop today.
+          </p>
         </div>
         <Link
           href="/checkout-links"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-600/25 transition hover:-translate-y-0.5 hover:bg-violet-700 dark:shadow-none"
         >
           <Plus className="h-4 w-4" /> New checkout link
         </Link>
@@ -126,123 +127,137 @@ export function DashboardView({ displayName }: { displayName: string }) {
 
       {/* To do */}
       <section>
-        <div className="mb-2 flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold text-slate-200">What needs you today</h3>
-          {totalTodo === 0 && <span className="text-xs text-emerald-300">All caught up</span>}
+        <div className="mb-3 flex items-baseline justify-between">
+          <h3 className="pk-label">What needs you today</h3>
+          {totalTodo === 0 && <span className="pk-chip !bg-emerald-50 !text-emerald-700 dark:!bg-emerald-500/15 dark:!text-emerald-200">All caught up</span>}
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {TODO.map((t) => {
             const n = today.todo[t.key];
             const Icon = t.icon;
             const urgent = n > 0;
+            const warn = t.key === "attention";
             return (
               <Link
                 key={t.key}
                 href={`/orders?tab=${t.tab}`}
-                className={`group rounded-2xl border p-4 transition ${
+                data-testid={`todo-${t.key}`}
+                className={`group rounded-2xl border bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)] transition hover:-translate-y-0.5 dark:shadow-none ${
                   urgent
-                    ? t.key === "attention"
-                      ? "border-amber-400/40 bg-amber-400/10 hover:bg-amber-400/15"
-                      : "border-primary/40 bg-primary/10 hover:bg-primary/15"
-                    : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                    ? warn
+                      ? "border-amber-300 ring-1 ring-amber-200 dark:border-amber-400/40 dark:bg-amber-400/10 dark:ring-0"
+                      : "border-violet-300 ring-1 ring-violet-200 dark:border-primary/40 dark:bg-primary/10 dark:ring-0"
+                    : "border-slate-200 dark:border-white/10 dark:bg-white/[0.03]"
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <Icon className={`h-4 w-4 ${urgent ? "text-white" : "text-slate-500"}`} />
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-500 transition group-hover:translate-x-0.5" />
+                  <span
+                    className={`grid h-9 w-9 place-items-center rounded-xl ${
+                      warn ? "bg-amber-50 text-amber-600 dark:bg-amber-400/15 dark:text-amber-200" : "bg-violet-50 text-violet-600 dark:bg-white/10 dark:text-slate-200"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  {urgent ? (
+                    <span className={`pk-chip ${warn ? "!bg-amber-50 !text-amber-700 dark:!bg-amber-400/15 dark:!text-amber-200" : ""}`}>Needs you</span>
+                  ) : (
+                    <ArrowRight className="h-3.5 w-3.5 text-slate-400 transition group-hover:translate-x-0.5" />
+                  )}
                 </div>
-                <p className={`mt-3 font-display text-2xl font-bold ${urgent ? "text-white" : "text-slate-400"}`}>{n}</p>
-                <p className="text-sm font-medium text-slate-200">{t.label}</p>
-                <p className="text-xs text-slate-500">{t.hint}</p>
+                <p className="pk-label mt-4">{t.label}</p>
+                <p className={`mt-1 font-display text-3xl font-bold tracking-tight ${urgent ? "text-slate-900 dark:text-white" : "text-slate-300 dark:text-slate-500"}`}>{n}</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t.hint}</p>
               </Link>
             );
           })}
         </div>
         {today.todo.to_pay > 0 && (
-          <Link href="/orders?tab=to_pay" className="mt-2 inline-block text-xs text-slate-400 hover:text-white">
+          <Link href="/orders?tab=to_pay" className="mt-2 inline-block text-xs text-slate-500 hover:text-violet-700 dark:text-slate-400 dark:hover:text-white">
             {today.todo.to_pay} order{today.todo.to_pay === 1 ? "" : "s"} waiting for the buyer to pay →
           </Link>
         )}
         {data.lowStock && data.lowStock.lowCount > 0 && (
           <Link
             href="/inventory?filter=low"
-            className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3 transition hover:bg-amber-400/10"
+            className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 transition hover:bg-amber-100/70 dark:border-amber-400/25 dark:bg-amber-400/[0.06] dark:hover:bg-amber-400/10"
             data-testid="low-stock-alert"
           >
-            <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-300" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-600 dark:text-amber-300" />
             <span className="min-w-0 text-sm">
-              <span className="font-semibold text-amber-100">
+              <span className="font-semibold text-amber-900 dark:text-amber-100">
                 {data.lowStock.lowCount} item{data.lowStock.lowCount === 1 ? "" : "s"} running low
                 {data.lowStock.soldOutCount > 0 ? ` · ${data.lowStock.soldOutCount} sold out` : ""}
               </span>
-              <span className="block truncate text-xs text-slate-400">
+              <span className="block truncate text-xs text-amber-800/70 dark:text-slate-400">
                 {data.lowStock.items.map((i) => `${i.title} (${i.stockQty})`).join(" · ")}
               </span>
             </span>
-            <span className="ml-auto flex-none text-xs text-amber-200">Restock →</span>
+            <span className="ml-auto flex-none text-xs font-semibold text-amber-700 dark:text-amber-200">Restock →</span>
           </Link>
         )}
       </section>
 
-      {/* Today + deliveries */}
+      {/* Today + deliveries — the violet hero card is palenkeAi's signature */}
       <section className="grid gap-3 lg:grid-cols-3">
-        <Card className="border-white/10 bg-white/[0.03] lg:col-span-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Today</p>
-          <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-2">
+        <div
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#14062b] via-[#3b0f7a] to-[#6d28d9] p-5 text-white shadow-xl shadow-violet-900/20 lg:col-span-2"
+          data-testid="today-hero"
+        >
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-fuchsia-400/20 blur-3xl dark:bg-fuchsia-400/20" />
+          <p className="relative text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-200 dark:text-violet-200">Today</p>
+          <div className="relative mt-2 flex flex-wrap items-end gap-x-10 gap-y-2">
             <div>
-              <p className="font-display text-3xl font-bold text-white">{formatPrice(today.today.sales)}</p>
-              <p className="text-xs text-slate-400">sales</p>
+              <p className="font-display text-4xl font-bold tracking-tight">{formatPrice(today.today.sales)}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-200/80 dark:text-violet-200/80">Sales</p>
             </div>
             <div>
-              <p className="font-display text-3xl font-bold text-white">{today.today.orders}</p>
-              <p className="text-xs text-slate-400">orders</p>
+              <p className="font-display text-4xl font-bold tracking-tight">{today.today.orders}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-200/80 dark:text-violet-200/80">Orders</p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <div className="rounded-xl border border-white/10 p-3">
-              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+          <div className="relative mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur-sm dark:bg-white/10">
+              <p className="flex items-center gap-1.5 text-xs text-violet-100 dark:text-violet-100">
                 <Link2 className="h-3.5 w-3.5" /> From checkout links
               </p>
-              <p className="mt-1 font-semibold text-white">
+              <p className="mt-1 font-semibold">
                 {today.today.byChannel.checkoutLinks.orders} · {formatPrice(today.today.byChannel.checkoutLinks.sales)}
               </p>
             </div>
-            <div className="rounded-xl border border-white/10 p-3">
-              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur-sm dark:bg-white/10">
+              <p className="flex items-center gap-1.5 text-xs text-violet-100 dark:text-violet-100">
                 <Store className="h-3.5 w-3.5" /> From your online store
               </p>
-              <p className="mt-1 font-semibold text-white">
+              <p className="mt-1 font-semibold">
                 {today.today.byChannel.store.orders} · {formatPrice(today.today.byChannel.store.sales)}
               </p>
             </div>
-            <Link href="/pos" className="rounded-xl border border-white/10 p-3 transition hover:border-white/25">
-              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Link href="/pos" className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur-sm transition hover:bg-white/20 dark:bg-white/10">
+              <p className="flex items-center gap-1.5 text-xs text-violet-100 dark:text-violet-100">
                 <Calculator className="h-3.5 w-3.5" /> In-store (POS)
               </p>
-              <p className="mt-1 font-semibold text-white">
+              <p className="mt-1 font-semibold">
                 {today.today.byChannel.pos?.orders ?? 0} · {formatPrice(today.today.byChannel.pos?.sales ?? 0)}
               </p>
             </Link>
           </div>
-        </Card>
+        </div>
 
-        <Card className="border-white/10 bg-white/[0.03]">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Deliveries</p>
+        <Card className="dark:border-white/10 dark:bg-white/[0.03]">
+          <p className="pk-label">Deliveries</p>
           <ul className="mt-3 space-y-2.5 text-sm">
-            <li className="flex justify-between text-slate-300">
-              <span>Rider booked</span>
-              <span className="font-semibold text-white">{today.deliveries.booked}</span>
-            </li>
-            <li className="flex justify-between text-slate-300">
-              <span>Out for delivery</span>
-              <span className="font-semibold text-white">{today.deliveries.outForDelivery}</span>
-            </li>
-            <li className="flex justify-between text-slate-300">
-              <span>Delivered today</span>
-              <span className="font-semibold text-white">{today.deliveries.deliveredToday}</span>
-            </li>
+            {[
+              ["Rider booked", today.deliveries.booked],
+              ["Out for delivery", today.deliveries.outForDelivery],
+              ["Delivered today", today.deliveries.deliveredToday],
+            ].map(([label, n]) => (
+              <li key={String(label)} className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                <span>{label}</span>
+                <span className="font-display text-base font-bold text-slate-900 dark:text-white">{n}</span>
+              </li>
+            ))}
           </ul>
-          <Link href="/orders?tab=shipping" className="mt-3 inline-block text-xs text-slate-400 hover:text-white">
+          <Link href="/orders?tab=shipping" className="mt-3 inline-block text-xs font-semibold text-violet-700 hover:text-violet-900 dark:text-slate-400 dark:hover:text-white">
             See deliveries →
           </Link>
         </Card>

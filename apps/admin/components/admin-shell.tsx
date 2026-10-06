@@ -29,6 +29,7 @@ import { PartnerAccessBanner } from "@/components/partner-access-banner";
 import { NewOrderAlerts } from "@/components/new-order-alerts";
 import { PlanNoticeBanner } from "@/components/plan-notice-banner";
 import { storefrontBaseUrl } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface SessionUser {
   role: string;
@@ -164,7 +165,7 @@ export function AdminShell({
   }
 
   return (
-    <div className="relative min-h-screen bg-guma-navy text-slate-200">
+    <div className="relative min-h-screen bg-background text-foreground">
       {supportAccess && (
         <SupportAccessBanner
           tenantName={user?.tenantName ?? tenant?.name}
@@ -176,8 +177,8 @@ export function AdminShell({
       {shopRole === "owner" && !supportAccess && <PlanNoticeBanner />}
       <div className="relative min-h-screen lg:flex">
       {/* Soft ambient — keep noise low so content stays readable */}
-      <div className="pointer-events-none fixed inset-0 grid-bg grid-bg-fade opacity-25" />
-      <div className="pointer-events-none fixed -top-48 left-0 h-[360px] w-[360px] rounded-full bg-guma-purple/[0.06] blur-[100px]" />
+      <div className="pointer-events-none fixed inset-0 hidden grid-bg grid-bg-fade opacity-25 dark:block" />
+      <div className="pointer-events-none fixed -top-48 left-0 h-[360px] w-[360px] rounded-full bg-violet-400/[0.10] blur-[100px] dark:bg-guma-purple/[0.06]" />
 
       <UpgradeGateModal
         open={gateTarget !== null}
@@ -204,14 +205,14 @@ export function AdminShell({
 
       {/* Sidebar — Guma One (drawer on phones, fixed column on desktop) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border-r border-white/[0.08] bg-guma-navy transition-transform duration-200 glass-strong lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:w-[260px] lg:max-w-none lg:shrink-0 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border-r border-slate-200 bg-white transition-transform duration-200 dark:border-white/[0.08] dark:bg-guma-navy dark:glass-strong lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:w-[260px] lg:max-w-none lg:shrink-0 lg:translate-x-0 ${
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <Link href="/" className="flex items-center gap-2.5 px-5 py-5">
           <GumaMark className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-white">
+            <p className="truncate font-display text-[15px] font-bold tracking-tight text-slate-900 dark:text-white">
               {user?.tenantName ?? tenant?.name ?? "Your shop"}
             </p>
             <p className="truncate text-[11px] text-slate-400">
@@ -230,7 +231,7 @@ export function AdminShell({
               placeholder="Search…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-guma-navy/60 py-2 pl-9 pr-3 text-xs text-white placeholder:text-slate-500 focus:border-guma-purple/50 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none dark:border-white/10 dark:bg-guma-navy/60 dark:text-white"
             />
           </div>
         </div>
@@ -272,24 +273,24 @@ export function AdminShell({
                         key={item.id}
                         href={item.href}
                         onClick={(e) => handleNavClick(e, item)}
-                        className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                        className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-semibold transition-colors ${
                           active
-                            ? "bg-white/[0.07] text-white"
+                            ? "bg-violet-600 text-white shadow-md shadow-violet-600/25 dark:bg-white/[0.07] dark:shadow-none"
                             : locked
-                              ? "text-slate-500 hover:bg-white/[0.03]"
-                              : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                              ? "text-slate-400 hover:bg-slate-50 dark:text-slate-500 dark:hover:bg-white/[0.03]"
+                              : "text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-400 dark:hover:bg-white/[0.04] dark:hover:text-slate-200"
                         }`}
                       >
                         {active ? (
-                          <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-guma-purple/80" />
+                          <span className="absolute left-0 top-1/2 hidden h-4 w-0.5 -translate-y-1/2 rounded-full bg-guma-purple/80 dark:block" />
                         ) : null}
                         <Icon
-                          className={`h-4 w-4 shrink-0 ${active ? "text-slate-200" : "text-slate-500 group-hover:text-slate-400"}`}
+                          className={`h-4 w-4 shrink-0 ${active ? "text-current opacity-90" : "text-slate-400 group-hover:text-current"}`}
                         />
                         <span className="flex-1 truncate">{item.label}</span>
                         {item.badge === "new" ? (
                           <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-guma-purple/70"
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? "bg-white/80" : "bg-violet-500 dark:bg-guma-purple/70"}`}
                             title="New"
                             aria-label="New"
                           />
@@ -305,7 +306,7 @@ export function AdminShell({
           })}
 
           {/* Full settings tree */}
-          <div className="mt-2 border-t border-white/[0.08] pt-2">
+          <div className="mt-2 border-t border-slate-200 pt-2 dark:border-white/[0.08]">
             <button
               type="button"
               onClick={() => {
@@ -314,14 +315,14 @@ export function AdminShell({
                   router.push(settingsSections[0]?.href ?? "/settings/account");
                 }
               }}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-[13px] font-semibold transition-colors ${
                 pathname.startsWith("/settings")
-                  ? "bg-white/[0.07] text-white"
-                  : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                  ? "bg-violet-50 text-violet-700 dark:bg-white/[0.07] dark:text-white"
+                  : "text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-400 dark:hover:bg-white/[0.04] dark:hover:text-slate-200"
               }`}
             >
               <span className="flex items-center gap-2.5">
-                <Settings className="h-4 w-4 text-slate-500" />
+                <Settings className="h-4 w-4 text-slate-400" />
                 Settings
               </span>
               <ChevronDown
@@ -336,8 +337,8 @@ export function AdminShell({
                     href={section.href}
                     className={`block rounded-md px-2.5 py-1.5 text-xs transition ${
                       pathname === section.href
-                        ? "font-medium text-slate-100"
-                        : "text-slate-500 hover:text-slate-300"
+                        ? "font-semibold text-violet-700 dark:text-slate-100"
+                        : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-300"
                     }`}
                   >
                     {section.label}
@@ -350,8 +351,9 @@ export function AdminShell({
 
         {/* AI credits strip */}
         {!planLoading && credits ? (
-          <div className="mx-3 mb-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
-            <p className="text-xs font-medium text-slate-200">
+          <div className="mx-3 mb-3 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-3 dark:border-white/[0.08] dark:from-transparent dark:to-transparent dark:bg-white/[0.03]">
+            <p className="pk-label mb-1 !text-violet-600 dark:!text-violet-300">AI credits</p>
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
               {credits.generationsLeft} AI generations left this month
             </p>
             <p className="mt-0.5 text-[10px] text-slate-500">
@@ -368,7 +370,7 @@ export function AdminShell({
           </div>
         ) : null}
 
-        <div className="hidden border-t border-white/[0.08] p-3 lg:block">
+        <div className="hidden border-t border-slate-200 p-3 dark:border-white/[0.08] lg:block">
           {user ? (
             <div className="mb-2 flex items-center gap-2">
               <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.06] text-[10px] font-semibold text-slate-200">
@@ -388,21 +390,24 @@ export function AdminShell({
               </div>
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-2 text-xs font-medium text-slate-300 hover:bg-white/5 hover:text-white"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Sign out
-          </button>
+          <div className="flex gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-white/[0.08] bg-guma-navy/90 px-3 py-2.5 backdrop-blur-md sm:gap-4 sm:px-4 lg:px-6">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-slate-200/80 bg-white/85 px-3 py-2.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-guma-navy/90 sm:gap-4 sm:px-4 lg:px-6">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -411,20 +416,20 @@ export function AdminShell({
           >
             <Menu className="h-4 w-4" /> Menu
           </button>
-          <div className="hidden items-center gap-1 rounded-lg sm:flex border border-white/[0.08] bg-white/[0.02] p-0.5 text-xs font-medium">
+          <div className="hidden items-center gap-1 rounded-xl border border-slate-200 bg-slate-100/80 p-1 text-xs font-semibold dark:border-white/[0.08] dark:bg-white/[0.02] sm:flex">
             {slug ? (
               <a
                 href="/api/storefront-preview"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-slate-500 hover:bg-white/[0.04] hover:text-slate-200"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-slate-500 hover:text-slate-900 dark:hover:bg-white/[0.04] dark:hover:text-slate-200"
               >
                 <Monitor className="h-3.5 w-3.5" />
                 Preview
               </a>
             ) : null}
-            <span className="flex items-center gap-1.5 rounded-md bg-white/[0.06] px-3 py-1.5 font-medium text-slate-100">
-              <Store className="h-3.5 w-3.5 text-slate-400" />
+            <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-slate-900 shadow-sm dark:bg-white/[0.06] dark:text-slate-100 dark:shadow-none">
+              <Store className="h-3.5 w-3.5 text-violet-600 dark:text-slate-400" />
               Dashboard
             </span>
           </div>
@@ -433,9 +438,9 @@ export function AdminShell({
             {showUpgrade ? (
               <Link
                 href={upgradeHref(plan === "free" ? "growth" : "pro", "topbar")}
-                className="hidden items-center gap-1.5 rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white sm:inline-flex"
+                className="hidden items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-100 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:border-white/20 dark:hover:bg-white/[0.04] dark:hover:text-white sm:inline-flex"
               >
-                <Gem className="h-3.5 w-3.5 text-slate-400" />
+                <Gem className="h-3.5 w-3.5" />
                 Upgrade
               </Link>
             ) : null}
@@ -444,9 +449,9 @@ export function AdminShell({
                 href={`${storefrontBase}/${slug}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/[0.1]"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 dark:border dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]"
               >
-                <Rocket className="h-3.5 w-3.5 text-slate-400" />
+                <Rocket className="h-3.5 w-3.5 opacity-80" />
                 <span className="hidden sm:inline">View shop</span>
                 <ExternalLink className="h-3 w-3 opacity-50" />
               </a>
@@ -472,9 +477,9 @@ export function AdminShell({
 
         <main className="guma-console-main flex-1 px-4 py-6 lg:px-8">
           <div className="mb-6">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-white">{title}</h1>
+            <h1 className="font-display text-[28px] font-bold tracking-tight text-slate-900 dark:text-white">{title}</h1>
             {description ? (
-              <p className="mt-1 max-w-2xl text-sm text-slate-400">{description}</p>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">{description}</p>
             ) : null}
           </div>
           {children}

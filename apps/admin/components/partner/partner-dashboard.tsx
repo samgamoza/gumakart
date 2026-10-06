@@ -83,7 +83,8 @@ export function PartnerDashboard() {
       <header className="border-b border-white/10">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4">
           <div className="flex items-center gap-3">
-            <GumaLogo on="dark" className="h-9" />
+            <GumaLogo on="light" className="h-9 dark:hidden" />
+            <GumaLogo on="dark" className="hidden h-9 dark:block" />
             <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-200">Partner</span>
           </div>
           <button type="button" onClick={() => void logout()} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5">

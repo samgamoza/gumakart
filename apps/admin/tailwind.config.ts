@@ -1,6 +1,8 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // Phase 34: `dark:` follows the seller's theme choice (html[data-theme="dark"]); light is the default.
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -53,8 +55,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-jakarta)", "system-ui", "sans-serif"],
-        display: ["var(--font-bricolage)", "var(--font-jakarta)", "system-ui", "sans-serif"],
+        sans: ["var(--font-body)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-body)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains)", "JetBrains Mono", "ui-monospace", "monospace"],
       },
       borderRadius: {

@@ -1,16 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
+// Phase 34: Palenke look — Inter for text, Space Grotesk for headings and numbers.
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-jakarta",
+  variable: "--font-body",
   display: "swap",
 });
 
-const bricolage = Bricolage_Grotesque({
+const grotesk = Space_Grotesk({
   subsets: ["latin"],
-  variable: "--font-bricolage",
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -28,15 +29,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0A0F1D",
+  themeColor: "#7c3aed",
 };
+
+/** Applies the saved theme before first paint (light by default; dark if the seller chose it). */
+const THEME_SCRIPT = `try{if(localStorage.getItem("guma-admin-theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${jakarta.variable} ${bricolage.variable} ${jetbrains.variable}`}
-    >
+    <html lang="en" className={`${inter.variable} ${grotesk.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="font-sans">{children}</body>
     </html>
   );
