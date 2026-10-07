@@ -203,6 +203,16 @@ export const STOREFRONT_TEMPLATE_REGISTRY: StorefrontTemplateRegistryEntry[] = [
     categoryHints: [/specialty|single.?product|flagship|phone.?repair|device.?repair/i],
     storefrontPath: "apps/web/components/storefront/specialty",
   },
+  {
+    id: "palenke",
+    patternId: "palenke",
+    label: "Palenke",
+    version: "1.0.0",
+    source: "Guma Kart native, modelled on the palenkeAi storefront mood board (Phase 34)",
+    license: "Guma One",
+    categoryHints: [],
+    storefrontPath: "apps/web/components/storefront/palenke",
+  },
 ];
 
 export function getTemplateRegistryEntry(

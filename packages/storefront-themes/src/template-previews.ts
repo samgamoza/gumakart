@@ -43,6 +43,7 @@ export const TEMPLATE_PREVIEW_IMAGES: Record<ShopTemplateId, string> = {
   motto: "https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=960&q=80",
   studio: "https://images.unsplash.com/photo-1452587925148-ce544e77e382?w=960&q=80",
   haircut: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=960&q=80",
+  palenke: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=960&q=80",
   specialty: "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=960&q=80",
 };
 

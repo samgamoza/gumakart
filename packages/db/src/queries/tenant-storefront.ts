@@ -31,7 +31,7 @@ export interface TenantStorefrontSettings {
 
 export interface UpdateTenantStorefrontInput {
   templateId?: string;
-  patternId?: "classic" | "simply-sweet" | "bloom" | "sarab" | "furnish" | "zay" | "electro" | "kaira" | "foodmart" | "stylish" | "mellow" | "organic" | "waggy" | "fruitables" | "ministore" | "aircon" | "carserv" | "motto" | "studio" | "haircut" | "specialty";
+  patternId?: "classic" | "simply-sweet" | "bloom" | "sarab" | "furnish" | "zay" | "electro" | "kaira" | "foodmart" | "stylish" | "mellow" | "organic" | "waggy" | "fruitables" | "ministore" | "aircon" | "carserv" | "motto" | "studio" | "haircut" | "specialty" | "palenke";
   primaryColor?: string;
   accentColor?: string;
   displayFont?: "bricolage" | "system" | "mono-accent";

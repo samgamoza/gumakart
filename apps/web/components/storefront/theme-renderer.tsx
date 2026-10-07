@@ -29,6 +29,8 @@ const StudioStorefront = dynamic(() => import("@/components/storefront/studio/st
 const HaircutStorefront = dynamic(() => import("@/components/storefront/haircut/haircut-storefront").then((mod) => ({ default: mod.HaircutStorefront })));
 const SpecialtyStorefront = dynamic(() => import("@/components/storefront/specialty/specialty-storefront").then((mod) => ({ default: mod.SpecialtyStorefront })));
 
+const PalenkeStorefront = dynamic(() => import("@/components/storefront/palenke/palenke-storefront").then((mod) => ({ default: mod.PalenkeStorefront })));
+
 const THEMES: Record<string, React.ComponentType<{ tenant: DemoTenant }>> = {
   "sweet-kitchen": SweetKitchenStorefront,
   "bloom": BloomStorefront,
@@ -50,6 +52,7 @@ const THEMES: Record<string, React.ComponentType<{ tenant: DemoTenant }>> = {
   "studio": StudioStorefront,
   "haircut": HaircutStorefront,
   "specialty": SpecialtyStorefront,
+  "palenke": PalenkeStorefront,
 };
 
 export const CLIENT_THEME_RENDERERS = Object.keys(THEMES);

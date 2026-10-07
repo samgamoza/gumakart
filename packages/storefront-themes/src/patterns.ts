@@ -294,6 +294,18 @@ export const STORE_PATTERNS: StorePatternDefinition[] = [
     storefrontRenderer: "specialty",
     dashboardRenderer: "guma",
   },
+  {
+    id: "palenke",
+    label: "Palenke",
+    description:
+      "Bright, friendly shop with a gradient banner in your colour, category chips and big product cards with Add to basket.",
+    tags: ["palenke", "everyday", "food", "bright", "mobile-first"],
+    // Picked by choice only — no category hints, so existing shops never switch to it on their own.
+    categoryHints: [],
+    templateId: "palenke",
+    storefrontRenderer: "palenke",
+    dashboardRenderer: "guma",
+  },
 ];
 
 export const STORE_PATTERN_MAP = Object.fromEntries(
@@ -382,6 +394,7 @@ export function matchStorePattern(input: {
   if (templateId === "studio") return "studio";
   if (templateId === "haircut") return "haircut";
   if (templateId === "specialty") return "specialty";
+  if (templateId === "palenke") return "palenke";
 
   const category = input.category?.trim() ?? "";
   if (category) {

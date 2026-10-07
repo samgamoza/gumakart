@@ -775,6 +775,33 @@ export const SHOP_TEMPLATES: ShopTemplateDefinition[] = [
       displayFont: "system",
     },
   },
+  {
+    id: "palenke",
+    tier: "basic",
+    label: "Palenke",
+    description:
+      "Bright, friendly shop: a gradient banner in your colour, category chips, and big product cards with Details and Add to basket.",
+    mood: "Bright · friendly · mobile-first",
+    tags: ["palenke", "everyday", "food", "bright", "mobile-first"],
+    previewGradient: "linear-gradient(120deg, #4f46e5 0%, #6d28d9 60%, #312e81 100%)",
+    minPlan: "free",
+    layout: "classic",
+    header: "standard",
+    card: "grid",
+    hero: "gradient",
+    tokens: {
+      primary: "#4f46e5",
+      accent: "#7c3aed",
+      background: "#f8fafc",
+      foreground: "#0f172a",
+      card: "#ffffff",
+      muted: "#64748b",
+      border: "#e2e8f0",
+      mode: "light",
+      radius: "1.5rem",
+      displayFont: "system",
+    },
+  },
 ];
 
 export const SHOP_TEMPLATE_MAP = Object.fromEntries(

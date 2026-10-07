@@ -28,11 +28,12 @@ export const SHOP_TEMPLATE_IDS = [
   "studio",
   "haircut",
   "specialty",
+  "palenke",
 ] as const;
 
-export const STORE_PATTERN_IDS = ["classic", "simply-sweet", "bloom", "sarab", "furnish", "zay", "electro", "kaira", "foodmart", "stylish", "mellow", "organic", "waggy", "fruitables", "ministore", "aircon", "carserv", "motto", "studio", "haircut", "specialty"] as const;
+export const STORE_PATTERN_IDS = ["classic", "simply-sweet", "bloom", "sarab", "furnish", "zay", "electro", "kaira", "foodmart", "stylish", "mellow", "organic", "waggy", "fruitables", "ministore", "aircon", "carserv", "motto", "studio", "haircut", "specialty", "palenke"] as const;
 export type StorePatternId = (typeof STORE_PATTERN_IDS)[number];
-export type StorefrontRenderer = "themed" | "experience" | "sweet-kitchen" | "bloom" | "sarab" | "furnish" | "zay" | "electro" | "kaira" | "foodmart" | "stylish" | "mellow" | "organic" | "waggy" | "fruitables" | "ministore" | "aircon" | "carserv" | "motto" | "studio" | "haircut" | "specialty";
+export type StorefrontRenderer = "themed" | "experience" | "sweet-kitchen" | "bloom" | "sarab" | "furnish" | "zay" | "electro" | "kaira" | "foodmart" | "stylish" | "mellow" | "organic" | "waggy" | "fruitables" | "ministore" | "aircon" | "carserv" | "motto" | "studio" | "haircut" | "specialty" | "palenke";
 export type DashboardRenderer = "guma" | "sweet-kitchen";
 
 export type ShopTemplateId = (typeof SHOP_TEMPLATE_IDS)[number];

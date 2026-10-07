@@ -179,7 +179,7 @@ export const tenants = pgTable(
     themeJson: jsonb("theme_json").$type<{
       templateId?: string;
       /** Paired storefront + seller-dashboard pattern (e.g. simply-sweet). */
-      patternId?: "classic" | "simply-sweet" | "bloom" | "sarab" | "furnish" | "zay" | "electro" | "kaira" | "foodmart" | "stylish" | "mellow" | "organic" | "waggy" | "fruitables" | "ministore" | "aircon" | "carserv" | "motto" | "studio" | "haircut" | "specialty";
+      patternId?: "classic" | "simply-sweet" | "bloom" | "sarab" | "furnish" | "zay" | "electro" | "kaira" | "foodmart" | "stylish" | "mellow" | "organic" | "waggy" | "fruitables" | "ministore" | "aircon" | "carserv" | "motto" | "studio" | "haircut" | "specialty" | "palenke";
       primaryColor?: string;
       accentColor?: string;
       fontFamily?: string;

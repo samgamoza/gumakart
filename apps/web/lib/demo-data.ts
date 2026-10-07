@@ -60,6 +60,8 @@ export interface DemoTenant {
   seo?: import("@gumakart/db").TenantSeoJson | null;
   /** Phase 23: shop rating from published verified reviews. Absent = none yet. */
   rating?: { average: number; count: number };
+  /** Phase 34: set only when the shop has buyer referrals on (amounts from its Suki settings). */
+  referral?: { friendReward: number; referrerReward: number; minOrder: number };
 }
 
 export const DEMO_TENANT: DemoTenant = {

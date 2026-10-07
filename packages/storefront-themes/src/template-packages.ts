@@ -401,6 +401,20 @@ export const TEMPLATE_PACKAGES: Partial<Record<ShopTemplateId, TemplatePackageMe
     accessibilityScore: 84,
     supportedFeatures: ["cart", "cod"],
   },
+  palenke: {
+    id: "palenke",
+    industryFit: ["Food & Beverage", "Home Bakers & Pastries", "Groceries", "General Merchandise"],
+    idealProductCount: { min: 2, max: 60 },
+    targetAudience: ["home sellers", "food sellers", "everyday shops"],
+    visualStyle: ["fresh", "cute"],
+    conversionFocus: "catalog",
+    mobileScore: 92,
+    liveSellingReady: true,
+    seoReady: true,
+    performanceScore: 90,
+    accessibilityScore: 86,
+    supportedFeatures: ["cart", "cod"],
+  },
 };
 
 export function getTemplatePackage(id: ShopTemplateId): TemplatePackageMetadata {

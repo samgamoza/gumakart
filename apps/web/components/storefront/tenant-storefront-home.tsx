@@ -11,7 +11,7 @@ const StorefrontExperience = dynamic(() =>
 );
 
 /** Themes rendered by the client-side switch (one chunk per theme). */
-const THEME_RENDERER_IDS = new Set<string>(["sweet-kitchen", "bloom", "sarab", "furnish", "zay", "electro", "kaira", "foodmart", "stylish", "mellow", "organic", "waggy", "fruitables", "ministore", "aircon", "carserv", "motto", "studio", "haircut", "specialty"]);
+const THEME_RENDERER_IDS = new Set<string>(["sweet-kitchen", "bloom", "sarab", "furnish", "zay", "electro", "kaira", "foodmart", "stylish", "mellow", "organic", "waggy", "fruitables", "ministore", "aircon", "carserv", "motto", "studio", "haircut", "specialty", "palenke"]);
 
 export function TenantStorefrontHome({
   tenant,

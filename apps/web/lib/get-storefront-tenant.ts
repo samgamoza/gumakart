@@ -5,6 +5,9 @@ import {
   getTenantAvailabilityBySlug,
   getTenantStorefrontBySlug,
   getTenantStorefrontPreviewBySlug,
+  loyaltyRules,
+  referralRules,
+  type TenantLoyaltySettings,
 } from "@gumakart/db";
 import {
   DEMO_TENANT,
@@ -71,6 +74,10 @@ function mapDbTenantToDemo(
     tenant.shippingPublishedJson
   );
   const patternId = resolveStorePattern(tenant.themeJson);
+  const loyaltySettings = (tenant.settingsJson as { loyalty?: TenantLoyaltySettings } | null)?.loyalty;
+  const referral = referralRules(loyaltySettings);
+  // Buyers get their share link on the order page's Suki card, which needs Suki loyalty on too.
+  const referralLive = referral.enabled && loyaltyRules(loyaltySettings).enabled;
 
   return {
     slug: tenant.slug,
@@ -92,6 +99,9 @@ function mapDbTenantToDemo(
     storeSettings,
     products: mappedProducts,
     ...(tenant.rating ? { rating: tenant.rating } : {}),
+    ...(referralLive && (referral.friendReward > 0 || referral.referrerReward > 0)
+      ? { referral: { friendReward: referral.friendReward, referrerReward: referral.referrerReward, minOrder: referral.minOrder } }
+      : {}),
     subscriptionPlan: tenant.subscriptionPlan,
     seo: tenant.seoPublishedJson ?? null,
   };
