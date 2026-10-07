@@ -37,8 +37,9 @@ were verified on 2026-10-06 and can go stale.
 | 32 | Buyer referrals "give ₱50, get ₱50" (store credit) + Suki win-back SMS audience (migration `0039_referrals`) — `docs/PHASE-32-NOTES.md` | Approved (`7feead1`) |
 | 33 | Compare couriers, fill a listing from a photo, background-removal cap, next-30-days forecast — `docs/PHASE-33-NOTES.md` | Approved (`b098ed4`) |
 | 23 | Verified reviews: buyer stars/text/photos, seller reply/hide/report, storefront stars + trust bar, ops review reports, opt-in SMS ask (migration `0040_reviews`) — `docs/PHASE-23-NOTES.md` | Approved (`e8e6d1f`) |
-| **22** | **Back-in-stock alerts, wishlists, pre-orders (no deposits yet) (migration `0041_demand`)** — `docs/PHASE-22-NOTES.md` | **Built, in review** (`4161ff5`) |
-| **24** | **Batch pick list + mark packed, barcode/price labels, parcel courier tracking numbers (aggregator ready to hook), fee by area (migration `0042_fulfilment`)** — `docs/PHASE-24-NOTES.md` | **Built, in review** |
+| 22 | Back-in-stock alerts, wishlists, pre-orders (no deposits yet) (migration `0041_demand`) — `docs/PHASE-22-NOTES.md` | Approved (`4161ff5`) |
+| 24 | Batch pick list + mark packed, barcode/price labels, parcel courier tracking numbers (aggregator ready to hook), fee by area (migration `0042_fulfilment`) — `docs/PHASE-24-NOTES.md` | Approved (`3ec567d`) |
+| 34 | The Palenke look: light seller dashboard (dark mode optional), checkout in the shop's colour, new **Palenke** shop theme with a Suki referral strip. No migration — `docs/PHASE-34-NOTES.md` | Approved (`a739dc9`, `eb1015d`, `98681ce`) |
 
 ## The launch track (not code: Sam's to-dos)
 
@@ -252,6 +253,7 @@ numbers.**
 | AI restock suggestions | **Paubos na** card: plain velocity math, no AI | 26 |
 | Omnichannel messenger CRM | **Suggest replies** in Chats, from real prices and stock | 26 |
 | Suki loyalty tiers + redemption | **Suki loyalty**: server ledger, refunds take points back, store credit only | 27 |
+| Its look (admin, storefront, checkout) | Light seller dashboard (dark optional), checkout in the shop colour, **Palenke** shop theme with an honest referral strip | 34 |
 
 **Next candidates, best value first** (✅ = built: H1/H3/H4/H6 in Phase 31, H5/H8 in Phase 32, H2/H7/H9/H10 in Phase 33 — see their notes):
 

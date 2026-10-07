@@ -1,12 +1,15 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-06 (Phases 8–24, 26, 27, 31–33 built and approved; paused for Sam to migrate 0038–0042 and deploy — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-07 (Phases 8–24, 26, 27, 31–34 built and approved; paused for Sam to migrate 0038–0042 and deploy — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-06 (all approved; paused for deploy)
+## ▶ Resume here — 2026-10-07 (all approved; paused for deploy)
 
 **Status.** Everything below is built, committed on branch `wip/uncommitted-work-2026-08-01` and approved. Work is paused until Sam migrates Neon (0038–0042) and pushes; deploy steps are under "Before pushing". Live so far: up to Phase 21 (deploy #20, `df6d24c`).
 
+- `98681ce` Phase 34c **Palenke shop theme** (seller-picked, free; gradient banner in the shop colour, real payment methods, category chips, Details / Add to basket cards, Suki referral strip only when loyalty + referrals are on). No migration. Approved.
+- `eb1015d` Phase 34b checkout in the shop's own colour (no more fixed orange), white fields, soft cards. No migration. Approved.
+- `a739dc9` Phase 34a **light seller dashboard** (Palenke look; Sun/Moon toggle keeps dark mode per device). No migration. Approved.
 - `3ec567d` Phase 24 faster fulfilment (batch pick list + mark packed, barcode/price labels with in-store EAN-13, parcel courier tracking numbers, fee by area; waybill aggregator ready to hook). Migration 0042_fulfilment. Approved.
 - `4161ff5` Phase 22 buyer demand capture (Notify me / back-in-stock texts, wishlists + /{shop}/saved, pre-orders with ship date; seller demand panel on Stock). Migration 0041_demand. Approved.
 - `e8e6d1f` Phase 23 verified reviews (buyer stars/text/photos from delivered orders, seller Reviews page, storefront stars + trust bar + /{shop}/reviews, ops Review reports, opt-in "Ask for a review" SMS). Migration 0040_reviews. Approved.
@@ -40,13 +43,14 @@ Pushing also switches the admin Worker cron to **every minute**. Check first wit
 - admin → Settings → Account: two-step sign-in, Change password.
 - admin → Overview (Ask Guma, restock card), Products/links → Captions, Chats → Suggest replies (needs an AI key on admin), Settings → Suki loyalty (Referrals card), SMS campaigns → Suki win-back, Orders → Book courier (compare), Products → Fill from photo (needs GEMINI or OPENAI key), Reports → Next 30 days, Reviews (seller), Automations → Ask for a review (off by default), ops → Review reports, Stock → demand panel, Products → Take pre-orders, storefront Notify me / Saved, Orders → To pack batch, Stock → Print barcode labels, Assign rider or courier (J&T etc.), Settings → Delivery fee by area.
 - ops → Frontends → Palenke AI (preview /palenke-ai).
+- admin: the new light look on every page; Sun/Moon button (next to Sign out) switches to dark and remembers it. Settings → Shop → Change → **Palenke**, then open the storefront (switch back afterwards if testing on a real shop). Checkout uses the shop colour.
 - ops.guma.one → System health and Status page.
 - kart.guma.one/status.
 - admin → /partners/join, /partner, Settings → Partner; ops → Partners (approve).
 - admin → Gift cards, Settings → Branches, Stock → By branch, POS (deal line, Gift card tender).
 - admin → Help, Settings → Plan, Reports, Discounts, SMS campaigns, Apps & integrations, API & webhooks.
 
-**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27/31/32/33/23/22/24-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
+**Phase notes:** `docs/PHASE-13/14/15/16/17/18/19/20/21/26/27/31/32/33/23/22/24/34-NOTES.md`, `docs/INTEGRATIONS-RECIPES.md`. Provider keys: `docs/GO-LIVE.md` §1–8.
 Backups: `docs/RUNBOOK-BACKUPS.md`.
 
 **Ready to hook up (owner to-dos):**
