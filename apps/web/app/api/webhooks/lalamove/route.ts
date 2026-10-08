@@ -8,6 +8,7 @@ import {
   createLogger,
   lalamoveFulfillment,
   verifyLalamoveWebhook,
+  webhookTimestampFresh,
 } from "@gumakart/services";
 
 const log = createLogger("webhook:lalamove");
@@ -81,6 +82,12 @@ export async function POST(request: Request) {
     // Shows which signature layout Lalamove uses — pin it with LALAMOVE_WEBHOOK_VARIANT.
     log.info("Lalamove webhook signature verified", { variant: verified.variant, path });
   }
+  // Security G2 (GK-19): the signed timestamp must be fresh — no replaying a
+  // captured "COMPLETED" (or "CANCELED") event later.
+  if (verified.ok && !webhookTimestampFresh(body.timestamp)) {
+    log.warn("Stale Lalamove webhook", { path, timestamp: body.timestamp });
+    return NextResponse.json({ error: "Stale event" }, { status: 401 });
+  }
   if (!verified.ok) {
     log.warn("Invalid Lalamove webhook signature", {
       path,
@@ -110,7 +117,7 @@ export async function POST(request: Request) {
       driverLng: location?.lng !== undefined ? String(location.lng) : undefined,
       pickedUp: courierStatus === "PICKED_UP",
       delivered: courierStatus === "COMPLETED",
-    });
+    }, "lalamove");
 
     if (!linked) {
       log.warn("Webhook for unknown Lalamove order", { providerOrderId });

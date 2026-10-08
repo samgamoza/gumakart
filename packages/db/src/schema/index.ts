@@ -975,6 +975,8 @@ export const tenantWallets = pgTable(
     pendingBalance: decimal("pending_balance", { precision: 12, scale: 2 })
       .default("0")
       .notNull(),
+    /** Security G2: what the seller owes the platform after a refund that exceeded the balance. Paid down by later credits. */
+    owedBalance: decimal("owed_balance", { precision: 12, scale: 2 }).default("0").notNull(),
     totalWithdrawn: decimal("total_withdrawn", { precision: 12, scale: 2 })
       .default("0")
       .notNull(),
@@ -998,6 +1000,8 @@ export const tenantPayouts = pgTable(
     destinationName: varchar("destination_name", { length: 120 }).notNull(),
     status: payoutStatusEnum("status").default("queued").notNull(),
     autoTriggered: boolean("auto_triggered").default(false).notNull(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    attempts: integer("attempts").default(0).notNull(),
     processedAt: timestamp("processed_at", { withTimezone: true }),
     failureReason: text("failure_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1023,14 +1027,61 @@ export const walletLedgerEntries = pgTable(
     feeAmount: decimal("fee_amount", { precision: 12, scale: 2 }).default("0").notNull(),
     netAmount: decimal("net_amount", { precision: 12, scale: 2 }).notNull(),
     description: text("description"),
+    /** Security G2: unique per money movement (sale:<order>, refund:<return>, payout:<id>) so a retry can't double-post. */
+    reference: varchar("reference", { length: 120 }),
     availableAt: timestamp("available_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("wallet_ledger_tenant_idx").on(table.tenantId, table.createdAt),
-    uniqueIndex("wallet_ledger_order_sale_idx").on(table.orderId, table.type),
+    uniqueIndex("wallet_ledger_one_sale_credit_idx").on(table.orderId).where(sql`${table.type} = 'sale_credit'`),
+    uniqueIndex("wallet_ledger_reference_idx").on(table.reference).where(sql`${table.reference} is not null`),
     index("wallet_ledger_pending_idx").on(table.status, table.availableAt),
   ]
+);
+
+/** Security G2 (GK-13): a gateway refund is recorded here first and sent after commit — one row, one refund. */
+export const gatewayRefunds = pgTable(
+  "gateway_refunds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+    orderId: uuid("order_id").references(() => orders.id).notNull(),
+    returnId: uuid("return_id"),
+    kind: varchar("kind", { length: 8 }).$type<"full" | "partial" | "edit">().notNull(),
+    gateway: paymentGatewayEnum("gateway").notNull(),
+    gatewayPaymentId: varchar("gateway_payment_id", { length: 255 }).notNull(),
+    amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+    status: varchar("status", { length: 12 }).$type<"pending" | "processing" | "sent" | "failed">().default("pending").notNull(),
+    gatewayRefundId: varchar("gateway_refund_id", { length: 255 }),
+    error: varchar("error", { length: 300 }),
+    attempts: integer("attempts").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("gateway_refunds_one_full_idx").on(table.orderId).where(sql`${table.kind} = 'full'`),
+    uniqueIndex("gateway_refunds_return_idx").on(table.returnId).where(sql`${table.returnId} is not null`),
+    index("gateway_refunds_order_idx").on(table.orderId, table.createdAt),
+  ]
+);
+
+/** Security G2 (GK-6): nightly ledger-vs-balance check per wallet. */
+export const walletReconciliations = pgTable(
+  "wallet_reconciliations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).defaultNow().notNull(),
+    ok: boolean("ok").notNull(),
+    walletAvailable: decimal("wallet_available", { precision: 12, scale: 2 }).notNull(),
+    walletPending: decimal("wallet_pending", { precision: 12, scale: 2 }).notNull(),
+    walletOwed: decimal("wallet_owed", { precision: 12, scale: 2 }).notNull(),
+    ledgerAvailable: decimal("ledger_available", { precision: 12, scale: 2 }).notNull(),
+    ledgerPending: decimal("ledger_pending", { precision: 12, scale: 2 }).notNull(),
+    note: varchar("note", { length: 300 }),
+  },
+  (table) => [index("wallet_reconciliations_tenant_idx").on(table.tenantId, table.checkedAt)]
 );
 
 // ─── Email one-time codes ─────────────────────────────────────────────────────
@@ -2489,7 +2540,7 @@ export const referrals = pgTable(
       .references(() => customers.id, { onDelete: "cascade" })
       .notNull(),
     orderId: uuid("order_id").references(() => orders.id, { onDelete: "set null" }),
-    status: varchar("status", { length: 10 }).$type<"rewarded" | "blocked">().notNull(),
+    status: varchar("status", { length: 10 }).$type<"rewarded" | "blocked" | "reversed">().notNull(),
     reason: varchar("reason", { length: 120 }),
     referrerCardId: uuid("referrer_card_id").references(() => giftCards.id, { onDelete: "set null" }),
     friendCardId: uuid("friend_card_id").references(() => giftCards.id, { onDelete: "set null" }),

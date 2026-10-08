@@ -7,7 +7,7 @@ import {
   COURIER_NOTES,
   createLogger,
   grabFulfillment,
-  verifyTimestampedHmacSignature,
+  verifyGrabWebhook,
 } from "@gumakart/services";
 
 const log = createLogger("webhook:grab");
@@ -37,15 +37,6 @@ interface GrabWebhookBody {
   timestamp?: string | number;
 }
 
-function verifySignature(rawBody: string, body: GrabWebhookBody, secret: string): boolean {
-  return verifyTimestampedHmacSignature({
-    rawBody,
-    signature: body.signature ?? "",
-    timestamp: body.timestamp ?? "",
-    secret,
-  });
-}
-
 
 export async function POST(request: Request) {
   // Without a secret anyone could mark orders delivered — refuse everything.
@@ -64,8 +55,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!verifySignature(rawBody, body, secret)) {
-    log.warn("Invalid Grab webhook signature");
+  // Security G2 (GK-19): signature from headers (or the body minus its own signature)
+  // over a fresh timestamp — a captured event can't be replayed after 5 minutes.
+  const verified = verifyGrabWebhook({ rawBody, headers: request.headers, body: body as GrabWebhookBody & Record<string, unknown>, secret });
+  if (!verified.ok) {
+    log.warn("Invalid Grab webhook signature", { reason: verified.reason });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -88,7 +82,7 @@ export async function POST(request: Request) {
       ),
       delivered: courierStatus === "COMPLETED" || courierStatus === "DELIVERED",
       trackingUrl: body.trackingURL ?? body.trackingUrl,
-    });
+    }, "grab");
 
     if (!linked) {
       log.warn("Webhook for unknown Grab delivery", { providerOrderId });

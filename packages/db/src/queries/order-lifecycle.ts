@@ -1,12 +1,14 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import {
+  gatewayRefunds,
   orderItems,
   orderStatusHistory,
   orders,
   paymentTransactions,
   productVariants,
   products,
+  stockMovements,
   tenants,
 } from "../schema/index";
 import {
@@ -172,21 +174,43 @@ export async function restockOrderInTx(
     .returning({ id: orders.id, tenantId: orders.tenantId, locationId: orders.locationId });
   if (!claimed) return false;
 
-  const lines = await tx
+  // Security G2 (GK-14): put back what was actually TAKEN for this order, not
+  // what was ordered. The stock ledger knows: every decrement for the order
+  // (sale, edit, exchange) and every unit already returned carry its id.
+  // Pre-orders, short offline sales and item-by-item returns therefore never
+  // inflate stock.
+  const taken = await tx
     .select({
-      variantId: orderItems.variantId,
-      quantity: orderItems.quantity,
-      trackInventory: products.trackInventory,
+      variantId: stockMovements.variantId,
+      net: sql<number>`-sum(${stockMovements.delta})`,
     })
-    .from(orderItems)
-    .innerJoin(products, eq(products.id, orderItems.productId))
-    .where(eq(orderItems.orderId, orderId));
+    .from(stockMovements)
+    .where(and(eq(stockMovements.orderId, orderId), sql`${stockMovements.reason} not in ('restock_cancel', 'restock_refund', 'restock_expiry')`))
+    .groupBy(stockMovements.variantId);
 
-  // One ledger row per variant even if the order had it on two lines.
   const qtyByVariant = new Map<string, number>();
-  for (const line of lines) {
-    if (!line.variantId || !line.trackInventory) continue;
-    qtyByVariant.set(line.variantId, (qtyByVariant.get(line.variantId) ?? 0) + line.quantity);
+  if (taken.length > 0) {
+    for (const row of taken) {
+      const n = Number(row.net);
+      if (row.variantId && n > 0) qtyByVariant.set(row.variantId, n);
+    }
+  } else {
+    // Orders older than the stock ledger: fall back to the lines, minus what came back.
+    const lines = await tx
+      .select({
+        variantId: orderItems.variantId,
+        quantity: orderItems.quantity,
+        returnedQty: orderItems.returnedQty,
+        trackInventory: products.trackInventory,
+      })
+      .from(orderItems)
+      .innerJoin(products, eq(products.id, orderItems.productId))
+      .where(eq(orderItems.orderId, orderId));
+    for (const line of lines) {
+      if (!line.variantId || !line.trackInventory) continue;
+      const left = Math.max(0, line.quantity - (line.returnedQty ?? 0));
+      if (left > 0) qtyByVariant.set(line.variantId, (qtyByVariant.get(line.variantId) ?? 0) + left);
+    }
   }
 
   for (const [variantId, quantity] of qtyByVariant) {
@@ -549,6 +573,8 @@ export interface GatewayRefundRequest {
   gatewayPaymentId: string | null;
   totalCentavos: number;
   orderNumber: string;
+  /** Security G2: the gateway_refunds row id — pass it to the gateway as the idempotency key where supported. */
+  refundRowId?: string;
 }
 
 export interface RefundOrderResult {
@@ -557,18 +583,105 @@ export interface RefundOrderResult {
   restocked: boolean;
   /** True for manual/COD: the seller returns the money directly to the buyer. */
   refundedOutsidePlatform: boolean;
+  /** Security G2: the gateway refund was recorded but could not be sent; retry it (POST …/refunds/:id/retry). */
+  gatewayRefundPending?: { refundRowId: string; error: string };
 }
 
 const LOCK_NOT_AVAILABLE = "55P03";
 
 /**
+ * Security G2 (GK-13): record a gateway refund inside the order's transaction.
+ * The money is NOT sent here. One row per refund (unique per order for a full
+ * refund, per return row for a partial one), so a rolled-back transaction or a
+ * repeated request can never pay the buyer twice: the send happens after
+ * commit, through settleGatewayRefund(), against that one row.
+ */
+export async function recordGatewayRefundInTx(
+  tx: Tx,
+  input: { tenantId: string; orderId: string; kind: "full" | "partial" | "edit"; gateway: "paymongo" | "xendit"; gatewayPaymentId: string; amountCentavos: number; returnId?: string | null }
+): Promise<{ id: string }> {
+  const [row] = await tx
+    .insert(gatewayRefunds)
+    .values({
+      tenantId: input.tenantId,
+      orderId: input.orderId,
+      returnId: input.returnId ?? null,
+      kind: input.kind,
+      gateway: input.gateway,
+      gatewayPaymentId: input.gatewayPaymentId,
+      amount: (input.amountCentavos / 100).toFixed(2),
+      status: "pending",
+    })
+    .returning({ id: gatewayRefunds.id });
+  return row!;
+}
+
+/**
+ * Sends one recorded gateway refund. Claims the row (pending/failed → processing)
+ * first, so two callers can't both send it; records the gateway's refund id or
+ * the error. Safe to call again for a failed row (that is the retry).
+ */
+export async function settleGatewayRefund(
+  refundRowId: string,
+  refundAtGateway: (request: GatewayRefundRequest) => Promise<{ refundId?: string }>
+): Promise<{ ok: true; refundId?: string } | { ok: false; error: string }> {
+  const db = getDb();
+  const [claimed] = await db
+    .update(gatewayRefunds)
+    .set({ status: "processing", attempts: sql`${gatewayRefunds.attempts} + 1` })
+    .where(and(eq(gatewayRefunds.id, refundRowId), inArray(gatewayRefunds.status, ["pending", "failed"])))
+    .returning();
+  if (!claimed) {
+    const [row] = await db.select().from(gatewayRefunds).where(eq(gatewayRefunds.id, refundRowId)).limit(1);
+    if (row?.status === "sent") return { ok: true, refundId: row.gatewayRefundId ?? undefined };
+    return { ok: false, error: "This refund is already being sent." };
+  }
+  const [order] = await db.select({ orderNumber: orders.orderNumber }).from(orders).where(eq(orders.id, claimed.orderId)).limit(1);
+  try {
+    const res = await refundAtGateway({
+      gateway: claimed.gateway,
+      gatewayPaymentId: claimed.gatewayPaymentId,
+      totalCentavos: Math.round(Number(claimed.amount) * 100),
+      orderNumber: order?.orderNumber ?? "",
+      refundRowId: claimed.id,
+    });
+    const now = new Date();
+    await db
+      .update(gatewayRefunds)
+      .set({ status: "sent", gatewayRefundId: res.refundId ?? null, sentAt: now, error: null })
+      .where(eq(gatewayRefunds.id, claimed.id));
+    if (res.refundId) {
+      await db
+        .update(paymentTransactions)
+        .set({ refundId: res.refundId, ...(claimed.kind === "full" ? { refundedAt: now } : {}) })
+        .where(and(eq(paymentTransactions.orderId, claimed.orderId), eq(paymentTransactions.gatewayPaymentId, claimed.gatewayPaymentId)));
+    }
+    return { ok: true, refundId: res.refundId };
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+    await db.update(gatewayRefunds).set({ status: "failed", error: message }).where(eq(gatewayRefunds.id, claimed.id));
+    return { ok: false, error: message };
+  }
+}
+
+/** Gateway refunds for an order that still need sending (for the order page / retry). */
+export async function listPendingGatewayRefunds(tenantId: string, orderId: string) {
+  const db = getDb();
+  return db
+    .select({ id: gatewayRefunds.id, kind: gatewayRefunds.kind, amount: gatewayRefunds.amount, status: gatewayRefunds.status, error: gatewayRefunds.error, attempts: gatewayRefunds.attempts, createdAt: gatewayRefunds.createdAt })
+    .from(gatewayRefunds)
+    .where(and(eq(gatewayRefunds.tenantId, tenantId), eq(gatewayRefunds.orderId, orderId), inArray(gatewayRefunds.status, ["pending", "processing", "failed"])))
+    .orderBy(gatewayRefunds.createdAt);
+}
+
+/**
  * Refunds a paid order exactly once.
  *
  * The order row is locked with NOWAIT for the whole operation, so a second
- * click (or a retry while the first is running) fails fast instead of issuing
- * a second gateway refund. The gateway call happens inside that lock; if the
- * DB write then fails, the error carries the gateway refund id so it can be
- * reconciled by hand.
+ * click (or a retry while the first is running) fails fast. Security G2: the
+ * gateway refund is recorded inside the transaction and SENT after commit —
+ * a transaction that rolls back leaves no money moved, and a retry finds the
+ * recorded row instead of refunding again.
  */
 export async function refundOrder(params: {
   tenantId: string;
@@ -578,10 +691,9 @@ export async function refundOrder(params: {
   refundAtGateway?: (request: GatewayRefundRequest) => Promise<{ refundId?: string }>;
 }): Promise<RefundOrderResult> {
   const db = getDb();
-  let gatewayRefundId: string | undefined;
 
   try {
-    const { refund, applied } = await db.transaction(async (tx) => {
+    const { refund, applied, refundRowId } = await db.transaction(async (tx) => {
       // Raw SQL on purpose: drizzle 0.38 renders `{ noWait: true }` as the
       // invalid "for update no wait".
       await tx.execute(
@@ -610,8 +722,9 @@ export async function refundOrder(params: {
         .limit(1);
 
       const gateway = txn?.gateway ?? (order.paymentMethod === "cod" ? "cod" : "manual");
-      const refundedOutsidePlatform = gateway !== "paymongo";
+      const refundedOutsidePlatform = gateway !== "paymongo" && gateway !== "xendit";
 
+      let refundRowId: string | undefined;
       if (!refundedOutsidePlatform) {
         if (!txn?.gatewayPaymentId) {
           throw new OrderError(
@@ -622,15 +735,12 @@ export async function refundOrder(params: {
         if (!params.refundAtGateway) {
           throw new Error("refundOrder: refundAtGateway is required for PayMongo payments.");
         }
-        const res = await params.refundAtGateway({
-          gateway,
-          gatewayPaymentId: txn.gatewayPaymentId,
-          // Phase 11: only what's left after partial refunds (returns).
-          // Phase 17: the gift-card part goes back on the card, not through the gateway.
-          totalCentavos: Math.max(0, Math.round(Number(order.total) * 100) - Math.round(Number(order.giftCardAmount ?? 0) * 100) - Math.round(Number(order.refundedAmount ?? 0) * 100)),
-          orderNumber: order.orderNumber,
-        });
-        gatewayRefundId = res.refundId;
+        // Phase 11: only what's left after partial refunds (returns).
+        // Phase 17: the gift-card part goes back on the card, not through the gateway.
+        const amountCentavos = Math.max(0, Math.round(Number(order.total) * 100) - Math.round(Number(order.giftCardAmount ?? 0) * 100) - Math.round(Number(order.refundedAmount ?? 0) * 100));
+        if (amountCentavos > 0) {
+          refundRowId = (await recordGatewayRefundInTx(tx, { tenantId: params.tenantId, orderId: order.id, kind: "full", gateway: gateway as "paymongo" | "xendit", gatewayPaymentId: txn.gatewayPaymentId, amountCentavos })).id;
+        }
       }
 
       const baseNote =
@@ -644,17 +754,23 @@ export async function refundOrder(params: {
         action: { type: "refund" },
         source: "seller",
         actorId: params.actorId,
-        note: gatewayRefundId ? `${baseNote} (${gatewayRefundId})` : baseNote,
-        payment: { refundId: gatewayRefundId ?? null, viaRefundFlow: true },
+        note: baseNote,
+        payment: { refundId: null, viaRefundFlow: true },
       });
       await tx.update(orders).set({ refundedAmount: order.total }).where(eq(orders.id, order.id));
       return {
         applied,
-        refund: { gateway, refundId: gatewayRefundId, restocked: applied.restocked, refundedOutsidePlatform },
+        refundRowId,
+        refund: { gateway, restocked: applied.restocked, refundedOutsidePlatform } as RefundOrderResult,
       };
     });
 
     await applyWalletEffects(applied);
+    if (refundRowId && params.refundAtGateway) {
+      const sent = await settleGatewayRefund(refundRowId, params.refundAtGateway);
+      if (sent.ok) refund.refundId = sent.refundId;
+      else refund.gatewayRefundPending = { refundRowId, error: sent.error };
+    }
     return refund;
   } catch (error) {
     // postgres-js puts the SQLSTATE on `code`; newer drizzle wraps it in `cause`.
@@ -665,14 +781,9 @@ export async function refundOrder(params: {
         "INVALID_TRANSITION"
       );
     }
-    if (gatewayRefundId) {
-      const wrapped = new Error(
-        `Refund ${gatewayRefundId} was issued at the gateway but could not be recorded: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      (wrapped as Error & { gatewayRefundId?: string }).gatewayRefundId = gatewayRefundId;
-      throw wrapped;
+    const dup = error as { code?: string; cause?: { code?: string; constraint_name?: string } } | null;
+    if (dup?.code === "23505" || dup?.cause?.code === "23505") {
+      throw new OrderError("A gateway refund for this order was already recorded. Check the order's refunds before trying again.", "INVALID_TRANSITION");
     }
     throw error;
   }

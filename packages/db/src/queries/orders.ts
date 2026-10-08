@@ -282,17 +282,15 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
 
     // Enforce the coupon redemption cap (Constitutional review C1). A coupon only
     // "redeems" when it would actually apply (active + subtotal >= minSubtotal), so
-    // we only block in that case. Redemptions are counted against prior orders that
-    // recorded this coupon code for the tenant, inside this transaction. Note: under
-    // READ COMMITTED two checkouts of the same coupon racing within the same instant
-    // can each see count = max-1 and both succeed, so the cap is a soft limit with a
-    // narrow over-redemption window; a hard guarantee would need a dedicated counter
-    // row locked FOR UPDATE (deferred — see review remediation).
+    // we only block in that case. Security G2 (GK-17): checkouts that use the same
+    // coupon are serialised with a transaction-scoped advisory lock before the
+    // count, so two parallel checkouts can no longer both see max-1 and both pass.
     if (input.couponCode) {
       const coupon = findActiveCoupon(checkoutConfig, input.couponCode);
       if (coupon && coupon.maxRedemptions && coupon.maxRedemptions > 0) {
         const wouldApply = subtotalCentavos >= toCentavos(coupon.minSubtotal ?? 0);
         if (wouldApply) {
+          await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`coupon:${tenant.id}:${coupon.code.toLowerCase()}`}))`);
           const [usage] = await tx
             .select({ count: sql<number>`count(*)` })
             .from(orders)
@@ -385,8 +383,11 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         .onConflictDoUpdate({
           target: [customers.tenantId, customers.phone],
           set: {
-            name: sql`coalesce(nullif(excluded.name, ''), ${customers.name})`,
-            email: sql`coalesce(nullif(excluded.email, ''), ${customers.email})`,
+            // Security G2 (GK-18): a guest checkout matched by phone alone never
+            // rewrites what the shop already knows about that customer — it only
+            // fills in blanks. The name/email typed at checkout stay on the order.
+            name: sql`coalesce(nullif(${customers.name}, ''), excluded.name)`,
+            email: sql`coalesce(nullif(${customers.email}, ''), excluded.email)`,
             lastOrderAt: nowTs,
             updatedAt: nowTs,
             // Consent is only ever granted here, never silently withdrawn by a later order.
@@ -690,6 +691,10 @@ export interface MarkOrderPaidResult {
   transitioned?: boolean;
   /** Payment landed on a cancelled/refunded order — needs a refund. */
   paidAfterCancel?: boolean;
+  /** Security G2 (GK-16): a second charge on an already-paid order — kept as a failed row, needs a refund. */
+  duplicate?: boolean;
+  /** Security G2 (GK-16): the gateway's amount/currency did not match our charge row — not confirmed. */
+  amountMismatch?: boolean;
 }
 
 /**
@@ -704,7 +709,8 @@ export interface MarkOrderPaidResult {
 export async function markOrderPaidByIntent(
   gatewayIntentId: string,
   gatewayPaymentId?: string,
-  rawWebhookJson?: unknown
+  rawWebhookJson?: unknown,
+  paid?: { amountCentavos?: number; currency?: string }
 ): Promise<MarkOrderPaidResult> {
   const db = getDb();
   let applied: Awaited<ReturnType<typeof applyOrderActionInTx>> | null = null;
@@ -727,6 +733,53 @@ export async function markOrderPaidByIntent(
 
     const now = new Date();
     const wasPaid = txn.status === "paid";
+
+    // Security G2 (GK-16): the gateway's figure must match what we charged, and
+    // a second charge on an order that is already paid is never confirmed —
+    // it is kept as a flagged row for the seller to refund.
+    const expectedCentavos = Math.round(Number(txn.amount) * 100);
+    if (!wasPaid && paid?.amountCentavos !== undefined && paid.amountCentavos !== expectedCentavos) {
+      await tx
+        .update(paymentTransactions)
+        .set({ status: "failed", gatewayPaymentId: gatewayPaymentId ?? txn.gatewayPaymentId, failureReason: `amount mismatch: gateway ${paid.amountCentavos} vs expected ${expectedCentavos}`.slice(0, 255), ...(rawWebhookJson !== undefined ? { rawWebhookJson } : {}) })
+        .where(eq(paymentTransactions.id, txn.id));
+      await insertOutboxEvent(tx, {
+        name: "Order.PaymentMismatch.V1",
+        tenantId: order.tenantId,
+        idempotencyKey: `Order.PaymentMismatch.V1:${txn.id}:${gatewayPaymentId ?? "none"}`,
+        data: { tenantId: order.tenantId, orderId: order.id, orderNumber: order.orderNumber, expectedCentavos, gotCentavos: paid.amountCentavos, currency: paid.currency ?? null },
+      });
+      return { ok: true, orderId: order.id, orderNumber: order.orderNumber, tenantId: order.tenantId, total: order.total, transitioned: false, amountMismatch: true } as MarkOrderPaidResult;
+    }
+    if (!wasPaid && paid?.currency && paid.currency.toUpperCase() !== (txn.currency ?? "PHP").toUpperCase()) {
+      await tx
+        .update(paymentTransactions)
+        .set({ status: "failed", failureReason: `currency mismatch: ${paid.currency}`.slice(0, 255), ...(rawWebhookJson !== undefined ? { rawWebhookJson } : {}) })
+        .where(eq(paymentTransactions.id, txn.id));
+      return { ok: true, orderId: order.id, orderNumber: order.orderNumber, tenantId: order.tenantId, total: order.total, transitioned: false, amountMismatch: true } as MarkOrderPaidResult;
+    }
+    const [otherPaid] = await tx
+      .select({ id: paymentTransactions.id })
+      .from(paymentTransactions)
+      .where(and(eq(paymentTransactions.orderId, order.id), eq(paymentTransactions.status, "paid"), sql`${paymentTransactions.id} <> ${txn.id}`, sql`coalesce(${paymentTransactions.gatewayIntentId}, '') not like 'pos\\_%'`, sql`coalesce(${paymentTransactions.gatewayIntentId}, '') not like 'giftcard\\_%'`))
+      .limit(1);
+    if (!wasPaid && otherPaid) {
+      await tx
+        .update(paymentTransactions)
+        .set({ status: "failed", gatewayPaymentId: gatewayPaymentId ?? txn.gatewayPaymentId, failureReason: "duplicate payment: the order was already paid — refund this charge", ...(rawWebhookJson !== undefined ? { rawWebhookJson } : {}) })
+        .where(eq(paymentTransactions.id, txn.id));
+      const [history] = await tx
+        .insert(orderStatusHistory)
+        .values({ orderId: order.id, status: order.status, event: "duplicate_payment", note: `A second payment arrived for an order that was already paid${gatewayPaymentId ? ` (${gatewayPaymentId})` : ""} — refund it from PayMongo` })
+        .returning({ id: orderStatusHistory.id });
+      await insertOutboxEvent(tx, {
+        name: "Order.DuplicatePayment.V1",
+        tenantId: order.tenantId,
+        idempotencyKey: `Order.DuplicatePayment.V1:${order.id}:${history!.id}`,
+        data: { tenantId: order.tenantId, orderId: order.id, orderNumber: order.orderNumber, gatewayPaymentId: gatewayPaymentId ?? null, amountCentavos: expectedCentavos },
+      });
+      return { ok: true, orderId: order.id, orderNumber: order.orderNumber, tenantId: order.tenantId, total: order.total, transitioned: false, duplicate: true } as MarkOrderPaidResult;
+    }
     await tx
       .update(paymentTransactions)
       .set({

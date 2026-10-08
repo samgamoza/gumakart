@@ -64,7 +64,37 @@ export async function attachReferralCode(tenantId: string, orderId: string, rawC
 const lastDigits = (p: string | null | undefined) => (p ?? "").replace(/\D/g, "").slice(-10);
 
 /** Rewards (or blocks) referred first orders. Idempotent; run from the loyalty cron. */
-export async function syncReferrals(opts: { tenantId?: string; limit?: number; now?: Date } = {}): Promise<{ rewarded: number; blocked: number }> {
+/**
+ * Security G2 (GK-17): a rewarded referral whose qualifying order was since
+ * refunded or cancelled is clawed back — both store-credit cards are disabled
+ * with whatever balance is left on them, and the referral is marked reversed.
+ * Returns how many were reversed.
+ */
+export async function clawBackReferrals(tenantId?: string): Promise<number> {
+  const due = await rows<{ id: string; referrer_card_id: string | null; friend_card_id: string | null }>(sql`
+    select r.id, r.referrer_card_id, r.friend_card_id
+    from referrals r
+    join orders o on o.id = r.order_id
+    where r.status = 'rewarded' ${tenantId ? sql`and r.tenant_id = ${tenantId}` : sql``}
+      and (coalesce(o.order_state::text, '') = 'cancelled' or o.payment_state = 'refunded' or o.voided_at is not null)
+    limit 200`);
+  let reversed = 0;
+  for (const r of due) {
+    await getDb().transaction(async (tx) => {
+      const claimed = (await tx.execute(sql`update referrals set status = 'reversed', reason = 'Order refunded or cancelled' where id = ${r.id} and status = 'rewarded' returning id`)) as unknown as unknown[];
+      if (!claimed.length) return; // another run got here first
+      for (const cardId of [r.referrer_card_id, r.friend_card_id]) {
+        if (!cardId) continue;
+        await tx.execute(sql`update gift_cards set status = 'disabled', balance = 0 where id = ${cardId} and kind = 'store_credit'`);
+      }
+      reversed++;
+    });
+  }
+  return reversed;
+}
+
+export async function syncReferrals(opts: { tenantId?: string; limit?: number; now?: Date } = {}): Promise<{ rewarded: number; blocked: number; reversed: number }> {
+  const reversed = await clawBackReferrals(opts.tenantId);
   const shops = await rows<{ id: string; s: { loyalty?: TenantLoyaltySettings } | null }>(sql`
     select id, settings_json as s from tenants
     where (settings_json -> 'loyalty' -> 'referral' ->> 'enabled') = 'true' ${opts.tenantId ? sql`and id = ${opts.tenantId}` : sql``}`);
@@ -148,7 +178,7 @@ export async function syncReferrals(opts: { tenantId?: string; limit?: number; n
       });
     }
   }
-  return { rewarded, blocked };
+  return { rewarded, blocked, reversed };
 }
 
 export interface ReferralSummary {

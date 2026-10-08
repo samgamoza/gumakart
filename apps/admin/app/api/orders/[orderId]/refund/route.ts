@@ -12,9 +12,10 @@ const log = createLogger("orders:refund");
  * Refunds a paid order exactly once (order row locked NOWAIT for the whole
  * operation — a double click gets "already in progress", not a second refund).
  *
- * PayMongo payments are refunded through the PayMongo refunds API inside that
- * lock. Direct e-wallet/bank transfers and COD are marked refunded and the
- * seller returns the money to the buyer themselves.
+ * PayMongo payments: the refund is recorded in the same transaction and sent
+ * after commit (security G2) — one row, one refund, retryable. Direct e-wallet/
+ * bank transfers and COD are marked refunded and the seller returns the money
+ * to the buyer themselves.
  */
 export async function POST(
   _request: Request,
@@ -58,6 +59,12 @@ export async function POST(
       refundId: result.refundId ?? null,
       refundedOutsidePlatform: result.refundedOutsidePlatform,
       restocked: result.restocked,
+      // Security G2: the order is refunded and the gateway refund is recorded; if sending it
+      // failed, the seller retries it — it can never be sent twice.
+      gatewayRefundPending: result.gatewayRefundPending ?? null,
+      warning: result.gatewayRefundPending
+        ? `The order is marked refunded, but PayMongo did not accept the refund yet (${result.gatewayRefundPending.error}). Retry it from the order page.`
+        : null,
     });
   } catch (error) {
     if (error instanceof ApiAuthError) {

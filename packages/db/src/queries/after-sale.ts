@@ -10,7 +10,8 @@ import {
   products,
   type OrderReturnItem,
 } from "../schema/index";
-import { applyOrderActionInTx, applyWalletEffects, restockOrderInTx, type ApplyOrderActionResult } from "./order-lifecycle";
+import { applyOrderActionInTx, applyWalletEffects, recordGatewayRefundInTx, restockOrderInTx, settleGatewayRefund, type ApplyOrderActionResult } from "./order-lifecycle";
+import { debitWalletForRefund } from "./wallet";
 import { OrderError } from "./order-status";
 import { issueGiftCardInTx, restoreGiftCardsForOrderInTx } from "./gift-cards";
 import { recordStockMovement } from "./stock-ledger";
@@ -292,7 +293,14 @@ export interface EditLineInput {
 }
 
 export interface GatewayPartialRefund {
-  (req: { gatewayPaymentId: string; amountCentavos: number; orderNumber: string; reason: string }): Promise<{ refundId?: string }>;
+  (req: { gatewayPaymentId: string; amountCentavos: number; orderNumber: string; reason: string; refundRowId?: string }): Promise<{ refundId?: string }>;
+}
+
+/** Security G2 (GK-13): sends a recorded partial refund after the transaction committed. */
+async function sendPartialRefund(refundRowId: string, refundAtGateway: GatewayPartialRefund, reason: string) {
+  return settleGatewayRefund(refundRowId, (req) =>
+    refundAtGateway({ gatewayPaymentId: req.gatewayPaymentId ?? "", amountCentavos: req.totalCentavos, orderNumber: req.orderNumber, reason, refundRowId: req.refundRowId })
+  );
 }
 
 export interface EditResult {
@@ -302,6 +310,8 @@ export interface EditResult {
   /** Paid orders that went down: the difference to give back. */
   refundDue: number;
   refundedAtGateway: boolean;
+  /** Security G2: recorded but not sent yet — retry from the order page. */
+  gatewayRefundPending?: { refundRowId: string; error: string };
   summary: string;
 }
 
@@ -319,7 +329,7 @@ export async function editOrderItems(
 ): Promise<EditResult> {
   if (lines.length > 100) throw new OrderError("Too many lines.", "INVALID_TRANSITION");
   const db = getDb();
-  return db.transaction(async (tx) => {
+  const committed = await db.transaction(async (tx) => {
     const order = await lockOrder(tx, tenantId, orderId);
     const [pending] = await tx
       .select({ id: paymentTransactions.id })
@@ -452,7 +462,7 @@ export async function editOrderItems(
     }
 
     let refundDueC = 0;
-    let gatewayRefundId: string | undefined;
+    let refundRowId: string | undefined;
     if (paid && newTotalC < oldTotalC) {
       refundDueC = oldTotalC - newTotalC;
       const [txn] = await tx
@@ -461,11 +471,12 @@ export async function editOrderItems(
         .where(and(eq(paymentTransactions.orderId, orderId), eq(paymentTransactions.status, "paid")))
         .orderBy(sql`${paymentTransactions.paidAt} desc nulls last`)
         .limit(1);
-      if (txn?.gateway === "paymongo") {
+      if (txn?.gateway === "paymongo" || txn?.gateway === "xendit") {
         if (!txn.gatewayPaymentId || !options.refundAtGateway) {
           throw new OrderError("This order was paid online — online refunds aren't switched on yet. Refund it from the PayMongo dashboard.", "INVALID_TRANSITION");
         }
-        gatewayRefundId = (await options.refundAtGateway({ gatewayPaymentId: txn.gatewayPaymentId, amountCentavos: refundDueC, orderNumber: order.orderNumber, reason: "order edited" })).refundId;
+        // Recorded now, sent after commit (security G2, GK-13).
+        refundRowId = (await recordGatewayRefundInTx(tx, { tenantId, orderId, kind: "edit", gateway: txn.gateway, gatewayPaymentId: txn.gatewayPaymentId, amountCentavos: refundDueC })).id;
       }
     }
 
@@ -481,7 +492,7 @@ export async function editOrderItems(
       note: summary.slice(0, 500),
       actorId: actor.userId,
     });
-    await tx.insert(orderReturns).values({
+    const [editRow] = await tx.insert(orderReturns).values({
       tenantId,
       orderId,
       kind: "edit",
@@ -496,21 +507,40 @@ export async function editOrderItems(
           restock: true,
         })),
       refundAmount: peso(refundDueC),
-      refundMethod: refundDueC ? (gatewayRefundId ? "original" : "shop") : "none",
-      gatewayRefundId: gatewayRefundId ?? null,
+      refundMethod: refundDueC ? (refundRowId ? "original" : "shop") : "none",
+      gatewayRefundId: null,
       note: options.note?.slice(0, 300) ?? null,
       actorUserId: actor.userId,
       actorName: actor.name.slice(0, 80),
-    });
+    }).returning({ id: orderReturns.id });
     return {
-      orderNumber: order.orderNumber,
-      oldTotal: oldTotalC / 100,
-      newTotal: newTotalC / 100,
-      refundDue: refundDueC / 100,
-      refundedAtGateway: Boolean(gatewayRefundId),
-      summary,
+      result: {
+        orderNumber: order.orderNumber,
+        oldTotal: oldTotalC / 100,
+        newTotal: newTotalC / 100,
+        refundDue: refundDueC / 100,
+        refundedAtGateway: false,
+        summary,
+      } as EditResult,
+      refundRowId,
+      refundDueC,
+      editRowId: editRow?.id,
     };
   });
+  // After commit: the wallet gives back its share, then the gateway refund is sent (once).
+  if (committed.refundDueC > 0) {
+    await debitWalletForRefund(orderId, committed.refundDueC, `refund:edit:${committed.editRowId ?? orderId}`, "Order edited · refund");
+  }
+  if (committed.refundRowId && options.refundAtGateway) {
+    const sent = await sendPartialRefund(committed.refundRowId, options.refundAtGateway, "order edited");
+    if (sent.ok) {
+      committed.result.refundedAtGateway = true;
+      if (sent.refundId && committed.editRowId) await db.update(orderReturns).set({ gatewayRefundId: sent.refundId }).where(eq(orderReturns.id, committed.editRowId));
+    } else {
+      committed.result.gatewayRefundPending = { refundRowId: committed.refundRowId, error: sent.error };
+    }
+  }
+  return committed.result;
 }
 
 // ─── Returns, exchanges, partial refunds ─────────────────────────────────────
@@ -545,6 +575,8 @@ export interface ReturnResult {
   fullyRefunded: boolean;
   restockedUnits: number;
   gatewayRefundId: string | null;
+  /** Security G2: recorded but not sent yet — retry from the order page. */
+  gatewayRefundPending?: { refundRowId: string; error: string };
   summary: string;
   /** Phase 17: the store credit issued when refundMethod = store_credit. */
   storeCredit?: { code: string; amount: number } | null;
@@ -625,7 +657,8 @@ export async function recordReturn(
     }
     const kind = items.some((i) => i.replacementVariantId) ? "exchange" : "return";
 
-    let gatewayRefundId: string | null = null;
+    const gatewayRefundId: string | null = null;
+    let gatewayCharge: { gateway: "paymongo" | "xendit"; gatewayPaymentId: string } | null = null;
     if (refundC > 0 && input.refundMethod === "original") {
       const [txn] = await tx
         .select()
@@ -633,11 +666,11 @@ export async function recordReturn(
         .where(and(eq(paymentTransactions.orderId, orderId), eq(paymentTransactions.status, "paid")))
         .orderBy(sql`${paymentTransactions.paidAt} desc nulls last`)
         .limit(1);
-      if (txn?.gateway === "paymongo") {
+      if (txn?.gateway === "paymongo" || txn?.gateway === "xendit") {
         if (!txn.gatewayPaymentId || !options.refundAtGateway) {
           throw new OrderError("This order was paid online — online refunds aren't switched on yet. Choose cash/GCash/Maya/bank and send it yourself.", "INVALID_TRANSITION");
         }
-        gatewayRefundId = (await options.refundAtGateway({ gatewayPaymentId: txn.gatewayPaymentId, amountCentavos: refundC, orderNumber: order.orderNumber, reason: "return" })).refundId ?? null;
+        gatewayCharge = { gateway: txn.gateway, gatewayPaymentId: txn.gatewayPaymentId };
       }
     }
 
@@ -678,6 +711,11 @@ export async function recordReturn(
         registerSessionId: input.registerSessionId ?? null,
       })
       .returning({ id: orderReturns.id });
+    // Security G2 (GK-13): the gateway refund is recorded against this return row and sent after commit.
+    let refundRowId: string | undefined;
+    if (gatewayCharge) {
+      refundRowId = (await recordGatewayRefundInTx(tx, { tenantId, orderId, kind: "partial", gateway: gatewayCharge.gateway, gatewayPaymentId: gatewayCharge.gatewayPaymentId, amountCentavos: refundC, returnId: row!.id })).id;
+    }
 
     const what = items.map((i) => `${i.qty}× ${i.title}${i.replacementTitle ? ` → ${i.replacementTitle}` : ""}`).join(", ");
     const summary = `${kind === "exchange" ? "Exchange" : "Return"} on ${order.orderNumber}${what ? `: ${what}` : ""}${refundC ? ` · refunded ₱${peso(refundC)}${storeCredit ? ` as store credit ${storeCredit.code}` : ""}` : ""}${collectedC ? ` · collected ₱${peso(collectedC)}` : ""}`;
@@ -699,10 +737,24 @@ export async function recordReturn(
       // The gift-card part was put back on its card by the refund action.
       if (giftC > 0) await tx.update(orders).set({ refundedAmount: order.total }).where(eq(orders.id, orderId));
     }
-    return { returnId: row!.id, orderNumber: order.orderNumber, refunded: refundC / 100, fullyRefunded, restockedUnits, gatewayRefundId, summary, storeCredit };
+    return { out: { returnId: row!.id, orderNumber: order.orderNumber, refunded: refundC / 100, fullyRefunded, restockedUnits, gatewayRefundId, summary, storeCredit } as ReturnResult, refundRowId, refundC, fullyRefunded };
   });
+  // After commit (security G2): the wallet gives back its share of a partial refund (a full
+  // refund is reversed by the wallet effects), then the recorded gateway refund is sent once.
+  if (result.refundC > 0 && !result.fullyRefunded) {
+    await debitWalletForRefund(orderId, result.refundC, `refund:return:${result.out.returnId}`, "Return · refund");
+  }
   if (applied) await applyWalletEffects(applied);
-  return result;
+  if (result.refundRowId && options.refundAtGateway) {
+    const sent = await sendPartialRefund(result.refundRowId, options.refundAtGateway, "return");
+    if (sent.ok) {
+      result.out.gatewayRefundId = sent.refundId ?? null;
+      if (sent.refundId) await db.update(orderReturns).set({ gatewayRefundId: sent.refundId }).where(eq(orderReturns.id, result.out.returnId));
+    } else {
+      result.out.gatewayRefundPending = { refundRowId: result.refundRowId, error: sent.error };
+    }
+  }
+  return result.out;
 }
 
 // ─── POS void ────────────────────────────────────────────────────────────────

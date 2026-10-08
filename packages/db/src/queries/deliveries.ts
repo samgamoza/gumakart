@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../client";
 import { deliveries, deliveryQuotes, orderStatusHistory, orders } from "../schema/index";
 import { applyOrderAction, factsOf } from "./order-lifecycle";
@@ -93,14 +93,16 @@ export interface DeliveryStatusPatch {
  */
 export async function updateDeliveryByProviderOrderId(
   providerOrderId: string,
-  patch: DeliveryStatusPatch
+  patch: DeliveryStatusPatch,
+  /** Security G2 (GK-19): the courier the webhook came from — a Grab id can never move a Lalamove booking. */
+  provider?: "lalamove" | "grab" | "manual" | "bayango"
 ): Promise<{ deliveryId: string; orderId: string; tenantId: string; orderStatus: string } | null> {
   const db = getDb();
   const [row] = await db
     .select({ delivery: deliveries, order: orders })
     .from(deliveries)
     .innerJoin(orders, eq(deliveries.orderId, orders.id))
-    .where(eq(deliveries.providerOrderId, providerOrderId))
+    .where(provider ? and(eq(deliveries.providerOrderId, providerOrderId), eq(deliveries.provider, provider)) : eq(deliveries.providerOrderId, providerOrderId))
     .limit(1);
   if (!row) return null;
 

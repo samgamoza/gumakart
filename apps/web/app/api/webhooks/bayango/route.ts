@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       trackingUrl: delivery.trackingUrl,
       pickedUp: status === "picked_up",
       delivered: status === "delivered",
-    });
+    }, "bayango");
 
     if (!linked) {
       log.warn("Webhook for unknown BayanGo delivery", {

@@ -33,7 +33,7 @@ export {
   type GrabBookInput,
   type GrabBookResult,
 } from "./delivery/grab";
-export { verifyTimestampedHmacSignature } from "./delivery/webhook-signature";
+export { verifyTimestampedHmacSignature, verifyGrabWebhook, webhookTimestampFresh } from "./delivery/webhook-signature";
 export { lalamoveSignatureBase, verifyLalamoveWebhook } from "./delivery/lalamove-webhook";
 export {
   normalizeOptOutPhone,

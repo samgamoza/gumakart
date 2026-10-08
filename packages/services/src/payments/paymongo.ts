@@ -55,6 +55,9 @@ export function parsePayMongoPaymentEvent(event: unknown): {
   intentId?: string;
   sessionId?: string;
   paymentId?: string;
+  /** What PayMongo says was paid (security G2, GK-16): checked against our charge row. */
+  amountCentavos?: number;
+  currency?: string;
 } | null {
   const attrs = (event as { data?: { attributes?: { type?: unknown; data?: unknown } } })?.data
     ?.attributes;
@@ -65,18 +68,23 @@ export function parsePayMongoPaymentEvent(event: unknown): {
   const r = resource?.attributes ?? {};
   if (attrs.type.startsWith("checkout_session.")) {
     const intent = r.payment_intent as { id?: string } | null | undefined;
-    const payments = Array.isArray(r.payments) ? (r.payments as Array<{ id?: string }>) : [];
+    const payments = Array.isArray(r.payments) ? (r.payments as Array<{ id?: string; attributes?: { amount?: unknown; currency?: unknown } }>) : [];
+    const paid = payments[0]?.attributes;
     return {
       type: attrs.type,
       sessionId: resource?.id,
       intentId: intent?.id,
       paymentId: payments[0]?.id,
+      amountCentavos: Number.isInteger(paid?.amount) ? Number(paid!.amount) : undefined,
+      currency: typeof paid?.currency === "string" ? paid.currency : undefined,
     };
   }
   return {
     type: attrs.type,
     intentId: typeof r.payment_intent_id === "string" ? r.payment_intent_id : undefined,
     paymentId: resource?.id,
+    amountCentavos: Number.isInteger(r.amount) ? Number(r.amount) : undefined,
+    currency: typeof r.currency === "string" ? r.currency : undefined,
   };
 }
 

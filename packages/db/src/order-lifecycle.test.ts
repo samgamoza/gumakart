@@ -31,6 +31,7 @@ import { getTenantSettings, updateTenantSettings } from "./queries/tenant-settin
 import { requestTenantPayout, WalletError } from "./queries/wallet";
 import {
   customers,
+  gatewayRefunds,
   kycDocuments,
   kycVerificationSessions,
   orderStatusHistory,
@@ -123,6 +124,7 @@ describe("order lifecycle", () => {
   after(async () => {
     const orderIds = db.select({ id: orders.id }).from(orders).where(eq(orders.tenantId, tenantId));
     await db.delete(walletLedgerEntries).where(eq(walletLedgerEntries.tenantId, tenantId));
+    await db.delete(gatewayRefunds).where(eq(gatewayRefunds.tenantId, tenantId));
     await db.delete(tenantPayouts).where(eq(tenantPayouts.tenantId, tenantId));
     await db.delete(tenantWallets).where(eq(tenantWallets.tenantId, tenantId));
     await db.delete(paymentTransactions).where(eq(paymentTransactions.tenantId, tenantId));
@@ -222,7 +224,9 @@ describe("order lifecycle", () => {
       .select()
       .from(walletLedgerEntries)
       .where(and(eq(walletLedgerEntries.orderId, order.id), eq(walletLedgerEntries.type, "sale_credit")));
-    assert.equal(credits.length, 1, "sale credited once");
+    // Security G2 (GK-6): cash the seller collected at the door never enters the
+    // platform wallet — only gateway money does.
+    assert.equal(credits.length, 0, "COD cash is not a platform-held balance");
   });
 
   it("expiry cancels stale unpaid orders and restocks, but skips ones with a payment reference", async () => {

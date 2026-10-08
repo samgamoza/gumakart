@@ -85,17 +85,18 @@ test("webhook parsing: hosted checkout and plain payment events", () => {
         type: "checkout_session.payment.paid",
         data: {
           id: "cs_1",
-          attributes: { payment_intent: { id: "pi_1" }, payments: [{ id: "pay_1" }] },
+          attributes: { payment_intent: { id: "pi_1" }, payments: [{ id: "pay_1", attributes: { amount: 12345, currency: "PHP" } }] },
         },
       },
     },
   });
-  assert.deepEqual(cs, { type: "checkout_session.payment.paid", sessionId: "cs_1", intentId: "pi_1", paymentId: "pay_1" });
+  // Security G2 (GK-16): the paid amount and currency ride along so the webhook can check them.
+  assert.deepEqual(cs, { type: "checkout_session.payment.paid", sessionId: "cs_1", intentId: "pi_1", paymentId: "pay_1", amountCentavos: 12345, currency: "PHP" });
 
   const paid = parsePayMongoPaymentEvent({
-    data: { attributes: { type: "payment.paid", data: { id: "pay_2", attributes: { payment_intent_id: "pi_2" } } } },
+    data: { attributes: { type: "payment.paid", data: { id: "pay_2", attributes: { payment_intent_id: "pi_2", amount: 500, currency: "PHP" } } } },
   });
-  assert.deepEqual(paid, { type: "payment.paid", intentId: "pi_2", paymentId: "pay_2" });
+  assert.deepEqual(paid, { type: "payment.paid", intentId: "pi_2", paymentId: "pay_2", amountCentavos: 500, currency: "PHP" });
 
   assert.equal(parsePayMongoPaymentEvent({ nope: true }), null);
 });

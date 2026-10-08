@@ -102,10 +102,17 @@ export async function POST(request: Request) {
   try {
     const isPaid = eventType === "payment.paid" || eventType === "checkout_session.payment.paid";
     if (isPaid && intentId) {
-      let result = await markOrderPaidByIntent(intentId, paymentId, event);
+      const paidFacts = { amountCentavos: parsed?.amountCentavos, currency: parsed?.currency };
+      let result = await markOrderPaidByIntent(intentId, paymentId, event, paidFacts);
       if (!result.ok && parsed?.sessionId && parsed.sessionId !== intentId) {
         // Session created before PayMongo assigned an intent — we stored the session id.
-        result = await markOrderPaidByIntent(parsed.sessionId, paymentId, event);
+        result = await markOrderPaidByIntent(parsed.sessionId, paymentId, event, paidFacts);
+      }
+      if (result.ok && result.duplicate) {
+        console.warn("[PayMongo Webhook] Duplicate payment on an already-paid order — refund needed", { intentId, orderNumber: result.orderNumber });
+      }
+      if (result.ok && result.amountMismatch) {
+        console.error("[PayMongo Webhook] Payment amount/currency did not match the charge — not confirmed", { intentId, orderNumber: result.orderNumber });
       }
       if (result.ok && result.paidAfterCancel) {
         // The order was cancelled/refunded before the money arrived. It stays
