@@ -539,6 +539,17 @@ export {
   type AuditLogItem,
 } from "./queries/platform";
 export {
+  recordAuditEvent,
+  listAuditEvents,
+  verifyAuditChain,
+  runAuditChainCheck,
+  latestChainChecks,
+  withCronLock,
+  type AuditEventInput,
+  type AuditEventRow,
+  type ChainCheckResult,
+} from "./queries/audit";
+export {
   getWalletSummary,
   listWalletLedger,
   listTenantPayouts,

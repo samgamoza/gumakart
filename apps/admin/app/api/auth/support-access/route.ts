@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clientIpFrom } from "@gumakart/services";
 import {
   SUPPORT_ACCESS_SESSION_MAX_AGE_SECONDS,
   createSessionToken,
@@ -6,7 +7,7 @@ import {
   sessionCookieHeader,
   verifySupportAccessGrantToken,
 } from "@gumakart/auth";
-import { consumeTokenOnce, getTenantStatusById } from "@gumakart/db";
+import { consumeTokenOnce, getTenantStatusById, recordAuditEvent } from "@gumakart/db";
 
 /**
  * Exchange a short-lived Platform grant for an admin-host session cookie.
@@ -62,6 +63,9 @@ export async function GET(request: Request) {
     },
     SUPPORT_ACCESS_SESSION_MAX_AGE_SECONDS
   );
+
+  // Security G3 (GK-20): support access is in the audit chain, in the shop's own log.
+  await recordAuditEvent({ tenantId: grant.tenantId, actorId: actor.userId, actorLabel: `Guma support (${actor.email})`, action: "support.access", entityType: "tenant", entityId: grant.tenantId, details: { ip: clientIpFrom(request) } });
 
   const dest = new URL("/", request.url);
   dest.searchParams.set("support", "1");

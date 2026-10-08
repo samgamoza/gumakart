@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AuthError, loginUser } from "@gumakart/auth";
-import { resolveSellerHomePath } from "@gumakart/db";
+import { recordAuditEvent, resolveSellerHomePath } from "@gumakart/db";
 import { homeFor, shopRoleOf } from "@gumakart/db/staff-permissions";
 import { clientIpFrom, limiterSubject, rateLimit, rateLimitBlocked } from "@gumakart/services";
 import { signInJson } from "@/lib/two-factor-sign-in";
@@ -38,6 +38,8 @@ export async function POST(request: Request) {
       );
     }
     const { user, sessionToken } = await loginUser(body);
+    // Security G3 (GK-20): sign-ins are in the audit chain.
+    await recordAuditEvent({ tenantId: user.tenantId ?? null, actorId: user.userId, actorLabel: user.email, action: "auth.login", entityType: "user", entityId: user.userId, details: { ip: clientIpFrom(request), role: user.role } });
 
     const shopRole = shopRoleOf(user);
     const redirectTo = user.role === "partner" ? "/partner" : shopRole && shopRole !== "owner" ? homeFor(shopRole) : await resolveSellerHomePath({

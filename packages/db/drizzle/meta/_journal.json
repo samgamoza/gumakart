@@ -316,6 +316,13 @@
       "when": 1787500000000,
       "tag": "0044_security_g2",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0045_security_g3",
+      "breakpoints": true
     }
   ]
 }

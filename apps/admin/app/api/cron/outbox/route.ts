@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { outboxBacklog, relayOutbox } from "@gumakart/db";
+import { outboxBacklog, relayOutbox, withCronLock } from "@gumakart/db";
 import { inngest, isInngestConfigured } from "@gumakart/events";
 import { handleOrderEvent } from "@/lib/automations";
 import { isCronAuthorized } from "@/lib/cron-auth";
@@ -22,19 +22,23 @@ export async function GET(request: Request) {
   }
   const live = isInngestConfigured();
   const sms: Array<{ recipe: string; status: string }> = [];
-  const result = await relayOutbox(
-    async (row) => {
-      const outcome = await handleOrderEvent(row);
-      if (outcome) sms.push(outcome);
-      if (!live) return;
-      await inngest.send({
-        id: row.idempotencyKey,
-        name: row.name,
-        data: { ...row.data, idempotencyKey: row.idempotencyKey },
-      });
-    },
-    { limit: 100 }
+  // Security G3: one relay at a time, so an event is never handled by two overlapping runs.
+  const result = await withCronLock("outbox", () =>
+    relayOutbox(
+      async (row) => {
+        const outcome = await handleOrderEvent(row);
+        if (outcome) sms.push(outcome);
+        if (!live) return;
+        await inngest.send({
+          id: row.idempotencyKey,
+          name: row.name,
+          data: { ...row.data, idempotencyKey: row.idempotencyKey },
+        });
+      },
+      { limit: 100 }
+    )
   );
+  if (!result) return NextResponse.json({ ok: true, skipped: "another run is still going" });
   const backlog = await outboxBacklog();
   if (backlog.stuck > 0) {
     console.error("[outbox] events gave up after max attempts", backlog);

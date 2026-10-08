@@ -9,6 +9,7 @@ import {
   smallint,
   date,
   bigint,
+  bigserial,
   decimal,
   jsonb,
   pgEnum,
@@ -1065,6 +1066,50 @@ export const gatewayRefunds = pgTable(
     index("gateway_refunds_order_idx").on(table.orderId, table.createdAt),
   ]
 );
+
+/** Security G3 (GK-20): hash-chained, append-only audit log — written by database triggers. */
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    seq: bigserial("seq", { mode: "number" }).primaryKey(),
+    id: uuid("id").defaultRandom().notNull(),
+    tenantId: uuid("tenant_id"),
+    actorId: uuid("actor_id"),
+    actorLabel: varchar("actor_label", { length: 120 }),
+    action: varchar("action", { length: 80 }).notNull(),
+    entityType: varchar("entity_type", { length: 40 }).notNull(),
+    entityId: varchar("entity_id", { length: 64 }),
+    details: jsonb("details").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    prevHash: varchar("prev_hash", { length: 64 }).notNull(),
+    hash: varchar("hash", { length: 64 }).notNull(),
+  },
+  (table) => [
+    index("audit_events_tenant_idx").on(table.tenantId, table.seq),
+    index("audit_events_entity_idx").on(table.entityType, table.entityId, table.seq),
+    index("audit_events_actor_idx").on(table.actorId, table.seq),
+  ]
+);
+
+export const auditChainChecks = pgTable("audit_chain_checks", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  tenantId: uuid("tenant_id"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).defaultNow().notNull(),
+  ok: boolean("ok").notNull(),
+  checked: bigint("checked", { mode: "number" }).notNull(),
+  firstBadSeq: bigint("first_bad_seq", { mode: "number" }),
+  problem: varchar("problem", { length: 300 }),
+  lastSeq: bigint("last_seq", { mode: "number" }),
+  lastHash: varchar("last_hash", { length: 64 }),
+});
+
+/** Security G3: scheduled jobs take a named lock so two runs never overlap. */
+export const cronLocks = pgTable("cron_locks", {
+  name: varchar("name", { length: 64 }).primaryKey(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  holder: varchar("holder", { length: 64 }),
+});
 
 /** Security G2 (GK-6): nightly ledger-vs-balance check per wallet. */
 export const walletReconciliations = pgTable(

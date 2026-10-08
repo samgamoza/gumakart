@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listSyncingMarketplaceAccounts } from "@gumakart/db";
+import { listSyncingMarketplaceAccounts, withCronLock } from "@gumakart/db";
 import { syncMarketplaceAccount } from "@/lib/marketplace-sync";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
@@ -8,17 +8,21 @@ import { isCronAuthorized } from "@/lib/cron-auth";
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
-    const accounts = await listSyncingMarketplaceAccounts(50);
-    let pushed = 0;
-    let imported = 0;
-    let failed = 0;
-    for (const account of accounts) {
-      const s = await syncMarketplaceAccount(account);
-      pushed += s.pushed;
-      imported += s.imported;
-      if (s.error) failed += 1;
-    }
-    return NextResponse.json({ ok: true, accounts: accounts.length, pushed, imported, failed });
+    const result = await withCronLock("marketplaces", async () => {
+      const accounts = await listSyncingMarketplaceAccounts(50);
+      let pushed = 0;
+      let imported = 0;
+      let failed = 0;
+      for (const account of accounts) {
+        const s = await syncMarketplaceAccount(account);
+        pushed += s.pushed;
+        imported += s.imported;
+        if (s.error) failed += 1;
+      }
+      return { accounts: accounts.length, pushed, imported, failed };
+    });
+    if (!result) return NextResponse.json({ ok: true, skipped: "another run is still going" });
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("[cron marketplaces]", error);
     return NextResponse.json({ ok: false, error: "Marketplace sync failed." }, { status: 500 });

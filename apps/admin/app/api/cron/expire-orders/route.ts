@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { DEFAULT_UNPAID_EXPIRY_HOURS, expireUnpaidOrders } from "@gumakart/db";
+import { DEFAULT_UNPAID_EXPIRY_HOURS, expireUnpaidOrders, withCronLock } from "@gumakart/db";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
 
@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
-  const result = await expireUnpaidOrders({ defaultHours: expiryHours() });
+  const result = await withCronLock("expire-orders", () => expireUnpaidOrders({ defaultHours: expiryHours() }));
+  if (!result) return NextResponse.json({ ok: true, skipped: "another run is still going" });
   return NextResponse.json({ ok: true, ...result });
 }

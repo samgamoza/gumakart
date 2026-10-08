@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@gumakart/db";
 import { captureError } from "@/lib/errors";
 import { runBilling } from "@/lib/billing-notices";
 import { isCronAuthorized } from "@/lib/cron-auth";
@@ -8,7 +9,9 @@ import { isCronAuthorized } from "@/lib/cron-auth";
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
-    return NextResponse.json({ ok: true, ...(await runBilling()) });
+    const result = await withCronLock("billing", () => runBilling());
+    if (!result) return NextResponse.json({ ok: true, skipped: "another run is still going" });
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     await captureError("GET /api/cron/billing", error);
     console.error("[cron billing]", error);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@gumakart/db";
 import { runCampaigns } from "@/lib/campaign-sender";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
@@ -7,7 +8,9 @@ import { isCronAuthorized } from "@/lib/cron-auth";
 export async function GET(request: Request) {
   if (!isCronAuthorized(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
-    return NextResponse.json({ ok: true, ...(await runCampaigns()) });
+    const result = await withCronLock("campaigns", () => runCampaigns());
+    if (!result) return NextResponse.json({ ok: true, skipped: "another run is still going" });
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("[cron campaigns]", error);
     return NextResponse.json({ ok: false, error: "Campaign run failed." }, { status: 500 });

@@ -35,6 +35,8 @@ export const CRON_JOBS: CronJob[] = [
   { path: "/api/cron/wallet-settlement", due: hourlyAt(40), maxGapMinutes: 130 },
   // Phase 16: plan reminders, grace period, downgrade after grace. Hourly.
   { path: "/api/cron/billing", due: hourlyAt(50), maxGapMinutes: 130 },
+  // Security G3: audit chain verification, daily at 18:15 UTC (02:15 Manila).
+  { path: "/api/cron/audit-chain", due: (t) => t.getUTCHours() === 18 && t.getUTCMinutes() === 15, maxGapMinutes: 26 * 60 },
   // AI agents — same times as the old vercel.json (UTC).
   { path: "/api/cron/agent-reminders", due: (t) => t.getUTCHours() === 9 && t.getUTCMinutes() === 0, maxGapMinutes: 26 * 60 },
   { path: "/api/cron/agents?mode=daily", due: (t) => t.getUTCHours() === 10 && t.getUTCMinutes() === 0, maxGapMinutes: 26 * 60 },
