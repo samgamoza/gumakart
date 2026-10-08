@@ -89,8 +89,11 @@ function VerifyEmailContent() {
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.ok) done(data.redirectTo);
-        else {
+        if (data.ok) {
+          // The link only confirms the address (GK-8); sign in normally afterwards.
+          setNotice("Email confirmed! Sign in to open your shop…");
+          setTimeout(() => router.push(data.redirectTo ?? "/login?verified=1"), 900);
+        } else {
           setNotice(null);
           setError((data.error ?? "This link is invalid or expired.") + " Use a code instead.");
         }

@@ -50,6 +50,6 @@ export async function POST(request: Request) {
     if (error instanceof ApiAuthError) return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
     console.error("[products/from-photo]", error);
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Could not read the photo." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Could not read the photo. Try another image." }, { status: 500 });
   }
 }

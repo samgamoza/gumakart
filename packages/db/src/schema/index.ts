@@ -2572,3 +2572,26 @@ export const wishlistItems = pgTable(
   },
   (table) => [index("wishlist_items_tenant_idx").on(table.tenantId, table.productId)]
 );
+
+// ─── Shared rate-limit counters (security G1, GK-2) ──────────────────────────
+// One row per limiter key and window start; every hit is an atomic UPSERT, so
+// the count is shared by every Worker isolate. Rows are tiny and are swept by
+// the hourly cron (`sweepRateLimits`).
+
+export const rateLimits = pgTable("rate_limits", {
+  key: varchar("key", { length: 200 }).primaryKey(),
+  count: integer("count").default(0).notNull(),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+// ─── Single-use tokens (GK-9) ────────────────────────────────────────────────
+// Support-access grants (and any future one-shot link) record their JWT id here
+// when redeemed; a second redemption finds the row and is refused.
+
+export const consumedTokens = pgTable("consumed_tokens", {
+  jti: varchar("jti", { length: 64 }).primaryKey(),
+  purpose: varchar("purpose", { length: 32 }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});

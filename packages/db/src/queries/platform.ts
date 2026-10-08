@@ -452,16 +452,24 @@ export async function getUserRoleCounts(): Promise<{ role: string; count: number
   return rows.map((r) => ({ role: r.role, count: r.n }));
 }
 
+/**
+ * Security G1 (GK-5): any status or role change bumps the session version, so every
+ * session the user holds — seller console, ops, support access — ends at once instead
+ * of running on for up to 7 days.
+ */
 export async function setUserStatus(id: string, status: UserStatus): Promise<void> {
   const db = getDb();
-  await db.update(users).set({ status }).where(eq(users.id, id));
+  await db
+    .update(users)
+    .set({ status, sessionVersion: sql`${users.sessionVersion} + 1` })
+    .where(eq(users.id, id));
 }
 
 export async function setUserRole(id: string, role: string): Promise<void> {
   const db = getDb();
   await db
     .update(users)
-    .set({ role: role as never })
+    .set({ role: role as never, sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.id, id));
 }
 

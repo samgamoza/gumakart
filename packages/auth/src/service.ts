@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   getDb,
   needsGumaLaunch,
@@ -104,11 +104,13 @@ export async function isSessionCurrent(
 ): Promise<boolean> {
   const db = getDb();
   const [row] = await db
-    .select({ sessionVersion: users.sessionVersion })
+    .select({ sessionVersion: users.sessionVersion, status: users.status })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   if (!row) return false;
+  // Security G1 (GK-5): a suspended or removed account has no current session, full stop.
+  if (row.status === "suspended" || row.status === "removed") return false;
   return (row.sessionVersion ?? 0) === tokenSessionVersion;
 }
 
@@ -331,10 +333,11 @@ export async function verifyUserEmail(token: string): Promise<SessionUser | null
 
   if (!row || row.user.email !== payload.email) return null;
 
+  // Security G1 (GK-8): single use — once the address is verified the link is spent.
   const [updated] = await db
     .update(users)
     .set({ emailVerifiedAt: new Date() })
-    .where(eq(users.id, row.user.id))
+    .where(and(eq(users.id, row.user.id), isNull(users.emailVerifiedAt)))
     .returning();
 
   if (!updated) return null;
@@ -362,8 +365,20 @@ export async function authenticateGoogleUser(profile: GoogleProfile): Promise<{
   const db = getDb();
   const existing = await findUserWithTenant(profile.email);
 
+  // Security G1: Google must vouch for the address before it can open or create an account here.
+  if (!profile.emailVerified) {
+    throw new AuthError("Verify this email with Google first, then sign in again.", "INVALID_CREDENTIALS");
+  }
+
   if (existing) {
     const { user, tenant } = existing;
+
+    if (user.status === "suspended") {
+      throw new AuthError("This account is suspended. Contact support for help.", "ACCOUNT_SUSPENDED");
+    }
+    if (user.status === "removed") {
+      throw new AuthError("This account is no longer active.", "INVALID_CREDENTIALS");
+    }
 
     if (user.passwordHash && !user.profileJson?.googleId) {
       throw new AuthError(
@@ -602,20 +617,14 @@ export async function getUserSessionById(userId: string): Promise<SessionUser | 
   return toSessionUser(row.user, row.tenant);
 }
 
-export async function sendVerificationEmail(
-  email: string,
-  verificationToken: string
-): Promise<void> {
-  const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001";
-  const verifyUrl = `${adminUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
-
-  if (process.env.RESEND_API_KEY) {
-    // Placeholder for future Resend integration
-    console.log(`[auth] Verification email for ${email}: ${verifyUrl}`);
-    return;
-  }
-
-  console.log(`[auth] Verify your Guma One email (${email}): ${verifyUrl}`);
+/**
+ * @deprecated Security G1 (GK-8). The seller console verifies with emailed codes
+ * (`issueEmailCode` + the app's mailer); the old link was printed to the logs, where
+ * anyone with log access could use it to sign in. This now only records that a link
+ * was requested — the token itself is never logged or sent.
+ */
+export async function sendVerificationEmail(email: string, _verificationToken: string): Promise<void> {
+  console.log(`[auth] Verification link requested for ${email}; links are retired — use the code flow.`);
 }
 
 export { normalizeSlug, slugFromShopName, validateSlug };

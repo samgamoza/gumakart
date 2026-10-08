@@ -1,9 +1,12 @@
 /**
  * Fixed-window rate limiter for public endpoints.
  *
- * Uses Upstash Redis (REST) when UPSTASH_REDIS_REST_URL / _TOKEN are set so
- * limits hold across serverless instances. Falls back to a per-instance
- * in-memory window otherwise (fine for dev, best-effort in prod).
+ * Order of preference (GK-2):
+ *   1. Upstash Redis (REST) when UPSTASH_REDIS_REST_URL / _TOKEN are set,
+ *   2. a shared backend registered by the app (the database counter in
+ *      @gumakart/db — one atomic UPSERT per hit, shared by every Worker isolate),
+ *   3. a per-instance in-memory window (dev only; on Workers every isolate
+ *      would count separately, which is what let limits be dodged).
  */
 
 export interface RateLimitOptions {
@@ -17,6 +20,32 @@ export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   retryAfterSeconds: number;
+}
+
+/**
+ * A shared counter: returns the hit count in the current window (after adding
+ * this hit when `consume` is true) and the seconds left in the window.
+ */
+export type SharedRateLimitBackend = (
+  key: string,
+  options: RateLimitOptions,
+  consume: boolean
+) => Promise<{ count: number; retryAfterSeconds: number }>;
+
+// Kept on globalThis (like the db client): Next bundles this module separately for the
+// instrumentation file and for each route, so a module-level variable would not be shared.
+declare global {
+  // eslint-disable-next-line no-var
+  var __gumaKartRateLimitBackend: SharedRateLimitBackend | null | undefined;
+}
+
+/** Registered once per server (each app’s instrumentation.ts) so limits hold across Worker isolates without Redis. */
+export function registerSharedRateLimitBackend(backend: SharedRateLimitBackend | null): void {
+  globalThis.__gumaKartRateLimitBackend = backend;
+}
+
+function sharedBackendNow(): SharedRateLimitBackend | null {
+  return globalThis.__gumaKartRateLimitBackend ?? null;
 }
 
 const memoryBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -97,20 +126,69 @@ export async function rateLimit(
     try {
       return await upstashRateLimit(url, token, key, options);
     } catch (error) {
-      console.error("[rate-limit] Upstash unavailable, falling back to memory:", error);
+      console.error("[rate-limit] Upstash unavailable, falling back:", error);
+    }
+  }
+  const sharedBackend = sharedBackendNow();
+  if (sharedBackend) {
+    try {
+      const { count, retryAfterSeconds } = await sharedBackend(key, options, true);
+      if (count > options.limit) return { allowed: false, remaining: 0, retryAfterSeconds: Math.max(1, retryAfterSeconds) };
+      return { allowed: true, remaining: options.limit - count, retryAfterSeconds: 0 };
+    } catch (error) {
+      console.error("[rate-limit] shared counter unavailable, falling back to memory:", error);
     }
   }
   return memoryRateLimit(key, options);
 }
 
-/** Best-effort client IP for rate-limit keys (Vercel/most proxies set x-forwarded-for). */
+/**
+ * Is `key` already over its limit? Reads without spending a hit, so a lockout can
+ * be charged only on failures: check first, then `rateLimit()` the same key when
+ * the attempt fails.
+ */
+export async function rateLimitBlocked(key: string, options: RateLimitOptions): Promise<RateLimitResult> {
+  const sharedBackend = sharedBackendNow();
+  if (sharedBackend) {
+    try {
+      const { count, retryAfterSeconds } = await sharedBackend(key, options, false);
+      if (count >= options.limit) return { allowed: false, remaining: 0, retryAfterSeconds: Math.max(1, retryAfterSeconds) };
+      return { allowed: true, remaining: options.limit - count, retryAfterSeconds: 0 };
+    } catch (error) {
+      console.error("[rate-limit] shared counter unavailable, falling back to memory:", error);
+    }
+  }
+  const bucket = memoryBuckets.get(key);
+  const now = Date.now();
+  if (!bucket || bucket.resetAt <= now) return { allowed: true, remaining: options.limit, retryAfterSeconds: 0 };
+  if (bucket.count >= options.limit) return { allowed: false, remaining: 0, retryAfterSeconds: Math.ceil((bucket.resetAt - now) / 1000) };
+  return { allowed: true, remaining: options.limit - bucket.count, retryAfterSeconds: 0 };
+}
+
+/**
+ * Client IP for rate-limit keys. Cloudflare sets `cf-connecting-ip` itself and
+ * overwrites anything the client sent, so it is trusted first; `x-forwarded-for`
+ * is only a fallback off Cloudflare (Vercel rewrites it too). A client-supplied
+ * header can therefore no longer give each request a fresh identity (GK-2).
+ */
 export function clientIpFrom(request: Request): string {
+  const cf = request.headers.get("cf-connecting-ip")?.trim();
+  if (cf) return cf;
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     const first = forwarded.split(",")[0]?.trim();
     if (first) return first;
   }
-  return request.headers.get("x-real-ip") ?? "unknown";
+  return "unknown";
+}
+
+/** A stable, non-reversible key part for an email or phone (never store the raw value in a limiter key). */
+export async function limiterSubject(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value.trim().toLowerCase());
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Standard 429 JSON body + headers for a blocked request. */

@@ -1,5 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { SignJWT, jwtVerify } from "jose";
 import { emailVerificationCodes, getDb } from "@gumakart/db";
 import { AuthError } from "./types";
@@ -130,18 +130,32 @@ export async function verifyEmailCode(
   }
 
   if (code.length !== 6 || !sameHash(row.codeHash, hashCode(email, purpose, code))) {
-    const attempts = row.attempts + 1;
-    await db
+    // Count the miss in one atomic statement (GK-3): parallel wrong guesses each
+    // spend a try, and the cap holds in the database rather than in a stale read.
+    const [bumped] = await db
       .update(emailVerificationCodes)
-      .set({ attempts })
-      .where(eq(emailVerificationCodes.id, row.id));
-    const left = EMAIL_CODE_MAX_ATTEMPTS - attempts;
+      .set({ attempts: sql`${emailVerificationCodes.attempts} + 1` })
+      .where(and(eq(emailVerificationCodes.id, row.id), lt(emailVerificationCodes.attempts, EMAIL_CODE_MAX_ATTEMPTS)))
+      .returning({ attempts: emailVerificationCodes.attempts });
+    const attempts = bumped?.attempts ?? EMAIL_CODE_MAX_ATTEMPTS;
+    const left = Math.max(0, EMAIL_CODE_MAX_ATTEMPTS - attempts);
     throw new AuthError(
       left > 0
         ? `That code isn't right. ${left} ${left === 1 ? "try" : "tries"} left.`
         : "Too many wrong tries. Request a new code.",
       left > 0 ? "CODE_INVALID" : "CODE_LOCKED"
     );
+  }
+
+  // The right code still has to beat the cap: a guess that arrived in parallel with
+  // the fifth miss must not win after the lock.
+  const [stillOpen] = await db
+    .select({ attempts: emailVerificationCodes.attempts })
+    .from(emailVerificationCodes)
+    .where(eq(emailVerificationCodes.id, row.id))
+    .limit(1);
+  if (!stillOpen || stillOpen.attempts >= EMAIL_CODE_MAX_ATTEMPTS) {
+    throw new AuthError("Too many wrong tries. Request a new code.", "CODE_LOCKED");
   }
 
   // Consume atomically so two parallel submits can't both succeed.

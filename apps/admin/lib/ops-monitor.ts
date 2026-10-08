@@ -7,6 +7,7 @@ import {
   syncOpsAlerts,
   type CronRunInput,
   type OpsAlertRow,
+  sweepRateLimits,
 } from "@gumakart/db";
 import { helpdeskNotifyEmail, sendTransactionalEmail } from "@gumakart/services";
 import { cronExpectations } from "@/lib/cron-schedule";
@@ -40,5 +41,7 @@ export async function reportAndMonitor(runs: CronRunInput[], now = new Date()) {
   const { opened, resolved, open } = await syncOpsAlerts(alertConditions(snapshot, cronExpectations(), now), now);
   if (await notify(opened, resolved)) await markAlertsNotified(opened.map((a) => a.id), now);
   const pruned = now.getUTCMinutes() === 0 ? await pruneCronRuns(now) : 0;
-  return { recorded, opened: opened.length, resolved: resolved.length, open: open.length, pruned };
+  // Security G1: expired rate-limit windows and redeemed one-shot tokens are swept hourly too.
+  const swept = now.getUTCMinutes() === 0 ? await sweepRateLimits().catch(() => 0) : 0;
+  return { recorded, opened: opened.length, resolved: resolved.length, open: open.length, pruned, swept };
 }

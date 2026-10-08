@@ -171,3 +171,20 @@ export async function getCustomerStatsForTenant(tenantId: string): Promise<Custo
     repeatRate: totalCustomers > 0 ? repeatCustomers / totalCustomers : 0,
   };
 }
+
+/**
+ * Security G1 (GK-7): has this phone number ever placed an order at the shop? Used to decide
+ * whether an abandoned-checkout text may go out — a stranger's number typed into the form
+ * has not consented to anything, however the checkbox was sent.
+ */
+export async function phoneHasOrderedAtShop(tenantId: string, phone: string): Promise<boolean> {
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return false;
+  const db = getDb();
+  const [row] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.tenantId, tenantId), sql`right(regexp_replace(coalesce(${orders.guestPhone}, ''), '\\D', '', 'g'), 10) = ${digits}`))
+    .limit(1);
+  return Boolean(row);
+}

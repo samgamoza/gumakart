@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { imageRemotePatterns } from "./lib/image-hosts";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -47,7 +48,11 @@ const nextConfig: NextConfig = {
     deviceSizes: [384, 640, 828, 1200],
     imageSizes: [64, 128, 256],
     formats: ["image/webp"],
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Security G1 (GK-11): only the hosts photos live on are optimised; see lib/image-hosts.ts.
+    // Other remote images are passed through untouched by the custom loader.
+    loader: "custom",
+    loaderFile: "./lib/image-loader.ts",
+    remotePatterns: imageRemotePatterns(),
     localPatterns: [
       { pathname: "/uploads/**" },
       { pathname: "/**" },

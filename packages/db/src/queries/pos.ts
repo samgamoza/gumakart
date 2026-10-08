@@ -61,6 +61,7 @@ export class PosError extends Error {
       | "EMPTY"
       | "STAFF_NAME_TAKEN"
       | "NOT_FOUND"
+      | "PRICE_BELOW_CATALOG"
   ) {
     super(message);
     this.name = "PosError";
@@ -770,6 +771,7 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
           status: products.status,
           basePrice: products.basePrice,
           trackInventory: products.trackInventory,
+          updatedAt: products.updatedAt,
           variantId: productVariants.id,
           variantTitle: productVariants.title,
           variantPrice: productVariants.price,
@@ -813,6 +815,17 @@ export async function createPosSale(input: PosSaleInput): Promise<PosReceipt> {
         }
         let unit = toCentavos(row.hasOptions && row.variantPrice != null ? row.variantPrice : row.basePrice);
         const offlinePrice = offline ? offlinePrices.get(`${productId}:${variantId ?? ""}`) : undefined;
+        if (offlinePrice !== undefined && offlinePrice < unit && !(offline && row.updatedAt > offline.rungAt)) {
+          // Security G1 (GK-4): an offline sale can't undercut the catalogue. The register only
+          // ever charges the price it cached, so a lower figure is legitimate only when the
+          // owner raised the price *after* the sale was rung (the product changed since
+          // `rungAt`). Otherwise it is a tampered request and goes to the owner's
+          // offline-review queue instead of being booked.
+          throw new PosError(
+            `"${row.title}" was sent at ₱${(offlinePrice / 100).toFixed(2)} but the catalogue price is ₱${(unit / 100).toFixed(2)}. Offline sales can't be recorded below the catalogue price — review it under Settings → POS → Offline sales.`,
+            "PRICE_BELOW_CATALOG"
+          );
+        }
         if (offlinePrice !== undefined && offlinePrice !== unit) {
           issues.push({
             kind: "price_changed",

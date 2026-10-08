@@ -176,14 +176,32 @@ describe("syncing offline sales", () => {
   });
 
   it("price changed meanwhile: keeps what the buyer paid and flags it", async () => {
-    await db.update(products).set({ basePrice: "120.00" }).where(eq(products.id, ids.a));
+    // The owner raised the price after the sale was rung (every product edit stamps updated_at).
+    const rungAt = new Date(Date.now() - 5 * 60_000);
+    await db.update(products).set({ basePrice: "120.00", updatedAt: new Date() }).where(eq(products.id, ids.a));
     await db.update(productVariants).set({ price: "120.00" }).where(eq(productVariants.id, ids.aVar));
-    const r = await offlineSale({});
+    const r = await offlineSale({ rungAt });
     assert.equal(r.totals.total, 100);
     assert.equal(r.items[0]!.unitPrice, 100);
     const [issue] = await listSyncIssues(shop.id, { open: true });
     assert.equal(issue!.kind, "price_changed");
     // Online sales use today's price.
+    await db.update(products).set({ basePrice: "100.00" }).where(eq(products.id, ids.a));
+    await db.update(productVariants).set({ price: "100.00" }).where(eq(productVariants.id, ids.aVar));
+  });
+
+  it("security G1 (GK-4): a lower price with no price change since the sale is refused for review", async () => {
+    await db.update(products).set({ basePrice: "120.00", updatedAt: new Date(Date.now() - 60 * 60_000) }).where(eq(products.id, ids.a));
+    await db.update(productVariants).set({ price: "120.00" }).where(eq(productVariants.id, ids.aVar));
+    await assert.rejects(
+      offlineSale({ rungAt: new Date() }),
+      (e: unknown) => (e as { code?: string }).code === "PRICE_BELOW_CATALOG"
+    );
+    // Paying more than the catalogue is never refused (the device had an old, higher price).
+    await db.update(products).set({ basePrice: "90.00" }).where(eq(products.id, ids.a));
+    await db.update(productVariants).set({ price: "90.00" }).where(eq(productVariants.id, ids.aVar));
+    const r = await offlineSale({ rungAt: new Date() });
+    assert.equal(r.totals.total, 100);
     await db.update(products).set({ basePrice: "100.00" }).where(eq(products.id, ids.a));
     await db.update(productVariants).set({ price: "100.00" }).where(eq(productVariants.id, ids.aVar));
   });

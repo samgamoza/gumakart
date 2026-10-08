@@ -94,7 +94,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/brand/") ||
     // Phase 12b: the register's offline service worker (cashiers have no seller session).
     pathname === "/pos-sw.js" ||
-    /\.(ico|png|jpe?g|gif|webp|avif|svg|txt|xml|webmanifest)$/.test(pathname)
+    // Static assets only — never an /api route dressed up with an image extension (security G1).
+    (!pathname.startsWith("/api/") && /\.(ico|png|jpe?g|gif|webp|avif|svg|txt|xml|webmanifest)$/.test(pathname))
   ) {
     return pass(request);
   }

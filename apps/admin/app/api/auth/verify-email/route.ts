@@ -1,69 +1,36 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  createEmailVerificationToken,
-  createSessionToken,
-  getUserSessionById,
-  hasTwoFactor,
-  sendVerificationEmail,
-  sessionCookieHeader,
-  verifyUserEmail,
-} from "@gumakart/auth";
-import { getSessionFromRequest } from "@gumakart/auth";
-import { resolveSellerHomePath } from "@gumakart/db";
+import { verifyUserEmail } from "@gumakart/auth";
+import { clientIpFrom, rateLimit } from "@gumakart/services";
 
 const bodySchema = z.object({
-  token: z.string().min(10).optional(),
+  token: z.string().min(10),
 });
 
+/**
+ * Legacy emailed-link verification. Security G1 (GK-8): the link now only marks the
+ * address verified — it is single use and never signs anyone in. The person signs in
+ * normally afterwards. New codes are sent by /api/auth/verify-email/code.
+ */
 export async function POST(request: Request) {
   try {
-    const json = await request.json();
-    const { token } = bodySchema.parse(json);
-
-    if (token) {
-      const user = await verifyUserEmail(token);
-      if (!user) {
-        return NextResponse.json(
-          { ok: false, error: "This verification link is invalid or expired." },
-          { status: 400 }
-        );
-      }
-
-      // Phase 21: an email link is not a second factor — two-step accounts sign in normally.
-      if (await hasTwoFactor(user.userId)) {
-        return NextResponse.json({ ok: true, user, redirectTo: "/login" });
-      }
-      const sessionToken = await createSessionToken(user);
-      const redirectTo = await resolveSellerHomePath({
-        tenantId: user.tenantId,
-        emailVerified: true,
-        preferLaunchWhenUnverified: true,
-      });
-      const response = NextResponse.json({ ok: true, user, redirectTo });
-      response.headers.set("Set-Cookie", sessionCookieHeader(sessionToken));
-      return response;
+    const limited = await rateLimit(`verify-link:${clientIpFrom(request)}`, { limit: 20, windowSeconds: 600 });
+    if (!limited.allowed) {
+      return NextResponse.json({ ok: false, error: "Too many tries. Wait a few minutes." }, { status: 429 });
     }
-
-    const session = await getSessionFromRequest(request);
-    if (!session) {
-      return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
-    }
-
-    const user = await getUserSessionById(session.userId);
+    const { token } = bodySchema.parse(await request.json());
+    const user = await verifyUserEmail(token);
     if (!user) {
-      return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "This verification link is invalid, expired or already used." },
+        { status: 400 }
+      );
     }
-
-    if (user.emailVerified) {
-      return NextResponse.json({ ok: true, user, message: "Email already verified." });
-    }
-
-    const verificationToken = await createEmailVerificationToken(user.userId, user.email);
-    await sendVerificationEmail(user.email, verificationToken);
-
-    return NextResponse.json({ ok: true, message: "Verification email sent." });
+    return NextResponse.json({ ok: true, verified: true, redirectTo: "/login?verified=1" });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ ok: false, error: "This verification link is invalid." }, { status: 400 });
+    }
     console.error("[auth/verify-email]", error);
     return NextResponse.json({ ok: false, error: "Something went wrong." }, { status: 500 });
   }

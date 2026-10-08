@@ -6,7 +6,7 @@ import {
   sessionCookieHeader,
   verifySupportAccessGrantToken,
 } from "@gumakart/auth";
-import { getTenantStatusById } from "@gumakart/db";
+import { consumeTokenOnce, getTenantStatusById } from "@gumakart/db";
 
 /**
  * Exchange a short-lived Platform grant for an admin-host session cookie.
@@ -23,6 +23,14 @@ export async function GET(request: Request) {
   if (!grant) {
     return NextResponse.redirect(
       new URL("/login?error=Support+access+link+expired.+Open+the+shop+again+from+Platform.", request.url)
+    );
+  }
+
+  // Security G1 (GK-9): a grant opens exactly one session. The link in the browser
+  // history or a log is spent the moment it is used.
+  if (!(await consumeTokenOnce(grant.jti, "support_access", grant.expiresAt))) {
+    return NextResponse.redirect(
+      new URL("/login?error=This+support+access+link+was+already+used.+Open+the+shop+again+from+Platform.", request.url)
     );
   }
 

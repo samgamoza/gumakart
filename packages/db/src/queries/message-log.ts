@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { messageLog, messagingOptOuts, type MessageChannel } from "../schema/index";
 
@@ -106,6 +106,10 @@ export async function addOptOut(input: {
     .onConflictDoNothing();
 }
 
+/** Per-number ceilings for 24 hours, platform-wide (GK-7). */
+export const SMS_DAILY_CAP_MARKETING = 3;
+export const SMS_DAILY_CAP_TRANSACTIONAL = 15;
+
 export async function sendWithLog(
   entry: MessageEntry,
   send: () => Promise<ProviderSendResult>
@@ -148,6 +152,33 @@ export async function sendWithLog(
       .set({ status: "suppressed", suppressedReason: "opted_out" })
       .where(eq(messageLog.id, reserved.id));
     return { status: "suppressed", reason: "opted_out", logId: reserved.id };
+  }
+
+  // Security G1 (GK-7): a hard ceiling per phone number per day across every shop, so no
+  // combination of carts, alerts and orders can turn the platform into an SMS cannon aimed
+  // at one person. Marketing is capped tighter than order updates.
+  if (entry.channel === "sms") {
+    const cap = entry.kind === "marketing" ? SMS_DAILY_CAP_MARKETING : SMS_DAILY_CAP_TRANSACTIONAL;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [{ n }] = await db
+      .select({ n: count() })
+      .from(messageLog)
+      .where(
+        and(
+          eq(messageLog.channel, "sms"),
+          eq(messageLog.recipient, normalizePhone(entry.recipient)),
+          inArray(messageLog.status, ["queued", "sent", "delivered"]),
+          gte(messageLog.createdAt, since),
+          ne(messageLog.id, reserved.id)
+        )
+      );
+    if (Number(n) >= cap) {
+      await db
+        .update(messageLog)
+        .set({ status: "suppressed", suppressedReason: "daily_cap" })
+        .where(eq(messageLog.id, reserved.id));
+      return { status: "suppressed", reason: "daily_cap", logId: reserved.id };
+    }
   }
 
   try {

@@ -27,6 +27,7 @@ export {
   clearSessionCookieHeader,
   getSessionCookieOptions,
   type SupportAccessGrant,
+  type VerifiedSupportAccessGrant,
 } from "./session";
 
 export {

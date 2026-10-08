@@ -5,6 +5,17 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Security G1 (GK-2): rate limits count in the shared database table instead of
+    // per-isolate memory, so every Worker copy enforces the same limit.
+    try {
+      const [{ registerSharedRateLimitBackend }, { dbRateLimitHit }] = await Promise.all([
+        import("@gumakart/services"),
+        import("@gumakart/db"),
+      ]);
+      registerSharedRateLimitBackend(dbRateLimitHit);
+    } catch {
+      /* falls back to the in-memory window */
+    }
     try {
       const { installErrorCapture } = await import("./instrumentation-node");
       installErrorCapture();

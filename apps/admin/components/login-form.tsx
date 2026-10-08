@@ -31,6 +31,7 @@ export function LoginForm() {
     if (oauthError) {
       setError(decodeURIComponent(oauthError.replace(/\+/g, " ")));
     }
+    if (searchParams.get("verified") === "1") setNotice("Email confirmed. Sign in to open your shop.");
     if (searchParams.get("step") === "2fa") {
       setCodeStep(true);
       if (searchParams.get("reset") === "1") setNotice("Your password was changed. Enter your sign-in code to finish.");
@@ -152,6 +153,7 @@ export function LoginForm() {
       <AuthDivider />
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {notice && <p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200">{notice}</p>}
         <AuthError message={error} />
 
         <AuthField label="Email" id="email">

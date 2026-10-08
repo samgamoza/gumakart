@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   getTenantStorefrontBySlug,
+  phoneHasOrderedAtShop,
   upsertCheckoutSession,
 } from "@gumakart/db";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
+import { currentBuyer } from "@/lib/guma-id";
+
+const digits10 = (value: string) => value.replace(/\D/g, "").slice(-10);
 
 const bodySchema = z.object({
   tenantSlug: z.string().min(1).max(64),
@@ -33,6 +37,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Shop not found." }, { status: 404 });
     }
 
+    const phone = typeof body.customer?.phone === "string" ? body.customer.phone : null;
+
+    // Security G1 (GK-7): a ticked box is not consent from whoever owns the number. Recovery
+    // texts are only armed when the number is proven to be this shopper's — a signed-in
+    // Guma ID whose verified phone matches, or a number that has ordered here before.
+    let marketingConsent: boolean | undefined = body.smsConsent;
+    if (body.smsConsent && phone) {
+      const buyer = await currentBuyer().catch(() => null);
+      const ownsNumber = Boolean(buyer && digits10(buyer.phone) === digits10(phone) && digits10(phone).length === 10);
+      marketingConsent = ownsNumber || (await phoneHasOrderedAtShop(tenant.id, phone));
+    } else if (body.smsConsent) {
+      marketingConsent = false;
+    }
+
     const session = await upsertCheckoutSession({
       tenantId: tenant.id,
       sessionKey: body.sessionKey,
@@ -40,8 +58,8 @@ export async function POST(request: Request) {
       customerJson: body.customer,
       addressJson: body.address,
       couponCode: body.couponCode ?? null,
-      phone: typeof body.customer?.phone === "string" ? body.customer.phone : null,
-      marketingConsent: body.smsConsent,
+      phone,
+      marketingConsent,
       sourceChannel: "storefront",
     });
 

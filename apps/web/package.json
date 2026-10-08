@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test lib/image-sizes.test.ts"
+    "test": "tsx --test lib/image-sizes.test.ts lib/security-g1.test.ts"
   },
   "dependencies": {
     "@gumakart/ai": "workspace:*",

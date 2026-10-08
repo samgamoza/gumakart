@@ -82,6 +82,9 @@ export type SupportAccessGrant = {
   tenantName: string;
 };
 
+/** What a verified grant carries back, including the one-shot id the exchange route records (GK-9). */
+export type VerifiedSupportAccessGrant = SupportAccessGrant & { jti: string; expiresAt: Date };
+
 /** Short-lived token — exchanged on admin.* so the cookie is set on that host. */
 export async function createSupportAccessGrantToken(
   input: SupportAccessGrant
@@ -95,6 +98,7 @@ export async function createSupportAccessGrantToken(
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(input.actorUserId)
+    .setJti(crypto.randomUUID())
     .setIssuedAt()
     .setExpirationTime(`${SUPPORT_ACCESS_GRANT_MAX_AGE_SECONDS}s`)
     .sign(getAuthSecret());
@@ -102,10 +106,11 @@ export async function createSupportAccessGrantToken(
 
 export async function verifySupportAccessGrantToken(
   token: string
-): Promise<SupportAccessGrant | null> {
+): Promise<VerifiedSupportAccessGrant | null> {
   try {
     const { payload } = await jwtVerify(token, getAuthSecret());
     if (payload.purpose !== "support_access") return null;
+    if (typeof payload.jti !== "string" || typeof payload.exp !== "number") return null;
     const actorUserId = payload.sub;
     const actorEmail = payload.email;
     const tenantId = payload.tenantId;
@@ -120,7 +125,7 @@ export async function verifySupportAccessGrantToken(
     ) {
       return null;
     }
-    return { actorUserId, actorEmail, tenantId, tenantSlug, tenantName };
+    return { actorUserId, actorEmail, tenantId, tenantSlug, tenantName, jti: payload.jti, expiresAt: new Date(payload.exp * 1000) };
   } catch {
     return null;
   }

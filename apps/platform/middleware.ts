@@ -23,7 +23,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/brand/") ||
-    /\.(ico|png|jpe?g|gif|webp|avif|svg|txt|xml|webmanifest)$/.test(pathname)
+    // Static assets only — never an /api route dressed up with an image extension (security G1).
+    (!pathname.startsWith("/api/") && /\.(ico|png|jpe?g|gif|webp|avif|svg|txt|xml|webmanifest)$/.test(pathname))
   ) {
     return NextResponse.next();
   }

@@ -115,11 +115,26 @@ export async function saveProductImage(
   return storeBuffer(tenantId, filename, buffer, mime);
 }
 
+/** Hosts our own uploads can live on (Vercel Blob). Nothing else is ever fetched (GK-12). */
+function isOwnUploadHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host.endsWith(".public.blob.vercel-storage.com")) return true;
+  const extra = (process.env.PRODUCT_UPLOAD_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  return extra.includes(host);
+}
+
 function assertTenantOwnsImage(tenantId: string, imageUrl: string): void {
   if (imageUrl.startsWith("http")) {
-    // Blob URLs keep the pathname we wrote: products/<tenantId>/<file>
-    const pathname = new URL(imageUrl).pathname;
-    if (!pathname.includes(`/products/${tenantId}/`)) {
+    // Security G1 (GK-12): an absolute URL must be one of *our* uploads — https, on the
+    // storage host we write to, under this shop's folder. "Path contains the tenant id"
+    // alone let the server fetch any website (SSRF, quota burn).
+    let url: URL;
+    try {
+      url = new URL(imageUrl);
+    } catch {
+      throw new Error("Image must belong to your shop.");
+    }
+    if (url.protocol !== "https:" || !isOwnUploadHost(url.hostname) || !url.pathname.startsWith(`/products/${tenantId}/`) || url.pathname.includes("..")) {
       throw new Error("Image must belong to your shop.");
     }
     return;
@@ -148,9 +163,17 @@ export async function readProductImageBuffer(
   assertTenantOwnsImage(tenantId, imageUrl);
 
   if (imageUrl.startsWith("http")) {
-    const res = await fetch(imageUrl);
+    // No redirects (a redirect could leave the allow-listed host), a time limit, an image
+    // content type and the same 5 MB ceiling as uploads.
+    const res = await fetch(imageUrl, { redirect: "error", signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error("Could not load the original image.");
-    return Buffer.from(await res.arrayBuffer());
+    const type = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+    if (!type.startsWith("image/")) throw new Error("Could not load the original image.");
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > MAX_BYTES) throw new Error("Image must be 5 MB or smaller.");
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.byteLength > MAX_BYTES) throw new Error("Image must be 5 MB or smaller.");
+    return buffer;
   }
   const stored = await readProductUpload(tenantId, imageUrl);
   if (!stored) throw new Error("Could not load the original image.");

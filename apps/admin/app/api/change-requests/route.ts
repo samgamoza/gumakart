@@ -459,7 +459,7 @@ export async function POST(request: Request) {
     }
     console.error("[change-requests POST]", error);
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Something went wrong." },
+      { ok: false, error: "Something went wrong." },
       { status: 500 }
     );
   }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AuthError, loginUser } from "@gumakart/auth";
 import { resolveSellerHomePath } from "@gumakart/db";
 import { homeFor, shopRoleOf } from "@gumakart/db/staff-permissions";
-import { clientIpFrom, rateLimit } from "@gumakart/services";
+import { clientIpFrom, limiterSubject, rateLimit, rateLimitBlocked } from "@gumakart/services";
 import { signInJson } from "@/lib/two-factor-sign-in";
 
 const loginSchema = z.object({
@@ -11,7 +11,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+/** Per-account lock (GK-2): 8 wrong passwords in 15 minutes locks that email, whatever the IP. */
+const ACCOUNT_LOCK = { limit: 8, windowSeconds: 900 };
+
 export async function POST(request: Request) {
+  let lockKey: string | null = null;
   try {
     const limited = await rateLimit(`login:${clientIpFrom(request)}`, {
       limit: 10,
@@ -25,6 +29,14 @@ export async function POST(request: Request) {
     }
 
     const body = loginSchema.parse(await request.json());
+    lockKey = `login-fail:${await limiterSubject(body.email)}`;
+    const locked = await rateLimitBlocked(lockKey, ACCOUNT_LOCK);
+    if (!locked.allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Too many wrong passwords for this account. Try again in a few minutes or reset your password." },
+        { status: 429, headers: { "Retry-After": String(locked.retryAfterSeconds) } }
+      );
+    }
     const { user, sessionToken } = await loginUser(body);
 
     const shopRole = shopRoleOf(user);
@@ -38,6 +50,7 @@ export async function POST(request: Request) {
     return signInJson(user, sessionToken, { user, redirectTo });
   } catch (error) {
     if (error instanceof AuthError) {
+      if (lockKey && error.code === "INVALID_CREDENTIALS") await rateLimit(lockKey, ACCOUNT_LOCK);
       return NextResponse.json({ ok: false, error: error.message, code: error.code }, { status: 401 });
     }
     if (error instanceof z.ZodError) {

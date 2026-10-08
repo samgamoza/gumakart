@@ -156,6 +156,7 @@ export {
   type CustomerSummary,
   type CustomerDetail,
   type CustomerStats,
+  phoneHasOrderedAtShop,
 } from "./queries/customers";
 export {
   getPlatformSetting,
@@ -1079,3 +1080,4 @@ export {
   type DemandSummary,
 } from "./queries/demand";
 export { activePreorder, shipDateLabel, manilaToday, type PreorderSettings } from "./types/demand";
+export { dbRateLimitHit, sweepRateLimits, consumeTokenOnce, isTokenConsumed } from "./queries/rate-limits";

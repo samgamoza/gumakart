@@ -103,10 +103,14 @@ export {
 } from "./notifications/sms";
 export {
   rateLimit,
+  rateLimitBlocked,
+  registerSharedRateLimitBackend,
+  limiterSubject,
   clientIpFrom,
   rateLimitResponseInit,
   type RateLimitOptions,
   type RateLimitResult,
+  type SharedRateLimitBackend,
 } from "./rate-limit";
 export { createLogger, captureError, type Logger, type LogContext } from "./logging";
 export {
