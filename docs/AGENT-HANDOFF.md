@@ -1,12 +1,13 @@
 # Guma Kart — Agent Handoff Document
 
-**Last updated:** 2026-10-07 (Phases 8–24, 26, 27, 31–34 built and approved; paused for Sam to migrate 0038–0042 and deploy — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
+**Last updated:** 2026-10-08 (Phases 8–24, 26, 27, 31–34 and security slice G1 built and approved; paused for Sam to migrate 0038–0043 and deploy — see “Resume here” below). Earlier: 2026-10-03 Cloudflare Workers setup; Phase 1 + 2 of the V1 plan.  
 **Purpose:** Hands-off context for the next agent or developer. Read this before making changes.
 
-## ▶ Resume here — 2026-10-07 (all approved; paused for deploy)
+## ▶ Resume here — 2026-10-08 (all approved; paused for deploy)
 
-**Status.** Everything below is built, committed on branch `wip/uncommitted-work-2026-08-01` and approved. Work is paused until Sam migrates Neon (0038–0042) and pushes; deploy steps are under "Before pushing". Live so far: up to Phase 21 (deploy #20, `df6d24c`).
+**Status.** Everything below is built, committed on branch `wip/uncommitted-work-2026-08-01` and approved. Work is paused until Sam migrates Neon (0038–0043) and pushes; deploy steps are under "Before pushing". Live so far: up to Phase 21 (deploy #20, `df6d24c`).
 
+- `b688cf1` **Security G1** from the 2026-10-07 three-app audit: JSON-LD escaping, trusted client IP + shared `rate_limits` counter + per-account login lock, atomic code counters, POS offline price guard, suspension ends sessions, single-use verification link and support-access grants (`consumed_tokens`), recovery texts only to proven numbers + per-number daily SMS cap, image allow-list and safe photo fetch. Migration **0043_security_g1** (the Phase 2 constraints in `drizzle-pending/` become 0044 later). `docs/SECURITY-G1-NOTES.md`. Next: G2 money integrity (keep `WALLET_PAYOUTS_ENABLED` off until then), G3 audit log, G4 headers/CI. Approved.
 - `98681ce` Phase 34c **Palenke shop theme** (seller-picked, free; gradient banner in the shop colour, real payment methods, category chips, Details / Add to basket cards, Suki referral strip only when loyalty + referrals are on). No migration. Approved.
 - `eb1015d` Phase 34b checkout in the shop's own colour (no more fixed orange), white fields, soft cards. No migration. Approved.
 - `a739dc9` Phase 34a **light seller dashboard** (Palenke look; Sun/Moon toggle keeps dark mode per device). No migration. Approved.
