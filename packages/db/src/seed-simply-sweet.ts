@@ -11,7 +11,13 @@ config({ path: path.join(rootDir, ".env") });
 
 const SLUG = "simply-sweet";
 const EMAIL = "hello@simplysweetcreations.com";
-const PASSWORD = "SimplySweet2026!";
+// Security G4 (GK-25): the seller's password comes from the environment, never from the repo.
+// If this account exists on Neon with the old hard-coded password, rotate it.
+const PASSWORD = process.env.SEED_SIMPLY_SWEET_PASSWORD ?? "";
+if (!PASSWORD || PASSWORD.length < 12) {
+  console.error("Set SEED_SIMPLY_SWEET_PASSWORD (12+ characters) before running this seed.");
+  process.exit(1);
+}
 const LOGO_URL =
   "https://media.base44.com/images/public/6a4ba7511766086b2db6e7c5/5c6e9ed4e_logo_simply_sweet.png";
 const COVER_URL =
@@ -204,7 +210,7 @@ async function seedSimplySweet() {
   console.log("Simply Sweet seed complete.");
   console.log(`  Admin:      http://localhost:3001`);
   console.log(`  Login:      ${EMAIL}`);
-  console.log(`  Password:   ${PASSWORD}`);
+  console.log("  Password:   (the SEED_SIMPLY_SWEET_PASSWORD you set)");
   console.log(`  Storefront: http://localhost:3000/${SLUG}`);
 }
 

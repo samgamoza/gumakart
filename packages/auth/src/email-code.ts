@@ -16,7 +16,7 @@ import { AuthError } from "./types";
  * (proof the email is verified) that /api/auth/signup requires.
  */
 
-export type EmailCodePurpose = "signup" | "verify" | "reset";
+export type EmailCodePurpose = "signup" | "verify" | "reset" | "enroll";
 
 export const EMAIL_CODE_TTL_SECONDS = 10 * 60;
 export const EMAIL_CODE_RESEND_SECONDS = 60;
@@ -199,7 +199,9 @@ export function verificationCodeEmail(code: string, purpose: EmailCodePurpose): 
 } {
   const minutes = Math.round(EMAIL_CODE_TTL_SECONDS / 60);
   const intro =
-    purpose === "signup"
+    purpose === "enroll"
+      ? "Use this code to confirm you are setting up two-factor sign-in for your Guma ops account:"
+      : purpose === "signup"
       ? "Use this code to finish creating your Guma Kart shop:"
       : purpose === "reset"
         ? "Use this code to reset your Guma Kart password:"

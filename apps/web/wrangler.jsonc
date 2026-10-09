@@ -8,6 +8,9 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "observability": { "enabled": true },
+  // Security G4 (GK-24): no *.workers.dev or preview URL — only the custom domain, behind the zone's WAF and rate rules.
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [{ "pattern": "kart.guma.one", "custom_domain": true }],
   // Phase 20: Cloudflare Images — resizes /_next/image and seller uploads (?w=). 5,000 unique
   // transformations/month free; then $0.50 per 1,000 on a paid plan.

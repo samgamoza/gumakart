@@ -8,6 +8,9 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "observability": { "enabled": true },
+  // Security G4 (GK-24): no *.workers.dev or preview URL — only the custom domain, behind the zone's WAF and rate rules.
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [{ "pattern": "ops.guma.one", "custom_domain": true }],
   // Cloudflare Hyperdrive "gumakart-db" -> Neon production (direct). getDb() uses it on Workers.
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "93f8b5636eb1478c9f3d13b3e7d589b8" }],

@@ -28,7 +28,9 @@ export async function enhanceProductPhoto(inputBuffer: Buffer): Promise<Buffer> 
 async function enhanceLocally(inputBuffer: Buffer): Promise<Buffer> {
   // Loaded only in local dev; kept out of the Workers bundle.
   const sharpModule = "sharp";
-  const sharp = (await import(/* webpackIgnore: true */ sharpModule)).default as typeof import("sharp");
+  // sharp 0.35 types the module as a namespace with a callable default; older versions as the callable itself.
+  const loaded = (await import(/* webpackIgnore: true */ sharpModule)) as { default?: unknown };
+  const sharp = (loaded.default ?? loaded) as typeof import("sharp").default;
 
   const normalized = await sharp(inputBuffer).rotate().png().toBuffer();
   const cutout = await removeProductBackground(normalized);

@@ -25,13 +25,16 @@
   .env.cloudflare on the first run. Safe launch defaults are added too:
   WALLET_PAYOUTS_ENABLED=false, BAYANGO_ENABLED=false, NEXT_PUBLIC_PLAN_BILLING_ENABLED=false.
 
-  Cloudflare token (CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in .env, or the Kuya Eddie .env):
-    Account -> Workers Scripts:Edit, Workers R2 Storage:Edit
-    Zone (guma.one) -> Workers Routes:Edit, DNS:Edit, Zone:Read
+  Cloudflare token (CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in this repo's .env):
+    Security G4 (GK-24): use a token made for Guma Kart ONLY — Workers Scripts:Edit, Workers R2
+    Storage:Read (bucket check), Zone:Read on guma.one, User:API Tokens:Read for the verify call.
+    No DNS:Edit (this script never edits DNS any more) and not the Kuya Eddie token.
+    Account -> Workers Scripts:Edit, Workers R2 Storage:Read
+    Zone (guma.one) -> Workers Routes:Edit, Zone:Read   (no DNS:Edit any more)
 
   admin.guma.one / ops.guma.one (and kart.guma.one) may still be Cloudflare Tunnel routes to
   Proxmox CT 106. A Worker custom domain can't share a hostname with a DNS record, so the
-  script offers to delete that tunnel CNAME first (asks unless -Yes). Rollback: delete the
+  script now only warns about that tunnel CNAME — delete it in the dashboard. Rollback: delete the
   Worker's custom domain and add the public hostname back on the tunnel.
 #>
 param(
@@ -111,16 +114,11 @@ $prod = ReadEnvFile $prodFile
 foreach ($k in $prod.Keys) { $envMap[$k] = $prod[$k] }
 if (Test-Path $prodFile) { Info "using .env + $prodFile ($($prod.Count) overrides)" } else { Info "using .env (no $prodFile yet)" }
 
-foreach ($fallback in @("E:\All Apps\Kuya Eddie\.env", "E:\All apps\Kuya Eddie\.env", "D:\All Apps\Kuya Eddie\.env")) {
-  if ((-not $envMap["CLOUDFLARE_API_TOKEN"]) -and (Test-Path $fallback)) {
-    $ke = ReadEnvFile $fallback
-    if ($ke["CLOUDFLARE_API_TOKEN"]) { $envMap["CLOUDFLARE_API_TOKEN"] = $ke["CLOUDFLARE_API_TOKEN"]; Info "using CLOUDFLARE_API_TOKEN from $fallback" }
-    if ($ke["CLOUDFLARE_ACCOUNT_ID"] -and -not $envMap["CLOUDFLARE_ACCOUNT_ID"]) { $envMap["CLOUDFLARE_ACCOUNT_ID"] = $ke["CLOUDFLARE_ACCOUNT_ID"] }
-  }
-}
+# Security G4 (GK-24): the Kuya Eddie token is no longer borrowed — Guma Kart uses its own,
+# narrower token from this repo's .env.
 if (-not $env:CLOUDFLARE_API_TOKEN -and $envMap["CLOUDFLARE_API_TOKEN"]) { $env:CLOUDFLARE_API_TOKEN = $envMap["CLOUDFLARE_API_TOKEN"] }
 if (-not $env:CLOUDFLARE_ACCOUNT_ID -and $envMap["CLOUDFLARE_ACCOUNT_ID"]) { $env:CLOUDFLARE_ACCOUNT_ID = $envMap["CLOUDFLARE_ACCOUNT_ID"] }
-if (-not $env:CLOUDFLARE_API_TOKEN) { throw "No CLOUDFLARE_API_TOKEN in .env (or the Kuya Eddie .env)." }
+if (-not $env:CLOUDFLARE_API_TOKEN) { throw "No CLOUDFLARE_API_TOKEN in .env — make a Guma Kart token (see the header of this script)." }
 
 # Production database: pooled Neon URL, shown by host only.
 $dbUrl = $envMap["DATABASE_URL_POOLED"]
@@ -188,7 +186,24 @@ foreach ($k in $envMap.Keys) {
   if ($k -like "NEXT_PUBLIC_*" -and -not (Test-Path "Env:$k") -and $envMap[$k] -notmatch "localhost|127\.0\.0\.1") { Set-Item "Env:$k" $envMap[$k] }
 }
 
-# Runtime secrets (same set for all three Workers).
+# Runtime secrets. Security G4 (GK-24): each Worker gets only what it uses — the public storefront
+# never holds ops/cron/marketplace/AI-vendor secrets, and ops never holds courier or storefront ones.
+# Keys listed per app are REMOVED from that Worker if an earlier deploy put them there.
+$DenyByApp = @{
+  web      = @("CRON_SECRET", "OPS_ALERT_EMAIL", "META_APP_ID", "META_APP_SECRET", "META_VERIFY_TOKEN", "SHOPEE_*", "LAZADA_*",
+               "REMOVE_BG_API_KEY", "WAYBILL_*", "CHANNEL_TOKEN_KEY", "TOTP_ENCRYPTION_KEY", "WALLET_PAYOUTS_ENABLED",
+               "WALLET_MIN_AUTO_PAYOUT", "RESTORE_DATABASE_URL", "AWS_*", "GITHUB_*", "CLOUDFLARE_*")
+  admin    = @("RESTORE_DATABASE_URL", "AWS_*", "GITHUB_*", "CLOUDFLARE_*")
+  platform = @("CRON_SECRET", "META_APP_ID", "META_APP_SECRET", "META_VERIFY_TOKEN", "SHOPEE_*", "LAZADA_*", "REMOVE_BG_API_KEY",
+               "WAYBILL_*", "CHANNEL_TOKEN_KEY", "GRAB_*", "LALAMOVE_*", "BAYANGO_API_KEY", "BAYANGO_WEBHOOK_SECRET",
+               "SMS_OPT_OUT_SECRET", "STOREFRONT_PREVIEW_SECRET", "VAPID_PRIVATE_KEY", "WALLET_PAYOUTS_ENABLED",
+               "WALLET_MIN_AUTO_PAYOUT", "INNGEST_EVENT_KEY", "BLOB_READ_WRITE_TOKEN", "PAYMONGO_WEBHOOK_SECRET",
+               "RESTORE_DATABASE_URL", "AWS_*", "GITHUB_*", "CLOUDFLARE_*")
+}
+function DeniedFor([string]$app, [string]$key) {
+  foreach ($pat in $DenyByApp[$app]) { if ($key -like $pat) { return $true } }
+  return $false
+}
 $secrets = [ordered]@{}
 $skip = @("NODE_ENV", "PORT", "DATABASE_URL", "DATABASE_URL_UNPOOLED", "DIRECT_URL")
 foreach ($k in $envMap.Keys) {
@@ -213,11 +228,8 @@ foreach ($name in $Selected) {
       $records = @(Cf GET "/zones/$($zoneObj.id)/dns_records?name=$hostName")
       foreach ($rec in $records) {
         if ($rec.type -eq "CNAME" -and $rec.content -like "*.cfargotunnel.com") {
-          Warn "$hostName is still routed to the Proxmox tunnel ($($rec.content))."
-          if (AskYes "Delete that DNS record so $hostName can point at the Worker?") {
-            Cf DELETE "/zones/$($zoneObj.id)/dns_records/$($rec.id)" | Out-Null
-            Info "deleted (remove $hostName from the tunnel's Public hostnames later, it's unused now)"
-          } else { Warn "kept - the custom domain step will fail until it's removed" }
+          # Security G4 (GK-24): this script no longer edits DNS, so the token it uses needs no DNS:Edit.
+          Warn "$hostName is still routed to the Proxmox tunnel ($($rec.content)). Delete that DNS record in the Cloudflare dashboard; the custom domain step fails until it's gone."
         } elseif ($rec.type -in @("A", "AAAA", "CNAME")) {
           Warn "$hostName has a $($rec.type) record -> $($rec.content). If deploy fails on the custom domain, delete it in DNS."
         }
@@ -240,13 +252,25 @@ foreach ($name in $Selected) {
     }
 
     if ($SkipSecrets) { Info "secrets skipped" } else {
+      $appSecrets = [ordered]@{}
+      foreach ($k in $secrets.Keys) { if (-not (DeniedFor $name $k)) { $appSecrets[$k] = $secrets[$k] } }
       $tmp = [System.IO.Path]::GetTempFileName()
       try {
-        [System.IO.File]::WriteAllText($tmp, ($secrets | ConvertTo-Json -Compress))
+        [System.IO.File]::WriteAllText($tmp, ($appSecrets | ConvertTo-Json -Compress))
         & pnpm exec wrangler secret bulk $tmp 2>&1 | ForEach-Object { Info $_ }
         if ($LASTEXITCODE -ne 0) { throw "$name : wrangler secret bulk failed." }
       } finally { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
-      Info "$($secrets.Count) secrets stored"
+      Info "$($appSecrets.Count) secrets stored ($($secrets.Count - $appSecrets.Count) kept off this Worker)"
+      # Remove anything an earlier deploy put on this Worker that it must not hold.
+      try {
+        $existing = & pnpm exec wrangler secret list --format json 2>$null | ConvertFrom-Json
+        foreach ($e in $existing) {
+          if (DeniedFor $name $e.name) {
+            & pnpm exec wrangler secret delete $e.name --force 2>&1 | ForEach-Object { Info $_ }
+            Info "removed $($e.name) from $name"
+          }
+        }
+      } catch { Warn "could not list existing secrets on $name ($($_.Exception.Message))" }
     }
   } finally { Pop-Location }
 

@@ -9,6 +9,9 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "observability": { "enabled": true },
+  // Security G4 (GK-24): no *.workers.dev or preview URL — only the custom domain, behind the zone's WAF and rate rules.
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [{ "pattern": "admin.guma.one", "custom_domain": true }],
   // Same bucket as the storefront: product photos (public, served by kart.guma.one) + KYC (private).
   "r2_buckets": [{ "binding": "UPLOADS", "bucket_name": "gumakart-uploads" }],

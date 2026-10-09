@@ -27,7 +27,8 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [code, setCode] = useState("");
-  const [enroll, setEnroll] = useState<{ secret: string; qrSvg: string } | null>(null);
+  const [enroll, setEnroll] = useState<{ secret: string; qrSvg: string; emailSentTo?: string } | null>(null);
+  const [emailCode, setEmailCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [lowBackup, setLowBackup] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
@@ -38,6 +39,7 @@ export function LoginForm() {
   function restart(message?: string) {
     setStep("password");
     setCode("");
+    setEmailCode("");
     setEnroll(null);
     setError(message ?? null);
   }
@@ -45,7 +47,7 @@ export function LoginForm() {
   async function startEnrollment() {
     const json = await post("/api/auth/2fa/enroll", { action: "start" });
     if (!json.ok) return restart(json.error);
-    setEnroll({ secret: json.secret, qrSvg: json.qrSvg });
+    setEnroll({ secret: json.secret, qrSvg: json.qrSvg, emailSentTo: json.emailSentTo });
     setStep("enroll");
   }
 
@@ -67,7 +69,7 @@ export function LoginForm() {
     setError(null);
     const json =
       step === "enroll"
-        ? await post("/api/auth/2fa/enroll", { action: "confirm", code })
+        ? await post("/api/auth/2fa/enroll", { action: "confirm", code, emailCode })
         : await post("/api/auth/2fa/verify", { code });
     setLoading(false);
     if (!json.ok) {
@@ -195,7 +197,26 @@ export function LoginForm() {
             maxLength={step === "enroll" ? 7 : 12}
           />
         </div>
-        <button type="submit" disabled={loading || code.trim().length < 6} className={buttonClass}>
+        {step === "enroll" ? (
+          <div>
+            <label htmlFor="emailCode" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Code we emailed to {enroll?.emailSentTo ?? "your address"}
+            </label>
+            <input
+              id="emailCode"
+              required
+              inputMode="numeric"
+              autoComplete="off"
+              value={emailCode}
+              onChange={(e) => setEmailCode(e.target.value)}
+              className={`${inputClass} text-center font-mono text-lg tracking-widest`}
+              placeholder="123 456"
+              maxLength={7}
+            />
+            <p className="mt-1 text-xs text-gray-500">Setting up two-factor needs both: the app code and the email code. That way a password alone can never enrol a new authenticator.</p>
+          </div>
+        ) : null}
+        <button type="submit" disabled={loading || code.trim().length < 6 || (step === "enroll" && emailCode.trim().length < 6)} className={buttonClass}>
           {loading ? "Checking..." : step === "enroll" ? "Turn on and sign in" : "Verify"}
         </button>
         <button type="button" onClick={() => restart()} className="w-full text-center text-xs text-gray-500 hover:text-gray-700">
