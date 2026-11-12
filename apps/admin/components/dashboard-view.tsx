@@ -73,17 +73,37 @@ export function DashboardView({ displayName }: { displayName: string }) {
   if (!data) {
     return (
       <div className="space-y-4">
-        <div className="h-24 animate-pulse rounded-2xl bg-white/[0.04]" />
+        <div className="h-24 animate-pulse rounded-2xl bg-slate-200/60 dark:bg-white/[0.04]" />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/[0.04]" />
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200/60 dark:bg-white/[0.04]" />
           ))}
         </div>
       </div>
     );
   }
   if (!data.ok || !data.today || !data.urls) {
-    return <p className="text-sm text-red-300">{data.error ?? "Couldn't load your dashboard."}</p>;
+    return (
+      <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">
+        <p className="font-semibold">We couldn&apos;t load today&apos;s numbers.</p>
+        <p className="mt-1">{data.error ?? "Check your connection and try again."} Your orders and links are safe.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setData(null);
+              void load();
+            }}
+            className="inline-flex min-h-[44px] items-center rounded-xl bg-red-700 px-4 font-semibold text-white hover:bg-red-800"
+          >
+            Try again
+          </button>
+          <Link href="/orders" className="inline-flex min-h-[44px] items-center rounded-xl border border-red-300 px-4 font-semibold dark:border-red-400/40">
+            Go to Orders
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const { today, urls } = data;
@@ -91,6 +111,8 @@ export function DashboardView({ displayName }: { displayName: string }) {
   const totalTodo = today.todo.to_confirm + today.todo.to_pack + today.todo.to_ship + today.todo.attention;
   const required = today.setup.filter((s) => !s.optional);
   const requiredDone = required.filter((s) => s.done).length;
+  const settingUp = requiredDone < required.length;
+  const nextStepId = today.setup.find((s) => !s.optional && !s.done)?.id;
 
   async function copyLink() {
     if (!linkUrl) return;
@@ -102,6 +124,78 @@ export function DashboardView({ displayName }: { displayName: string }) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
+
+  const setupCard = (
+    <Card className={settingUp ? "border-violet-200 ring-1 ring-violet-100 dark:border-primary/40 dark:ring-0" : ""}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+            {settingUp ? "Start selling in a few steps" : "You're set up"}
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {settingUp
+              ? `${requiredDone} of ${required.length} done · each takes about a minute`
+              : "Want a full shop page too? It's optional — checkout links work without it."}
+          </p>
+        </div>
+        <div
+          className="h-2 w-24 shrink-0 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"
+          role="progressbar"
+          aria-label="Setup progress"
+          aria-valuemin={0}
+          aria-valuemax={required.length}
+          aria-valuenow={requiredDone}
+        >
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+            style={{ width: `${Math.round((requiredDone / Math.max(1, required.length)) * 100)}%` }}
+          />
+        </div>
+      </div>
+      <ol className="space-y-2">
+        {today.setup
+          .filter((step) => settingUp || (step.optional && !step.done))
+          .map((step) => {
+            const isNext = step.id === nextStepId;
+            return (
+              <li
+                key={step.id}
+                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${
+                  isNext ? "border-violet-300 bg-violet-50/60 dark:border-primary/40 dark:bg-primary/10" : "border-slate-200 dark:border-white/10"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-2.5 text-sm">
+                  {step.done ? (
+                    <CheckCircle2 className="h-5 w-5 flex-none text-emerald-500" aria-label="Done" />
+                  ) : (
+                    <Circle className="h-5 w-5 flex-none text-slate-300 dark:text-slate-600" aria-label="Not done" />
+                  )}
+                  <span className={step.done ? "text-slate-400 line-through" : "font-medium text-slate-800 dark:text-slate-100"}>{step.label}</span>
+                  {step.optional && !step.done && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                      optional
+                    </span>
+                  )}
+                </span>
+                {!step.done && (
+                  <Link
+                    href={step.href}
+                    className={`inline-flex min-h-[40px] flex-none items-center gap-1 rounded-xl px-3.5 text-sm font-semibold transition-colors ${
+                      isNext
+                        ? "bg-violet-600 text-white hover:bg-violet-700"
+                        : "border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {step.action}
+                    {isNext && <ArrowRight className="h-4 w-4" aria-hidden />}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
+      </ol>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -119,17 +213,24 @@ export function DashboardView({ displayName }: { displayName: string }) {
         </div>
         <Link
           href="/checkout-links"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-600/25 transition hover:-translate-y-0.5 hover:bg-violet-700 dark:shadow-none"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-600/25 transition hover:-translate-y-0.5 hover:bg-violet-700 dark:shadow-none"
         >
           <Plus className="h-4 w-4" /> New checkout link
         </Link>
       </div>
 
+      {settingUp && setupCard}
+
       {/* To do */}
-      <section>
+      <section aria-labelledby="todo-heading">
         <div className="mb-3 flex items-baseline justify-between">
-          <h3 className="pk-label">What needs you today</h3>
-          {totalTodo === 0 && <span className="pk-chip !bg-emerald-50 !text-emerald-700 dark:!bg-emerald-500/15 dark:!text-emerald-200">All caught up</span>}
+          <h3 id="todo-heading" className="pk-label">What needs you today</h3>
+          {totalTodo === 0 &&
+            (settingUp && today.today.orders === 0 ? (
+              <span className="pk-chip !bg-slate-100 !text-slate-600 dark:!bg-white/10 dark:!text-slate-300">No orders yet</span>
+            ) : (
+              <span className="pk-chip !bg-emerald-50 !text-emerald-700 dark:!bg-emerald-500/15 dark:!text-emerald-200">All caught up</span>
+            ))}
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {TODO.map((t) => {
@@ -142,6 +243,7 @@ export function DashboardView({ displayName }: { displayName: string }) {
                 key={t.key}
                 href={`/orders?tab=${t.tab}`}
                 data-testid={`todo-${t.key}`}
+                aria-label={`${t.label}: ${n}. ${t.hint}. Open the list.`}
                 className={`group rounded-2xl border bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,.04),0_10px_30px_-18px_rgba(15,23,42,.18)] transition hover:-translate-y-0.5 dark:shadow-none ${
                   urgent
                     ? warn
@@ -313,57 +415,8 @@ export function DashboardView({ displayName }: { displayName: string }) {
         )}
       </Card>
 
-      {/* Setup */}
-      {(requiredDone < required.length || today.setup.some((s) => s.optional && !s.done)) && (
-        <Card className="border-white/10 bg-white/[0.03]">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">
-                {requiredDone < required.length ? "Finish setting up" : "You're set up"}
-              </p>
-              <p className="text-xs text-slate-400">
-                {requiredDone} of {required.length} done
-              </p>
-            </div>
-            <div className="h-1.5 w-28 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-emerald-500"
-                style={{ width: `${Math.round((requiredDone / Math.max(1, required.length)) * 100)}%` }}
-              />
-            </div>
-          </div>
-          <ul className="space-y-2">
-            {today.setup.map((step) => (
-              <li
-                key={step.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2.5"
-              >
-                <span className="flex items-center gap-2.5 text-sm">
-                  {step.done ? (
-                    <CheckCircle2 className="h-4 w-4 flex-none text-emerald-400" />
-                  ) : (
-                    <Circle className="h-4 w-4 flex-none text-slate-600" />
-                  )}
-                  <span className={step.done ? "text-slate-500 line-through" : "text-slate-200"}>{step.label}</span>
-                  {step.optional && !step.done && (
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-slate-400">
-                      optional
-                    </span>
-                  )}
-                </span>
-                {!step.done && (
-                  <Link
-                    href={step.href}
-                    className="flex-none rounded-lg border border-white/10 px-2.5 py-1 text-xs font-medium text-slate-200 hover:bg-white/[0.06]"
-                  >
-                    {step.action}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* Setup: once required steps are done, only the optional store prompt remains down here. */}
+      {!settingUp && today.setup.some((s) => s.optional && !s.done) && setupCard}
 
       {/* Shortcuts */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

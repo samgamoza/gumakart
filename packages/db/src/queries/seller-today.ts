@@ -148,7 +148,7 @@ export async function getSellerToday(
   const storeBuilt = Boolean((tenant.themePublishedJson as { templateId?: string } | null)?.templateId);
 
   const setup: SellerToday["setup"] = [
-    { id: "product", label: "Add your first product", done: hasProduct, href: "/products", action: "Add product" },
+    { id: "product", label: "Add your first product", done: hasProduct, href: "/products?new=1", action: "Add product" },
     { id: "payments", label: "Set how buyers pay you", done: paymentsReady, href: "/settings/payments", action: "Set up" },
     { id: "link", label: "Share your first checkout link", done: linkCount > 0, href: "/checkout-links", action: "Make a link" },
     {

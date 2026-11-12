@@ -131,6 +131,16 @@ function plainDescriptionToHtml(text: string): string {
   return `<p>${escaped.replace(/\n/g, "</p><p>")}</p>`;
 }
 
+/** Inline field message, announced by screen readers and tied to its input via aria-describedby. */
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <span id={id} className="mt-1 block text-sm font-medium text-red-600 dark:text-red-300">
+      {message}
+    </span>
+  );
+}
+
 export function ProductsManager() {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [shop, setShop] = useState<ShopContext | null>(null);
@@ -155,31 +165,67 @@ export function ProductsManager() {
   const [suggestingPrice, setSuggestingPrice] = useState(false);
   const [descriptionNote, setDescriptionNote] = useState<string | null>(null);
   const [variantsFor, setVariantsFor] = useState<ProductRow | null>(null);
+  // Field-level problems shown next to the field (the summary at the top says how many).
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"title" | "basePrice" | "compareAtPrice" | "unitCustom" | "preorderShipDate", string>>>({});
+  // After a new product is saved: point the seller at the next useful step (share it).
+  const [justCreated, setJustCreated] = useState<{ id: string | null; title: string; active: boolean } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const perms = useShopRole();
   const canEdit = perms.can("products.edit");
   const canMarket = perms.can("marketing.manage");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [productsRes, shopRes] = await Promise.all([
-      fetch("/api/products"),
-      fetch("/api/shop"),
-    ]);
-    const productsData = await productsRes.json();
-    const shopData = await shopRes.json();
-    if (productsData.ok) setProducts(productsData.products);
-    if (shopData.ok) {
-      setShop({
-        name: shopData.shop.tenant.name,
-        category: shopData.shop.tenant.category,
-      });
+    setLoadError(null);
+    try {
+      const [productsRes, shopRes] = await Promise.all([
+        fetch("/api/products"),
+        fetch("/api/shop"),
+      ]);
+      const productsData = await productsRes.json();
+      const shopData = await shopRes.json().catch(() => ({ ok: false }));
+      if (productsData.ok) setProducts(productsData.products);
+      else setLoadError(productsData.error ?? "We couldn't load your products.");
+      if (shopData.ok) {
+        setShop({
+          name: shopData.shop.tenant.name,
+          category: shopData.shop.tenant.category,
+        });
+      }
+    } catch {
+      setLoadError("We couldn't reach GumaKart. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Deep link from Home's setup checklist: /products?new=1 opens the form straight away.
+  useEffect(() => {
+    if (loading || !canEdit) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1" && !showForm) {
+      openCreateForm();
+      params.delete("new");
+      const qs = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, canEdit]);
+
+  /** Focus the first field with a problem so keyboard and screen-reader users land on it. */
+  function focusField(name: string) {
+    window.requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-field="${name}"]`);
+      el?.focus();
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }
 
   const pricingKind = useMemo(
     () => productPricingKindForCategory(shop?.category),
@@ -223,6 +269,8 @@ export function ProductsManager() {
   function openCreateForm() {
     setShowForm(true);
     setError(null);
+    setFieldErrors({});
+    setJustCreated(null);
     setDraft({ ...EMPTY_DRAFT, isMain: products.length === 0 });
     setEditingId(null);
     setNotice(null);
@@ -237,6 +285,7 @@ export function ProductsManager() {
     setShowForm(false);
     setDraft(null);
     setError(null);
+    setFieldErrors({});
     setOriginalImageUrl(null);
     setEnhancing(false);
     setEnhancingDescription(false);
@@ -251,7 +300,10 @@ export function ProductsManager() {
     setShowForm(true);
     setEditingId(product.id);
     setError(null);
+    setFieldErrors({});
+    setJustCreated(null);
     setNotice(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
     setChangeRequestId(null);
     setRequiresReview(false);
     setPricingNote(null);
@@ -563,41 +615,41 @@ export function ProductsManager() {
     if (!draft) return;
 
     setError(null);
-    setSaving(true);
 
     const price = Number(draft.basePrice);
-    if (!draft.title.trim()) {
-      setError("Product name is required.");
-      setSaving(false);
-      return;
-    }
-    if (!Number.isFinite(price) || price <= 0) {
-      setError("Enter a valid price.");
-      setSaving(false);
-      return;
-    }
-
     const compareAt = draft.compareAtPrice ? Number(draft.compareAtPrice) : null;
+    // Check every field at once so the seller sees all problems in one go; their input stays as typed.
+    const problems: typeof fieldErrors = {};
+    if (!draft.title.trim()) problems.title = "Give the product a name buyers will recognise.";
+    if (!editingHasOptions && (!draft.basePrice.trim() || !Number.isFinite(price) || price <= 0)) {
+      problems.basePrice = "Enter a price above ₱0, e.g. 325.";
+    }
     if (
       pricingKind === "service" &&
       draft.servicePriceStyle === "value_range" &&
       (!compareAt || compareAt < price)
     ) {
-      setError("Enter a max service value that is at least the base / minimum.");
-      setSaving(false);
-      return;
+      problems.compareAtPrice = "The maximum should be at least the minimum.";
     }
     if (pricingKind === "food" && draft.unitType === "other" && !draft.unitCustom.trim()) {
-      setError("Specify the unit type (e.g. per tray, per kilo).");
-      setSaving(false);
+      problems.unitCustom = "Say how it's sold, e.g. per tray or per kilo.";
+    }
+    if (draft.preorderEnabled && !/^\d{4}-\d{2}-\d{2}$/.test(draft.preorderShipDate)) {
+      problems.preorderShipDate = "Pick the date you expect to ship pre-orders.";
+    }
+    setFieldErrors(problems);
+    const firstProblem = Object.keys(problems)[0];
+    if (firstProblem) {
+      const count = Object.keys(problems).length;
+      setError(count === 1 ? "Please fix the field marked below." : `Please fix the ${count} fields marked below.`);
+      if (firstProblem === "preorderShipDate" || (firstProblem === "compareAtPrice" && pricingKind !== "service")) {
+        setShowMoreOptions(true);
+      }
+      focusField(firstProblem);
       return;
     }
 
-    if (draft.preorderEnabled && !/^\d{4}-\d{2}-\d{2}$/.test(draft.preorderShipDate)) {
-      setError("Pick the expected ship date for the pre-order.");
-      setSaving(false);
-      return;
-    }
+    setSaving(true);
     // Phase 22: the pre-order setting rides along with the pricing metadata.
     const pricingMeta = buildPricingMeta(draft);
     const metadataJson =
@@ -632,7 +684,7 @@ export function ProductsManager() {
             metadataJson,
             changeRequestId: changeRequestId ?? undefined,
           }),
-        })
+        }).catch(() => null)
       : await fetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -651,17 +703,30 @@ export function ProductsManager() {
             metadataJson,
             changeRequestId: changeRequestId ?? undefined,
           }),
-        });
+        }).catch(() => null);
 
-    const data = await res.json();
+    const data = res ? await res.json().catch(() => ({ ok: false, error: null })) : { ok: false, error: null };
     setSaving(false);
 
     if (!data.ok) {
-      setError(data.error ?? "Could not save product.");
+      // Keep everything the seller typed; tell them what happened and how to recover.
+      setError(
+        data.error
+          ? `${data.error} Your details are still here — fix it and save again.`
+          : "We couldn't save just now. Your details are still here — check your connection and tap Save again."
+      );
       return;
     }
 
+    const wasNew = !editingId;
+    const savedTitle = draft.title.trim();
+    const savedActive = draft.status === "active";
     closeCreateForm();
+    if (wasNew) {
+      setJustCreated({ id: data.product?.id ?? null, title: savedTitle, active: savedActive });
+    } else {
+      setNotice(`Saved changes to ${savedTitle}.`);
+    }
     await load();
   }
 
@@ -686,15 +751,11 @@ export function ProductsManager() {
           <p className="text-sm text-muted-foreground">
             {shop
               ? `Catalog for ${shop.name}${shop.category ? ` · ${shop.category}` : ""}`
-              : "Add products yourself. AI can polish copy or suggest nearby prices."}
+              : "Add what you sell — a name and price is enough to start."}
           </p>
         </div>
-        {showForm ? (
-          <Button type="button" variant="secondary" onClick={closeCreateForm}>
-            Cancel
-          </Button>
-        ) : canEdit ? (
-          <Button type="button" onClick={openCreateForm}>
+        {showForm ? null : canEdit ? (
+          <Button type="button" onClick={openCreateForm} className="min-h-[44px]">
             + Add product
           </Button>
         ) : (
@@ -709,22 +770,236 @@ export function ProductsManager() {
               {editingId ? "Edit product" : "New product"}
             </h3>
             <p className="mt-1 text-sm text-slate-400">
-              Fill in the basics yourself, or let AI draft the name and description from your
-              photo. Price and stock are always yours.
+              Name and price are all you need. Add a photo if you have one — AI can draft the
+              description from it. Price and stock are always yours.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
             {changeRequestId && requiresReview && (
               <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-100/90">
                 An AI suggestion is tracked as a change request. Saving applies it to your catalog.
               </p>
             )}
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && (
+              <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-800 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200">
+                {error}
+              </div>
+            )}
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-foreground">Product name</span>
+              <input
+                data-field="title"
+                required
+                aria-invalid={fieldErrors.title ? true : undefined}
+                aria-describedby={fieldErrors.title ? "err-title" : undefined}
+                value={draft.title}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDraft((d) => (d ? { ...d, title: value } : d));
+                  if (fieldErrors.title && value.trim()) setFieldErrors((f) => ({ ...f, title: undefined }));
+                }}
+                className={`h-11 w-full rounded-xl border bg-card px-3 text-base sm:text-sm ${fieldErrors.title ? "border-red-500" : "border-border"}`}
+                placeholder="e.g. Ube Halaya 500g"
+                autoComplete="off"
+              />
+              <FieldError id="err-title" message={fieldErrors.title} />
+            </label>
+
+            {pricingKind === "food" && (
+              <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+                <p className="text-sm font-semibold text-foreground">Sold as</p>
+                <p className="text-xs text-slate-400">How customers buy this food item.</p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["pc", "Per pc"],
+                      ["box", "Per box"],
+                      ["other", "Other — specify"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setDraft((d) => (d ? { ...d, unitType: id } : d))}
+                      aria-pressed={draft.unitType === id}
+                      className={`min-h-[40px] rounded-full border px-3 py-1.5 text-sm font-medium ${
+                        draft.unitType === id
+                          ? "border-emerald-500 bg-emerald-600 text-white"
+                          : "border-border bg-secondary text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {draft.unitType === "other" && (
+                  <input
+                    data-field="unitCustom"
+                    aria-label="How it's sold"
+                    aria-invalid={fieldErrors.unitCustom ? true : undefined}
+                    aria-describedby={fieldErrors.unitCustom ? "err-unitCustom" : undefined}
+                    value={draft.unitCustom}
+                    onChange={(e) =>
+                      setDraft((d) => (d ? { ...d, unitCustom: e.target.value } : d))
+                    }
+                    placeholder="e.g. per tray, per kilo, per dozen"
+                    className="mt-1 h-11 w-full max-w-md rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-slate-500"
+                  />
+                )}
+                <FieldError id="err-unitCustom" message={fieldErrors.unitCustom} />
+              </div>
+            )}
+
+            {pricingKind === "service" && (
+              <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+                <p className="text-sm font-semibold text-foreground">Service pricing</p>
+                <p className="text-xs text-slate-400">
+                  Services use a base / minimum or a value range — not retail stock pricing.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["base_minimum", "Base / minimum"],
+                      ["value_range", "Service value range"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() =>
+                        setDraft((d) => (d ? { ...d, servicePriceStyle: id } : d))
+                      }
+                      aria-pressed={draft.servicePriceStyle === id}
+                      className={`min-h-[40px] rounded-full border px-3 py-1.5 text-sm font-medium ${
+                        draft.servicePriceStyle === id
+                          ? "border-emerald-500 bg-emerald-600 text-white"
+                          : "border-border bg-secondary text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div
+              className={`grid gap-3 ${
+                pricingKind === "service" ? "sm:max-w-md sm:grid-cols-2" : "grid-cols-2 sm:max-w-md"
+              }`}
+            >
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">
+                  {pricingKind === "service"
+                    ? draft.servicePriceStyle === "value_range"
+                      ? "Minimum (₱)"
+                      : "Base / minimum (₱)"
+                    : pricingKind === "food"
+                      ? `Price (₱)${
+                          draft.unitType === "pc"
+                            ? " · per pc"
+                            : draft.unitType === "box"
+                              ? " · per box"
+                              : draft.unitCustom.trim()
+                                ? ` · per ${draft.unitCustom.trim()}`
+                                : ""
+                        }`
+                      : "Price (₱)"}
+                </span>
+                <input
+                  data-field="basePrice"
+                  required
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  step="any"
+                  disabled={editingHasOptions}
+                  title={editingHasOptions ? "Set per size/colour in Sizes & colours" : undefined}
+                  aria-invalid={fieldErrors.basePrice ? true : undefined}
+                  aria-describedby={fieldErrors.basePrice ? "err-basePrice" : undefined}
+                  value={draft.basePrice}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setDraft((d) => (d ? { ...d, basePrice: value } : d));
+                    if (fieldErrors.basePrice && Number(value) > 0) setFieldErrors((f) => ({ ...f, basePrice: undefined }));
+                  }}
+                  placeholder="325"
+                  className={`h-11 w-full rounded-xl border bg-card px-3 text-base sm:text-sm ${fieldErrors.basePrice ? "border-red-500" : "border-border"}`}
+                />
+                <FieldError id="err-basePrice" message={fieldErrors.basePrice} />
+              </label>
+
+              {pricingKind === "service" && draft.servicePriceStyle === "value_range" ? (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-foreground">
+                    Maximum (₱)
+                  </span>
+                  <input
+                    data-field="compareAtPrice"
+                    required
+                    type="number"
+                    inputMode="decimal"
+                    min="1"
+                    aria-invalid={fieldErrors.compareAtPrice ? true : undefined}
+                    aria-describedby={fieldErrors.compareAtPrice ? "err-compareAtPrice" : undefined}
+                    value={draft.compareAtPrice}
+                    onChange={(e) =>
+                      setDraft((d) => (d ? { ...d, compareAtPrice: e.target.value } : d))
+                    }
+                    placeholder="Upper end of typical jobs"
+                    className={`h-11 w-full rounded-xl border bg-card px-3 text-base sm:text-sm ${fieldErrors.compareAtPrice ? "border-red-500" : "border-border"}`}
+                  />
+                  <FieldError id="err-compareAtPrice" message={fieldErrors.compareAtPrice} />
+                </label>
+              ) : null}
+
+              {pricingKind !== "service" && (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-foreground">In stock</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    disabled={editingHasOptions}
+                    title={editingHasOptions ? "Set per size/colour in Sizes & colours" : undefined}
+                    aria-describedby="hint-stock"
+                    value={draft.stockQty}
+                    onChange={(e) =>
+                      setDraft((d) => (d ? { ...d, stockQty: e.target.value } : d))
+                    }
+                    placeholder="0"
+                    className="h-11 w-full rounded-xl border bg-card px-3 text-base sm:text-sm border-border"
+                  />
+                  <span id="hint-stock" className="mt-1 block text-xs text-slate-500">
+                    Orders stop at 0 unless you take pre-orders.
+                  </span>
+                </label>
+              )}
+            </div>
+
+            {editingHasOptions && (
+              <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                This product has sizes or colours — price and stock are set per variant.{" "}
+                <button
+                  type="button"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  onClick={() => {
+                    const product = products.find((p) => p.id === editingId);
+                    if (product) setVariantsFor(product);
+                  }}
+                >
+                  Edit sizes &amp; colours
+                </button>
+              </p>
+            )}
 
             <div className="rounded-xl border border-border bg-card p-4">
-              <span className="mb-2 block text-sm font-medium text-foreground">Product photo</span>
+              <span className="mb-2 block text-sm font-medium text-foreground">
+                Photo <span className="font-normal text-slate-500">(optional, but buyers trust a real photo)</span>
+              </span>
               {draft.imageUrl ? (
                 <div
                   className={`space-y-4 rounded-xl ${
@@ -751,12 +1026,12 @@ export function ProductsManager() {
                             : "Photo ready — drag a new file here to replace, or remove the background."}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <label className="inline-flex cursor-pointer items-center rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+                        <label className="inline-flex min-h-[44px] cursor-pointer items-center rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-violet-600">
                           Replace photo
                           <input
                             type="file"
                             accept={PRODUCT_IMAGE_ACCEPT}
-                            className="hidden"
+                            className="sr-only"
                             onChange={handleImageSelect}
                             disabled={uploadingImage}
                           />
@@ -820,7 +1095,7 @@ export function ProductsManager() {
                 </div>
               ) : (
                 <label
-                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-10 text-center transition ${
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-violet-600 ${
                     dragOverPhoto
                       ? "border-emerald-400 bg-emerald-500/10"
                       : "border-white/15 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.04]"
@@ -833,7 +1108,7 @@ export function ProductsManager() {
                   <input
                     type="file"
                     accept={PRODUCT_IMAGE_ACCEPT}
-                    className="hidden"
+                    className="sr-only"
                     onChange={handleImageSelect}
                     disabled={uploadingImage}
                   />
@@ -842,7 +1117,7 @@ export function ProductsManager() {
                       ? "Uploading…"
                       : dragOverPhoto
                         ? "Drop photo to upload"
-                        : "Drag & drop or click to upload"}
+                        : "Tap to add a photo, or drag one here"}
                   </span>
                   <span className="mt-1 text-xs text-slate-400">
                     JPG, PNG, WebP, GIF, or AVIF · up to 5 MB
@@ -850,17 +1125,6 @@ export function ProductsManager() {
                 </label>
               )}
             </div>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-foreground">Product name</span>
-              <input
-                required
-                value={draft.title}
-                onChange={(e) => setDraft((d) => (d ? { ...d, title: e.target.value } : d))}
-                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
-                placeholder="e.g. Choco Fudge Cake"
-              />
-            </label>
 
             {draft.shortDescription ? (
               <p className="text-sm text-muted-foreground">{draft.shortDescription}</p>
@@ -905,218 +1169,88 @@ export function ProductsManager() {
               )}
             </label>
 
-            {pricingKind === "food" && (
-              <div className="space-y-2 rounded-xl border border-border bg-card p-4">
-                <p className="text-sm font-semibold text-foreground">Sold as</p>
-                <p className="text-xs text-slate-400">How customers buy this food item.</p>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      ["pc", "Per pc"],
-                      ["box", "Per box"],
-                      ["other", "Other — specify"],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setDraft((d) => (d ? { ...d, unitType: id } : d))}
-                      className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
-                        draft.unitType === id
-                          ? "border-emerald-500 bg-emerald-600 text-white"
-                          : "border-border bg-secondary text-foreground"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {draft.unitType === "other" && (
-                  <input
-                    value={draft.unitCustom}
-                    onChange={(e) =>
-                      setDraft((d) => (d ? { ...d, unitCustom: e.target.value } : d))
-                    }
-                    placeholder="e.g. per tray, per kilo, per dozen"
-                    className="mt-1 h-11 w-full max-w-md rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-slate-500"
-                  />
-                )}
-              </div>
-            )}
 
-            {pricingKind === "service" && (
-              <div className="space-y-2 rounded-xl border border-border bg-card p-4">
-                <p className="text-sm font-semibold text-foreground">Service pricing</p>
-                <p className="text-xs text-slate-400">
-                  Services use a base / minimum or a value range — not retail stock pricing.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      ["base_minimum", "Base / minimum"],
-                      ["value_range", "Service value range"],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() =>
-                        setDraft((d) => (d ? { ...d, servicePriceStyle: id } : d))
-                      }
-                      className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
-                        draft.servicePriceStyle === id
-                          ? "border-emerald-500 bg-emerald-600 text-white"
-                          : "border-border bg-secondary text-foreground"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div
-              className={`grid gap-3 ${
-                pricingKind === "service" && draft.servicePriceStyle === "base_minimum"
-                  ? "sm:grid-cols-1 sm:max-w-xs"
-                  : "sm:grid-cols-2 lg:grid-cols-3"
-              }`}
-            >
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-foreground">
-                  {pricingKind === "service"
-                    ? draft.servicePriceStyle === "value_range"
-                      ? "Minimum (PHP)"
-                      : "Base / minimum (PHP)"
-                    : pricingKind === "food"
-                      ? `Price (PHP)${
-                          draft.unitType === "pc"
-                            ? " · per pc"
-                            : draft.unitType === "box"
-                              ? " · per box"
-                              : draft.unitCustom.trim()
-                                ? ` · per ${draft.unitCustom.trim()}`
-                                : ""
-                        }`
-                      : "Price (PHP)"}
+            <div className="rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => setShowMoreOptions((v) => !v)}
+                aria-expanded={showMoreOptions}
+                aria-controls="product-more-options"
+                className="flex min-h-[48px] w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left"
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">More options</span>
+                  <span className="block text-xs text-slate-500">
+                    {pricingKind === "service"
+                      ? "Visibility, main product, nearby price check"
+                      : "Sale price, pre-orders, visibility, main product, nearby price check"}
+                  </span>
                 </span>
-                <input
-                  required
-                  type="number"
-                  min="1"
-                  disabled={editingHasOptions}
-                  title={editingHasOptions ? "Set per size/colour in Sizes & colours" : undefined}
-                  value={draft.basePrice}
-                  onChange={(e) =>
-                    setDraft((d) => (d ? { ...d, basePrice: e.target.value } : d))
-                  }
-                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
-                />
-              </label>
+                <span aria-hidden className={`text-slate-500 transition-transform ${showMoreOptions ? "rotate-180" : ""}`}>▾</span>
+              </button>
+              {showMoreOptions && (
+                <div id="product-more-options" className="space-y-4 border-t border-border px-4 py-4">
+                  {pricingKind !== "service" && (
+                    <label className="block sm:max-w-xs">
+                      <span className="mb-1 block text-sm font-medium text-foreground">
+                        Original price before sale (₱, optional)
+                      </span>
+                      <input
+                        data-field="compareAtPrice"
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        aria-describedby="hint-compare"
+                        value={draft.compareAtPrice}
+                        onChange={(e) =>
+                          setDraft((d) => (d ? { ...d, compareAtPrice: e.target.value } : d))
+                        }
+                        placeholder="e.g. 399"
+                        className="h-11 w-full rounded-xl border bg-card px-3 text-base sm:text-sm border-border"
+                      />
+                      <span id="hint-compare" className="mt-1 block text-xs text-slate-500">
+                        Shown crossed out next to your price. Leave empty if there&apos;s no sale.
+                      </span>
+                    </label>
+                  )}
 
-              {pricingKind === "service" && draft.servicePriceStyle === "value_range" ? (
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-foreground">
-                    Maximum (PHP)
-                  </span>
-                  <input
-                    required
-                    type="number"
-                    min="1"
-                    value={draft.compareAtPrice}
-                    onChange={(e) =>
-                      setDraft((d) => (d ? { ...d, compareAtPrice: e.target.value } : d))
-                    }
-                    placeholder="Upper end of typical jobs"
-                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
-                  />
-                </label>
-              ) : pricingKind !== "service" ? (
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-foreground">
-                    Compare-at (optional)
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={draft.compareAtPrice}
-                    onChange={(e) =>
-                      setDraft((d) => (d ? { ...d, compareAtPrice: e.target.value } : d))
-                    }
-                    placeholder="499"
-                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
-                  />
-                </label>
-              ) : null}
-
-              {pricingKind !== "service" && (
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-foreground">Stock</span>
-                  <input
-                    type="number"
-                    min="0"
-                    disabled={editingHasOptions}
-                    title={editingHasOptions ? "Set per size/colour in Sizes & colours" : undefined}
-                    value={draft.stockQty}
-                    onChange={(e) =>
-                      setDraft((d) => (d ? { ...d, stockQty: e.target.value } : d))
-                    }
-                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
-                  />
-                </label>
-              )}
-            </div>
-
-            {pricingKind !== "service" && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4" data-testid="preorder-settings">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={draft.preorderEnabled}
-                    onChange={(e) => setDraft((d) => (d ? { ...d, preorderEnabled: e.target.checked } : d))}
-                    data-testid="preorder-enabled"
-                  />
-                  <span>
-                    <span className="block text-sm font-medium text-slate-200">Take pre-orders</span>
-                    <span className="block text-xs text-slate-500">
-                      Buyers can order even with 0 stock; the order shows &quot;Pre-order — ships ~date&quot;. Pre-orders don&apos;t take
-                      stock. It turns off by itself after the ship date.
-                    </span>
-                  </span>
-                </label>
-                {draft.preorderEnabled && (
-                  <label className="mt-3 block max-w-xs">
-                    <span className="mb-1 block text-xs font-medium text-slate-300">Expected ship date</span>
-                    <input
-                      type="date"
-                      min={new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10)}
-                      value={draft.preorderShipDate}
-                      onChange={(e) => setDraft((d) => (d ? { ...d, preorderShipDate: e.target.value } : d))}
-                      className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm"
-                      data-testid="preorder-date"
-                    />
-                  </label>
-                )}
-              </div>
-            )}
-
-            {editingHasOptions && (
-              <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
-                This product has sizes or colours — price and stock are set per variant.{" "}
-                <button
-                  type="button"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
-                  onClick={() => {
-                    const product = products.find((p) => p.id === editingId);
-                    if (product) setVariantsFor(product);
-                  }}
-                >
-                  Edit sizes &amp; colours
-                </button>
-              </p>
-            )}
+                  {pricingKind !== "service" && (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4" data-testid="preorder-settings">
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4"
+                          checked={draft.preorderEnabled}
+                          onChange={(e) => setDraft((d) => (d ? { ...d, preorderEnabled: e.target.checked } : d))}
+                          data-testid="preorder-enabled"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-200">Take pre-orders</span>
+                          <span className="block text-xs text-slate-500">
+                            Buyers can order even with 0 stock; the order shows &quot;Pre-order — ships ~date&quot;. Pre-orders don&apos;t take
+                            stock. It turns off by itself after the ship date.
+                          </span>
+                        </span>
+                      </label>
+                      {draft.preorderEnabled && (
+                        <label className="mt-3 block max-w-xs">
+                          <span className="mb-1 block text-xs font-medium text-slate-300">Expected ship date</span>
+                          <input
+                            data-field="preorderShipDate"
+                            type="date"
+                            min={new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10)}
+                            aria-invalid={fieldErrors.preorderShipDate ? true : undefined}
+                            aria-describedby={fieldErrors.preorderShipDate ? "err-preorderShipDate" : undefined}
+                            value={draft.preorderShipDate}
+                            onChange={(e) => setDraft((d) => (d ? { ...d, preorderShipDate: e.target.value } : d))}
+                            className={`h-11 w-full rounded-xl border bg-card px-3 text-sm ${fieldErrors.preorderShipDate ? "border-red-500" : "border-border"}`}
+                            data-testid="preorder-date"
+                          />
+                          <FieldError id="err-preorderShipDate" message={fieldErrors.preorderShipDate} />
+                        </label>
+                      )}
+                    </div>
+                  )}
 
             {pricingKind !== "service" && !editingHasOptions && (
               <div className="flex flex-wrap items-center gap-3">
@@ -1138,74 +1272,142 @@ export function ProductsManager() {
               </div>
             )}
 
-            <label className="block sm:max-w-xs">
-              <span className="mb-1 block text-sm font-medium text-foreground">Status</span>
-              <select
-                value={draft.status}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    d ? { ...d, status: e.target.value as "draft" | "active" } : d
-                  )
-                }
-                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
-              >
-                <option value="active">Active (visible on storefront)</option>
-                <option value="draft">Draft (hidden)</option>
-              </select>
-            </label>
+                  <label className="block sm:max-w-xs">
+                    <span className="mb-1 block text-sm font-medium text-foreground">Who can see it</span>
+                    <select
+                      value={draft.status}
+                      onChange={(e) =>
+                        setDraft((d) =>
+                          d ? { ...d, status: e.target.value as "draft" | "active" } : d
+                        )
+                      }
+                      className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm"
+                    >
+                      <option value="active">Live — buyers can order it</option>
+                      <option value="draft">Hidden — only you can see it</option>
+                    </select>
+                  </label>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card px-4 py-3">
-              <input
-                type="checkbox"
-                checked={draft.isMain || (!editingId && products.length === 0)}
-                onChange={(e) =>
-                  setDraft((d) => (d ? { ...d, isMain: e.target.checked } : d))
-                }
-                className="mt-1 h-4 w-4 rounded border-border"
-              />
-              <span>
-                <span className="block text-sm font-semibold text-foreground">
-                  Main / identity product
-                </span>
-                <span className="mt-0.5 block text-xs text-slate-400">
-                  Your shop&apos;s signature offering — featured first on the storefront. Only one
-                  product can be main.
-                </span>
-              </span>
-            </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={draft.isMain || (!editingId && products.length === 0)}
+                      onChange={(e) =>
+                        setDraft((d) => (d ? { ...d, isMain: e.target.checked } : d))
+                      }
+                      className="mt-1 h-4 w-4 rounded border-border"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-foreground">
+                        Feature this as my main product
+                      </span>
+                      <span className="mt-0.5 block text-xs text-slate-400">
+                        Shown first on your online store. Only one product can be main.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
 
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button type="submit" disabled={saving}>
+            <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 -mx-1 flex flex-wrap gap-2 rounded-xl bg-card/95 px-1 py-2 backdrop-blur lg:static lg:bg-transparent lg:p-0 lg:pt-1">
+              <Button type="submit" disabled={saving} className="min-h-[44px] flex-1 sm:flex-none">
                 {saving ? "Saving…" : editingId ? "Save changes" : "Save product"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={closeCreateForm} className="min-h-[44px]">
+                Cancel
               </Button>
             </div>
           </form>
         </Card>
       )}
 
+      {justCreated && !showForm && (
+        <div
+          role="status"
+          className="gk-rise mb-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-400/25 dark:bg-emerald-500/10"
+        >
+          <p className="font-semibold text-emerald-900 dark:text-emerald-100">
+            {justCreated.title} is saved.
+          </p>
+          <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200/90">
+            {justCreated.active
+              ? "Next: make a checkout link and paste it in your post or chat — buyers order on one page."
+              : "It's hidden for now. Set it to Live under More options when you're ready to sell it."}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {justCreated.active && justCreated.id ? (
+              <a
+                href={`/checkout-links?product=${justCreated.id}`}
+                className="inline-flex min-h-[44px] items-center rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white hover:bg-violet-700"
+              >
+                Make a checkout link
+              </a>
+            ) : null}
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={openCreateForm}
+                className="inline-flex min-h-[44px] items-center rounded-xl border border-emerald-300 px-4 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:border-emerald-400/30 dark:text-emerald-100 dark:hover:bg-emerald-500/10"
+              >
+                Add another product
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setJustCreated(null)}
+              className="inline-flex min-h-[44px] items-center rounded-xl px-3 text-sm text-emerald-800 hover:underline dark:text-emerald-200"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       {notice && (
-        <p className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-100/90">
+        <p role="status" className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100/90">
           {notice}
         </p>
       )}
       {error && !showForm && (
-        <p className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-2.5 text-sm text-red-200">
+        <p role="alert" className="mb-4 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-800 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-200">
           {error}
         </p>
       )}
 
       {loading ? (
-        <p className="text-muted-foreground">Loading products…</p>
-      ) : products.length === 0 && !showForm ? (
-        <Card className="border-dashed border-white/15 bg-white/[0.02]">
-          <p className="font-medium text-slate-100">No products yet</p>
-          <p className="mt-1 text-sm text-slate-400">
-            Add your main identity product first — name, price, and photo. That becomes the face
-            of your shop.
-          </p>
-          <Button type="button" className="mt-4" onClick={openCreateForm}>
-            + Add main product
+        <div className="space-y-3" aria-busy="true" aria-label="Loading products">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex animate-pulse items-center gap-4 rounded-2xl border border-border bg-card p-4">
+              <div className="h-16 w-16 rounded-xl bg-slate-200 dark:bg-white/10" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-1/2 rounded bg-slate-200 dark:bg-white/10" />
+                <div className="h-3 w-1/3 rounded bg-slate-200 dark:bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : loadError && products.length === 0 ? (
+        <Card className="border-red-200 dark:border-red-400/20">
+          <p className="font-medium text-slate-900 dark:text-slate-100">Products didn&apos;t load</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{loadError}</p>
+          <Button type="button" variant="secondary" className="mt-4 min-h-[44px]" onClick={() => void load()}>
+            Try again
           </Button>
+        </Card>
+      ) : products.length === 0 && !showForm && !justCreated ? (
+        <Card className="border-dashed border-white/15 bg-white/[0.02] text-center sm:text-left">
+          <p className="font-medium text-slate-100">Add your first product</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Just a name and a price — photo optional. Then you can share it with a checkout link in
+            your posts and chats.
+          </p>
+          {canEdit ? (
+            <Button type="button" className="mt-4 min-h-[44px]" onClick={openCreateForm}>
+              + Add product
+            </Button>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500">Ask the shop owner or a manager to add products.</p>
+          )}
         </Card>
       ) : products.length > 0 ? (
         <div className="space-y-6">
@@ -1214,6 +1416,7 @@ export function ProductsManager() {
             const catalog = products.filter((p) => !p.isMain);
             return (
               <>
+                {main ? (
                 <section className="space-y-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-emerald-300">
@@ -1225,7 +1428,7 @@ export function ProductsManager() {
                   </div>
                   {main ? (
                     <Card className="border-emerald-500/30 bg-emerald-500/5">
-                      <div className="flex items-center justify-between gap-4">
+                      <div className="flex flex-wrap items-center gap-4 sm:flex-nowrap">
                         {main.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -1251,7 +1454,7 @@ export function ProductsManager() {
                                   : "border-white/10 bg-white/[0.04] text-slate-400"
                               }
                             >
-                              {main.status}
+                              {main.status === "active" ? "Live" : "Hidden"}
                             </Badge>
                           </div>
                           <p className="mt-1 text-sm text-slate-400">
@@ -1260,32 +1463,34 @@ export function ProductsManager() {
                             {stockLine(main)}
                           </p>
                         </div>
-                        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0 sm:justify-end">
                           {main.status === "active" && (
                             <a
                               href={`/checkout-links?product=${main.id}`}
-                              className="rounded-xl border border-primary/40 px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
+                              aria-label={`Make a checkout link for ${main.title}`}
+                              className="rounded-xl border border-primary/40 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
                             >
-                              Checkout link
+                              Share link
                             </a>
                           )}
                           {pricingKind !== "service" && canEdit && (
                             <button
                               type="button"
                               onClick={() => setVariantsFor(main)}
-                              className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                              className="rounded-xl border border-white/10 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
                             >
                               {main.hasOptions ? "Sizes & colours" : "Add sizes"}
                             </button>
                           )}
                           {canMarket && main.status === "active" && (
-                            <CaptionsButton productId={main.id} title={main.title} className="inline-flex items-center gap-1 rounded-xl border border-violet-400/30 px-3 py-1.5 text-sm text-violet-200 transition hover:bg-violet-500/10" />
+                            <CaptionsButton productId={main.id} title={main.title} className="inline-flex items-center gap-1 rounded-xl border border-violet-400/30 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-violet-200 transition hover:bg-violet-500/10" />
                           )}
                           {canEdit && (
                             <button
                               type="button"
                               onClick={() => startEdit(main)}
-                              className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                              aria-label={`Edit ${main.title}`}
+                              className="rounded-xl border border-white/10 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
                             >
                               Edit
                             </button>
@@ -1293,24 +1498,17 @@ export function ProductsManager() {
                         </div>
                       </div>
                     </Card>
-                  ) : (
-                    <Card className="border-dashed border-amber-400/25 bg-amber-400/5">
-                      <p className="font-medium text-amber-100">No main product yet</p>
-                      <p className="mt-1 text-sm text-slate-400">
-                        Pick one from your catalog below, or mark a product as main when you save
-                        it.
-                      </p>
-                    </Card>
-                  )}
+                  ) : null}
                 </section>
+                ) : null}
 
                 <section className="space-y-3">
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                      Catalog
+                      {main ? "Other products" : "Your products"}
                     </h3>
                     <p className="mt-0.5 text-sm text-slate-400">
-                      Other products in your shop.
+                      Tap Share link to sell one in a post or chat.
                     </p>
                   </div>
                   {catalog.length === 0 ? (
@@ -1322,7 +1520,7 @@ export function ProductsManager() {
                   ) : (
                     <div className="grid gap-3">
                       {catalog.map((product) => (
-                        <Card key={product.id} className="flex items-center justify-between gap-4">
+                        <Card key={product.id} className="flex flex-wrap items-center gap-4 sm:flex-nowrap">
                           {product.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -1345,30 +1543,30 @@ export function ProductsManager() {
                                     : "border-white/10 bg-white/[0.04] text-slate-400"
                                 }
                               >
-                                {product.status}
+                                {product.status === "active" ? "Live" : "Hidden"}
                               </Badge>
                             </div>
                             <p className="mt-1 text-sm text-slate-500">
                               {product.hasOptions ? "From " : ""}
                               {priceLineForProduct(product)}
-                              {stockLine(product)} · /
-                              {product.slug}
+                              {stockLine(product)}
                             </p>
                           </div>
-                          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                          <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0 sm:justify-end">
                             {product.status === "active" && (
                               <a
                                 href={`/checkout-links?product=${product.id}`}
-                                className="rounded-xl border border-primary/40 px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
+                              aria-label={`Make a checkout link for ${product.title}`}
+                                className="rounded-xl border border-primary/40 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-primary transition hover:bg-primary/10"
                               >
-                                Checkout link
+                                Share link
                               </a>
                             )}
                             {canEdit && (
                               <button
                                 type="button"
                                 onClick={() => void setAsMainProduct(product)}
-                                className="rounded-xl border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/10"
+                                className="rounded-xl border border-emerald-500/30 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/10"
                               >
                                 Set as main
                               </button>
@@ -1377,19 +1575,20 @@ export function ProductsManager() {
                               <button
                                 type="button"
                                 onClick={() => setVariantsFor(product)}
-                                className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                                className="rounded-xl border border-white/10 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
                               >
                                 {product.hasOptions ? "Sizes & colours" : "Add sizes"}
                               </button>
                             )}
                             {canMarket && product.status === "active" && (
-                              <CaptionsButton productId={product.id} title={product.title} className="inline-flex items-center gap-1 rounded-xl border border-violet-400/30 px-3 py-1.5 text-sm text-violet-200 transition hover:bg-violet-500/10" />
+                              <CaptionsButton productId={product.id} title={product.title} className="inline-flex items-center gap-1 rounded-xl border border-violet-400/30 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-violet-200 transition hover:bg-violet-500/10" />
                             )}
                             {canEdit && (
                               <button
                                 type="button"
                                 onClick={() => startEdit(product)}
-                                className="rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
+                              aria-label={`Edit ${product.title}`}
+                                className="rounded-xl border border-white/10 inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/[0.05]"
                               >
                                 Edit
                               </button>
@@ -1398,8 +1597,9 @@ export function ProductsManager() {
                               <button
                                 type="button"
                                 onClick={() => handleDelete(product)}
+                                aria-label={`Delete ${product.title}`}
                                 disabled={deletingId === product.id}
-                                className="rounded-xl px-3 py-1.5 text-sm text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+                                className="rounded-xl inline-flex min-h-[40px] items-center px-3 py-1.5 text-sm text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
                               >
                                 {deletingId === product.id ? "Deleting…" : "Delete"}
                               </button>

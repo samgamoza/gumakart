@@ -5,7 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
+  Link2,
+  LayoutDashboard,
   Menu,
+  Package,
+  ShoppingBag,
+  X,
   ExternalLink,
   Gem,
   LogOut,
@@ -66,6 +71,20 @@ export function AdminShell({
   // Phones: the sidebar is a slide-in drawer opened from the top bar.
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setMenuOpen(false), [pathname]);
+  // Drawer: Escape closes it and the page behind doesn't scroll while it's open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [menuOpen]);
   const [gateTarget, setGateTarget] = useState<GateTarget | null>(null);
   const { plan, planLabel, credits, tenant, loading: planLoading } = useTenantPlan();
 
@@ -118,7 +137,10 @@ export function AdminShell({
     return allowed
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => item.label.toLowerCase().includes(q)),
+        items: group.items.filter(
+          (item) =>
+            item.label.toLowerCase().includes(q) || (item.description ?? "").toLowerCase().includes(q)
+        ),
       }))
       .filter((group) => group.items.length > 0);
   }, [search, shopRole]);
@@ -153,6 +175,14 @@ export function AdminShell({
   const tenantStatus = user?.tenantStatus ?? tenant?.status;
   const isSuspended = tenantStatus === "suspended";
   const supportAccess = Boolean(user?.supportAccess);
+  const searching = search.trim().length > 0;
+  // Phones: the four daily pages sit in a bottom bar; everything else is in the menu.
+  const bottomNav = [
+    { href: "/", label: "Home", icon: LayoutDashboard },
+    { href: "/orders", label: "Orders", icon: ShoppingBag },
+    { href: "/checkout-links", label: "Links", icon: Link2 },
+    { href: "/products", label: "Products", icon: Package },
+  ].filter((item) => canOpenPage(shopRole, item.href));
 
   if (isSuspended && !supportAccess) {
     return (
@@ -209,7 +239,8 @@ export function AdminShell({
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <Link href="/" className="flex items-center gap-2.5 px-5 py-5">
+        <div className="flex items-center">
+        <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5 px-5 py-5">
           <GumaMark className="h-9 w-9 shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-[15px] font-bold tracking-tight text-slate-900 dark:text-white">
@@ -220,27 +251,41 @@ export function AdminShell({
             </p>
           </div>
         </Link>
+        <button
+          type="button"
+          onClick={() => setMenuOpen(false)}
+          aria-label="Close menu"
+          className="mr-3 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 lg:hidden"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        </div>
 
         <div className="px-5 pb-1 mono-label">Seller Console</div>
 
         <div className="px-4 py-3">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             <input
               type="search"
-              placeholder="Search…"
+              aria-label="Find a page"
+              placeholder="Find a page…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none dark:border-white/10 dark:bg-guma-navy/60 dark:text-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none dark:border-white/10 dark:bg-guma-navy/60 dark:text-white"
             />
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-1">
+        <nav aria-label="Seller menu" className="flex-1 space-y-1 overflow-y-auto px-3 py-1">
+          {searching && filteredNav.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-slate-500">No page matches “{search.trim()}”.</p>
+          ) : null}
           {filteredNav.map((group) => {
             if (group.id === "settings") return null;
             const isCollapsible = group.collapsible && group.label;
-            const expanded = openGroups[group.id] ?? !isCollapsible;
+            // While searching, matches inside folded groups are shown too.
+            const expanded = searching || (openGroups[group.id] ?? !isCollapsible);
 
             return (
               <div key={group.id} className="pb-1">
@@ -251,7 +296,9 @@ export function AdminShell({
                       onClick={() =>
                         setOpenGroups((g) => ({ ...g, [group.id]: !expanded }))
                       }
-                      className="mono-label flex w-full items-center justify-between px-2 py-1.5 hover:text-slate-300"
+                      aria-expanded={expanded}
+                      aria-controls={`nav-group-${group.id}`}
+                      className="mono-label flex min-h-[40px] w-full items-center justify-between rounded-lg px-2 py-1.5 hover:text-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500 dark:hover:text-slate-300"
                     >
                       {group.label}
                       <ChevronDown
@@ -263,6 +310,7 @@ export function AdminShell({
                   )
                 ) : null}
 
+                <div id={`nav-group-${group.id}`} className="space-y-0.5">
                 {(expanded || !isCollapsible) &&
                   group.items.map((item) => {
                     const active = isActive(item.href);
@@ -273,7 +321,9 @@ export function AdminShell({
                         key={item.id}
                         href={item.href}
                         onClick={(e) => handleNavClick(e, item)}
-                        className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-semibold transition-colors ${
+                        aria-current={active ? "page" : undefined}
+                        title={item.description}
+                        className={`group relative flex min-h-[44px] items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors lg:min-h-[38px] lg:text-[13px] ${
                           active
                             ? "bg-violet-600 text-white shadow-md shadow-violet-600/25 dark:bg-white/[0.07] dark:shadow-none"
                             : locked
@@ -301,6 +351,7 @@ export function AdminShell({
                       </Link>
                     );
                   })}
+                </div>
               </div>
             );
           })}
@@ -315,7 +366,8 @@ export function AdminShell({
                   router.push(settingsSections[0]?.href ?? "/settings/account");
                 }
               }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-[13px] font-semibold transition-colors ${
+              aria-expanded={settingsOpen}
+              className={`flex min-h-[44px] w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold transition-colors lg:min-h-[38px] lg:text-[13px] ${
                 pathname.startsWith("/settings")
                   ? "bg-violet-50 text-violet-700 dark:bg-white/[0.07] dark:text-white"
                   : "text-slate-600 hover:bg-violet-50 hover:text-violet-700 dark:text-slate-400 dark:hover:bg-white/[0.04] dark:hover:text-slate-200"
@@ -335,7 +387,8 @@ export function AdminShell({
                   <Link
                     key={section.href}
                     href={section.href}
-                    className={`block rounded-md px-2.5 py-1.5 text-xs transition ${
+                    aria-current={pathname === section.href ? "page" : undefined}
+                    className={`flex min-h-[40px] items-center rounded-md px-2.5 py-1.5 text-sm transition lg:min-h-0 lg:text-xs ${
                       pathname === section.href
                         ? "font-semibold text-violet-700 dark:text-slate-100"
                         : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-300"
@@ -351,7 +404,7 @@ export function AdminShell({
 
         {/* AI credits strip */}
         {!planLoading && credits ? (
-          <div className="mx-3 mb-3 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-3 dark:border-white/[0.08] dark:from-transparent dark:to-transparent dark:bg-white/[0.03]">
+          <div className="mx-3 mb-3 hidden rounded-2xl border border-violet-100 lg:block bg-gradient-to-br from-violet-50 to-white p-3 dark:border-white/[0.08] dark:from-transparent dark:to-transparent dark:bg-white/[0.03]">
             <p className="pk-label mb-1 !text-violet-600 dark:!text-violet-300">AI credits</p>
             <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
               {credits.generationsLeft} AI generations left this month
@@ -405,14 +458,15 @@ export function AdminShell({
       </aside>
 
       {/* Main */}
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-slate-200/80 bg-white/85 px-3 py-2.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-guma-navy/90 sm:gap-4 sm:px-4 lg:px-6">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-medium text-slate-200 lg:hidden"
+            aria-expanded={menuOpen}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 dark:border-white/10 dark:text-slate-200 lg:hidden"
           >
             <Menu className="h-4 w-4" /> Menu
           </button>
@@ -449,7 +503,8 @@ export function AdminShell({
                 href={`${storefrontBase}/${slug}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 dark:border dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]"
+                aria-label="View your shop (opens in a new tab)"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white sm:min-h-0 transition hover:bg-slate-800 dark:border dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100 dark:hover:bg-white/[0.1]"
               >
                 <Rocket className="h-3.5 w-3.5 opacity-80" />
                 <span className="hidden sm:inline">View shop</span>
@@ -459,9 +514,10 @@ export function AdminShell({
             <button
               type="button"
               onClick={handleLogout}
-              className="rounded-lg px-2 py-1.5 text-xs text-slate-400 hover:bg-white/5 lg:hidden"
+              aria-label="Sign out"
+              className="grid min-h-[44px] min-w-[44px] place-items-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/5 lg:hidden"
             >
-              Sign out
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </header>
@@ -475,7 +531,10 @@ export function AdminShell({
           </div>
         ) : null}
 
-        <main className="guma-console-main flex-1 px-4 py-6 lg:px-8">
+        <main
+          id="main"
+          className="guma-console-main flex-1 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-6 lg:px-8 lg:pb-8"
+        >
           <div className="mb-6">
             <h1 className="font-display text-[28px] font-bold tracking-tight text-slate-900 dark:text-white">{title}</h1>
             {description ? (
@@ -486,6 +545,45 @@ export function AdminShell({
         </main>
       </div>
       </div>
+
+      {bottomNav.length > 0 ? (
+        <nav
+          aria-label="Quick menu"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md dark:border-white/10 dark:bg-guma-navy/95 lg:hidden"
+        >
+          <ul className="mx-auto grid max-w-lg grid-cols-5">
+            {bottomNav.map((item) => {
+              const active = isActive(item.href);
+              const Icon = item.icon;
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+                      active ? "text-violet-700 dark:text-violet-300" : "text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" aria-hidden />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+            <li>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                aria-expanded={menuOpen}
+                className="flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400"
+              >
+                <Menu className="h-5 w-5" aria-hidden />
+                More
+              </button>
+            </li>
+          </ul>
+        </nav>
+      ) : null}
     </div>
   );
 }

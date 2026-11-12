@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, BellRing, MessageSquareText, RotateCcw, Send } from "lucide-react";
+import { AlertTriangle, BellRing, CheckCircle2, MessageSquareText, RotateCcw, Send } from "lucide-react";
 import { Card, formatPrice } from "@gumakart/ui";
 
 /**
@@ -89,9 +89,16 @@ function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange: (v: 
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${on ? "bg-primary" : "bg-white/15"} disabled:opacity-50`}
+      className="group -m-2 inline-flex shrink-0 items-center justify-center p-2.5 disabled:opacity-50"
     >
-      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+      <span
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+          on ? "bg-violet-600 dark:bg-violet-500" : "bg-slate-300 dark:bg-white/15"
+        }`}
+      >
+        <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+      </span>
+      <span className="sr-only">{on ? "On" : "Off"}</span>
     </button>
   );
 }
@@ -105,6 +112,8 @@ export function AutomationsView() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  /** Last toggle that saved, for a brief "Saved" next to it (and for screen readers). */
+  const [savedKey, setSavedKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -135,38 +144,81 @@ export function AutomationsView() {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error ?? "Could not save.");
+      setSavedKey(key);
+      window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 1800);
     } catch (e) {
       setData(before);
-      setError(e instanceof Error ? e.message : "Could not save.");
+      setError(`${e instanceof Error ? e.message : "Could not save."} The switch was put back — try again.`);
     } finally {
       setSaving(null);
     }
   }
 
   if (!data) {
-    return <p className="text-sm text-muted-foreground">{error ?? "Loading…"}</p>;
+    if (error) {
+      return (
+        <div role="alert" className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">
+          <p className="font-semibold">Couldn&apos;t load your Auto SMS settings.</p>
+          <p className="mt-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              void load();
+            }}
+            className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-red-700 px-4 font-semibold text-white"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="mx-auto max-w-3xl space-y-3" aria-busy="true" aria-label="Loading Auto SMS">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-200/60 dark:bg-white/[0.04]" />
+        ))}
+      </div>
+    );
   }
 
   const transactional = data.recipes.filter((r) => r.kind === "transactional");
   const marketing = data.recipes.filter((r) => r.kind === "marketing");
+  const onCount = transactional.filter((r) => r.enabled).length;
 
   const recipeRow = (r: Recipe) => (
     <li key={r.id} className="py-3">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-foreground">{r.label}</p>
-          <p className="text-sm text-muted-foreground">{r.when}</p>
+          <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+            {r.label}
+            {savedKey === r.id && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved
+              </span>
+            )}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {r.when} · <span className={r.enabled ? "font-medium text-emerald-700 dark:text-emerald-300" : ""}>{r.enabled ? "On" : "Off"}</span>
+          </p>
           <button
             type="button"
-            className="mt-1 text-xs font-medium text-violet-300 hover:text-violet-200"
+            aria-expanded={open === r.id}
+            aria-controls={`sample-${r.id}`}
+            className="mt-1 inline-flex min-h-[32px] items-center text-sm font-medium text-violet-700 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-200"
             onClick={() => setOpen(open === r.id ? null : r.id)}
           >
-            {open === r.id ? "Hide sample" : "See sample text"}
+            {open === r.id ? "Hide preview" : "Preview the text"}
           </button>
           {open === r.id && (
-            <p className="mt-2 rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-xs leading-relaxed text-slate-200 break-words">
-              {r.example}
-            </p>
+            <div id={`sample-${r.id}`} className="gk-rise mt-2 max-w-sm">
+              <p className="rounded-2xl rounded-bl-md bg-slate-100 px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 break-words dark:bg-white/10 dark:text-slate-100">
+                {r.example}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Sample · the real text uses the buyer&apos;s name, order number and amount. ~{r.example.length} characters.
+              </p>
+            </div>
           )}
         </div>
         <Toggle
@@ -191,28 +243,49 @@ export function AutomationsView() {
         &ldquo;nasaan na po?&rdquo;. Turn off anything you&apos;d rather text yourself.
       </p>
 
-      {!data.smsLive && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>SMS sending isn&apos;t connected yet, so texts show below as &ldquo;Not sent&rdquo;. Your settings are saved and start working once it&apos;s on.</span>
+      <div
+        className={`flex items-start gap-3 rounded-2xl border p-4 ${
+          data.smsLive
+            ? "border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03]"
+            : "border-amber-300 bg-amber-50 dark:border-amber-400/30 dark:bg-amber-500/10"
+        }`}
+        data-testid="auto-sms-status"
+      >
+        {data.smsLive ? (
+          <MessageSquareText className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden />
+        ) : (
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden />
+        )}
+        <div className="min-w-0 text-sm">
+          <p className="font-semibold text-slate-900 dark:text-white">
+            {onCount} of {transactional.length} order updates are on
+            {data.smsLive ? " and sending" : " · waiting for SMS to be connected"}
+          </p>
+          <p className={`mt-0.5 ${data.smsLive ? "text-slate-600 dark:text-slate-400" : "text-amber-900 dark:text-amber-100"}`}>
+            {data.smsLive
+              ? "Buyers get these automatically. Check “Recent texts” below to see what went out."
+              : "Nothing is texted to buyers yet. Your choices are saved and start working once sending is on."}
+          </p>
         </div>
-      )}
-      {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
+      </div>
+      <div aria-live="polite">
+        {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200" role="alert">{error}</p>}
+      </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Card className="p-3 sm:p-4">
           <Send className="h-4 w-4 text-violet-300" />
           <p className="mt-2 text-2xl font-bold">{data.summary.sent30d}</p>
           <p className="text-xs text-muted-foreground">Texts sent · 30 days</p>
         </Card>
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <RotateCcw className="h-4 w-4 text-emerald-300" />
           <p className="mt-2 text-2xl font-bold">{data.summary.recovered.orders}</p>
           <p className="text-xs text-muted-foreground">
             Recovered checkouts{data.summary.recovered.sales > 0 ? ` · ${formatPrice(data.summary.recovered.sales)}` : ""}
           </p>
         </Card>
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           <AlertTriangle className="h-4 w-4 text-amber-300" />
           <p className="mt-2 text-2xl font-bold">{data.summary.failed30d}</p>
           <p className="text-xs text-muted-foreground">Not sent · 30 days</p>
@@ -281,7 +354,7 @@ export function AutomationsView() {
           <Toggle
             on={data.seller.smsOnNewOrder}
             label="Text me too"
-            disabled={saving === "seller"}
+            disabled={saving === "seller" || (!data.seller.mobile && !data.seller.smsOnNewOrder)}
             onChange={(v) =>
               void patch("seller", { notifications: { smsOnNewOrder: v } }, (d) => ({
                 ...d,
@@ -293,7 +366,10 @@ export function AutomationsView() {
       </Card>
 
       <Card className="p-5">
-        <h2 className="font-semibold">Recent texts</h2>
+        <h2 id="recent-texts" className="font-semibold">Recent texts</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          “Test only” means the message was recorded but not actually sent, because SMS isn&apos;t connected yet.
+        </p>
         {data.messages.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No texts yet. They show here as orders come in.</p>
         ) : (

@@ -9,7 +9,7 @@ export default async function DashboardPage() {
 
   if (session?.tenantId) {
     // Plan §9: the 4-step onboarding comes first; the Launch wizard is optional.
-    if (await needsOnboarding(session.tenantId)) {
+    if (process.env.UX_HARNESS !== '1' && (await needsOnboarding(session.tenantId))) {
       redirect("/onboarding");
     }
   }

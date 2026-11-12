@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import QRCode from "qrcode";
@@ -11,6 +11,7 @@ import {
   Download,
   ExternalLink,
   Link2,
+  Loader2,
   Minus,
   Plus,
   Power,
@@ -121,11 +122,11 @@ function shareCaption(link: CheckoutLink, url: string): string {
 // ─── Small UI bits ───────────────────────────────────────────────────────────
 
 const chip =
-  "rounded-xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
+  "min-h-[40px] rounded-xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40";
 const chipOn = "border-primary/60 bg-primary/15 text-foreground";
 const chipOff = "border-white/10 text-slate-300 hover:bg-white/[0.05]";
 const ghostBtn =
-  "inline-flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-200 transition hover:bg-white/[0.06]";
+  "inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-sm text-slate-200 transition hover:bg-white/[0.06] disabled:opacity-50";
 
 function useCopy() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -234,6 +235,9 @@ export function CheckoutLinksManager() {
 
   return (
     <div className="space-y-5">
+      <span className="sr-only" aria-live="polite">
+        {copied ? "Link copied" : ""}
+      </span>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
           Sell where your buyers already are. Make a link, paste it in your Facebook post, Instagram bio,
@@ -246,7 +250,7 @@ export function CheckoutLinksManager() {
               setCreating(true);
               setJustCreated(null);
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90"
           >
             <Plus className="h-4 w-4" /> New checkout link
           </button>
@@ -271,13 +275,14 @@ export function CheckoutLinksManager() {
       )}
 
       {justCreated && (
-        <Card className="border-emerald-500/30 p-5">
+        <Card className="gk-rise border-emerald-300 p-5 ring-1 ring-emerald-100 dark:border-emerald-500/30 dark:ring-0">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Your link is ready</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Your link is ready — share it now</p>
               <p className="mt-1 text-lg font-semibold">{justCreated.title}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">Orders from it land in Orders, marked “Checkout link”.</p>
             </div>
-            <button type="button" onClick={() => setJustCreated(null)} className="text-slate-400 hover:text-white" aria-label="Close">
+            <button type="button" onClick={() => setJustCreated(null)} className="-m-2 grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-white" aria-label="Close">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -445,6 +450,13 @@ function CreateLinkPanel({
   const [maxOrders, setMaxOrders] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  // On phones the error sits above the sticky Create bar, often off-screen: bring it into view.
+  useEffect(() => {
+    if (!error) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    errorRef.current?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  }, [error]);
 
   useEffect(() => {
     fetch("/api/products", { cache: "no-store" })
@@ -560,7 +572,7 @@ function CreateLinkPanel({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-clip">
       <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
         <p className="text-base font-semibold">New checkout link</p>
         <button type="button" onClick={onCancel} className="text-slate-400 hover:text-white" aria-label="Cancel">
@@ -584,11 +596,9 @@ function CreateLinkPanel({
           <div className="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
             {products === null ? (
               <p className="text-sm text-muted-foreground">Loading products…</p>
-            ) : visible.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No products yet. <Link className="text-primary underline" href="/products">Add a product</Link> first.
-              </p>
-            ) : (
+            ) : visible.length === 0 && search.trim() ? (
+              <p className="text-sm text-muted-foreground">No product matches “{search.trim()}”.</p>
+            ) : visible.length === 0 ? null : (
               visible.map((p) => {
                 const isActive = p.status === "active";
                 const qty = selected.get(p.id);
@@ -596,15 +606,16 @@ function CreateLinkPanel({
                 return (
                   <div
                     key={p.id}
-                    className={`flex items-center gap-3 rounded-xl border px-3 py-2 transition ${
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2 transition sm:flex-nowrap ${
                       on ? "border-primary/50 bg-primary/10" : "border-white/10"
                     } ${isActive ? "" : "opacity-50"}`}
                   >
                     <button
                       type="button"
                       disabled={!isActive}
+                      aria-pressed={on}
                       onClick={() => toggleProduct(p.id)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-not-allowed"
+                      className="flex min-w-[12rem] flex-1 items-center gap-3 text-left disabled:cursor-not-allowed"
                     >
                       <span
                         className={`flex h-5 w-5 flex-none items-center justify-center rounded-md border ${
@@ -645,12 +656,12 @@ function CreateLinkPanel({
                     )}
                     {on && (
                       <div className="flex flex-none items-center gap-1 rounded-xl border border-white/10 p-0.5">
-                        <button type="button" onClick={() => setQty(p.id, qty - 1)} className="rounded-lg p-1.5 hover:bg-white/10" aria-label="Less">
-                          <Minus className="h-3.5 w-3.5" />
+                        <button type="button" onClick={() => setQty(p.id, qty - 1)} disabled={qty <= 1} className="grid h-9 w-9 place-items-center rounded-lg hover:bg-white/10 disabled:opacity-40" aria-label={`One less ${p.title}`}>
+                          <Minus className="h-4 w-4" />
                         </button>
-                        <span className="w-6 text-center text-sm font-semibold">{qty}</span>
-                        <button type="button" onClick={() => setQty(p.id, qty + 1)} className="rounded-lg p-1.5 hover:bg-white/10" aria-label="More">
-                          <Plus className="h-3.5 w-3.5" />
+                        <span className="w-6 text-center text-sm font-semibold" aria-live="polite" aria-label={`Quantity ${qty}`}>{qty}</span>
+                        <button type="button" onClick={() => setQty(p.id, qty + 1)} disabled={qty >= 99} className="grid h-9 w-9 place-items-center rounded-lg hover:bg-white/10 disabled:opacity-40" aria-label={`One more ${p.title}`}>
+                          <Plus className="h-4 w-4" />
                         </button>
                       </div>
                     )}
@@ -659,6 +670,17 @@ function CreateLinkPanel({
               })
             )}
           </div>
+
+          {products !== null && (
+            <QuickAddProduct
+              startOpen={visible.length === 0 && !search.trim()}
+              onAdded={(product) => {
+                setProducts((list) => [product, ...(list ?? [])]);
+                setSelected((prev) => new Map(prev).set(product.id, 1));
+                setSearch("");
+              }}
+            />
+          )}
         </section>
 
         {/* 2. Where */}
@@ -670,6 +692,7 @@ function CreateLinkPanel({
               <button
                 key={c.id}
                 type="button"
+                aria-pressed={channel === c.id}
                 onClick={() => setChannel(channel === c.id ? null : c.id)}
                 className={`${chip} ${channel === c.id ? chipOn : chipOff}`}
               >
@@ -691,6 +714,7 @@ function CreateLinkPanel({
                   key={d.id}
                   type="button"
                   disabled={disabled}
+                  aria-pressed={delivery === d.id}
                   onClick={() => setDelivery(d.id)}
                   className={`${chip} ${delivery === d.id ? chipOn : chipOff}`}
                 >
@@ -728,6 +752,7 @@ function CreateLinkPanel({
                   <button
                     key={m.id}
                     type="button"
+                    aria-pressed={payments.has(m.id)}
                     onClick={() => togglePayment(m.id)}
                     className={`${chip} ${payments.has(m.id) ? chipOn : chipOff}`}
                   >
@@ -809,11 +834,14 @@ function CreateLinkPanel({
         </section>
 
         {error && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>
+          <div ref={errorRef} role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {error}
+            <span className="mt-0.5 block text-xs opacity-90">Nothing you picked was lost — fix it and tap Create link again.</span>
+          </div>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 bg-white/[0.02] px-5 py-4">
+      <div className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur dark:border-white/5 dark:bg-card/95 lg:bottom-0">
         <p className="text-sm text-muted-foreground">
           {selected.size === 0
             ? "No products picked yet"
@@ -827,9 +855,9 @@ function CreateLinkPanel({
             type="button"
             disabled={saving || selected.size === 0}
             onClick={() => void submit()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
           >
-            <Link2 className="h-4 w-4" /> {saving ? "Creating…" : "Create link"}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} {saving ? "Creating…" : "Create link"}
           </button>
         </div>
       </div>
@@ -856,6 +884,9 @@ export function SharePanelBody({ link, url, onShowQr }: { link: CheckoutLink; ur
 
   return (
     <div className="mt-4 space-y-4">
+      <span className="sr-only" aria-live="polite">
+        {copied ? "Copied" : ""}
+      </span>
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-2 pl-4">
         <span className="min-w-0 flex-1 truncate font-mono text-sm">{url.replace(/^https?:\/\//, "")}</span>
         <button
@@ -990,16 +1021,153 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       aria-label={title}
     >
       <div
-        className="w-full max-w-lg rounded-t-2xl border border-white/10 bg-card p-5 sm:rounded-2xl"
+        className="gk-rise max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-white/10 bg-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:rounded-2xl sm:pb-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3">
           <p className="truncate text-base font-semibold">{title}</p>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white" aria-label="Close">
+          <button type="button" onClick={onClose} autoFocus className="-m-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-white" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Quick add (so a new seller never has to leave this flow) ───────────────
+
+function QuickAddProduct({ startOpen, onAdded }: { startOpen: boolean; onAdded: (product: ProductRow) => void }) {
+  const [open, setOpen] = useState(startOpen);
+  const [title, setTitle] = useState("");
+  const [price, setPrice] = useState("");
+  const [stock, setStock] = useState("10");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<"title" | "price" | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-600 hover:border-violet-400 hover:text-violet-700 dark:border-white/20 dark:text-slate-300 dark:hover:text-white"
+      >
+        <Plus className="h-4 w-4" aria-hidden /> Add a new product
+      </button>
+    );
+  }
+
+  async function save() {
+    setError(null);
+    setFieldError(null);
+    const amount = Number(price.replace(/[^\d.]/g, ""));
+    if (title.trim().length < 2) {
+      setFieldError("title");
+      return setError("Type the product name (at least 2 letters).");
+    }
+    if (!(amount > 0)) {
+      setFieldError("price");
+      return setError("Type the price in pesos, like 250.");
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          basePrice: Math.round(amount * 100) / 100,
+          stockQty: Math.max(0, Math.min(99999, Number(stock) || 0)),
+          status: "active",
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok || !data.product) throw new Error(data.error ?? "Couldn't save the product.");
+      const p = data.product as Partial<ProductRow> & { id: string };
+      onAdded({
+        id: p.id,
+        title: p.title ?? title.trim(),
+        basePrice: String(p.basePrice ?? amount.toFixed(2)),
+        status: p.status ?? "active",
+        stockQty: Number(p.stockQty ?? stock) || 0,
+        imageUrl: p.imageUrl ?? null,
+        hasOptions: false,
+      });
+      setTitle("");
+      setPrice("");
+      setStock("10");
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the product.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const field =
+    "mt-1 h-11 w-full rounded-xl border bg-white/[0.03] px-3 text-sm outline-none focus:border-primary/40";
+  return (
+    <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-primary/30 dark:bg-primary/5" data-testid="quick-add-product">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Add a product</p>
+        <p className="text-xs text-muted-foreground">Add photos and sizes later in Products.</p>
+      </div>
+      <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_8rem_7rem]">
+        <label className="block text-xs font-medium text-muted-foreground">
+          Product name
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Ube Halaya 500g"
+            aria-invalid={fieldError === "title"}
+            className={`${field} ${fieldError === "title" ? "border-red-400" : "border-white/10"}`}
+            autoFocus={!startOpen}
+          />
+        </label>
+        <label className="block text-xs font-medium text-muted-foreground">
+          Price (₱)
+          <input
+            value={price}
+            inputMode="decimal"
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="250"
+            aria-invalid={fieldError === "price"}
+            className={`${field} ${fieldError === "price" ? "border-red-400" : "border-white/10"}`}
+          />
+        </label>
+        <label className="block text-xs font-medium text-muted-foreground">
+          In stock
+          <input
+            value={stock}
+            inputMode="numeric"
+            onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
+            className={`${field} border-white/10`}
+          />
+        </label>
+      </div>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">
+          {error}
+          {!fieldError && <span className="block text-xs">Your details are still here — try again.</span>}
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+          {saving ? "Saving…" : "Add and pick it"}
+        </button>
+        {!startOpen && (
+          <button type="button" onClick={() => setOpen(false)} className={ghostBtn}>
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   );

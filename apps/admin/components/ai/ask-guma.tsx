@@ -62,7 +62,7 @@ export function AskGuma() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-violet-900/40 hover:-translate-y-0.5"
+          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex min-h-[44px] items-center gap-2 rounded-2xl lg:bottom-5 lg:right-5 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-violet-900/40 hover:-translate-y-0.5"
           data-testid="ask-guma-open"
         >
           <Sparkles className="h-4 w-4" /> Ask Guma
@@ -72,7 +72,7 @@ export function AskGuma() {
         <div
           role="dialog"
           aria-label="Ask Guma"
-          className="fixed inset-x-3 bottom-3 z-50 flex max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d1224] shadow-2xl sm:inset-x-auto sm:right-5 sm:w-[400px]"
+          className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex max-h-[75vh] lg:bottom-3 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d1224] shadow-2xl sm:inset-x-auto sm:right-5 sm:w-[400px]"
           data-testid="ask-guma"
         >
           <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-violet-600/30 to-indigo-600/20 px-4 py-3">

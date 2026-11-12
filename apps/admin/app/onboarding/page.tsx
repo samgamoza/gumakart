@@ -8,6 +8,7 @@ import { formatPrice } from "@gumakart/ui";
 import { AuthError, AuthField, AuthLayout, authInputClassName } from "@/components/auth-layout";
 import { QrModal, SharePanelBody, type CheckoutLink } from "@/components/checkout-links-manager";
 import { productImageSrc } from "@/lib/product-image";
+import { formatPhPhone, isValidPhMobile, normalizePhMobile } from "@/lib/format-ph";
 
 /**
  * Plan §9 — steps 2–4 after "Your business" (step 1 is part of signup):
@@ -339,15 +340,31 @@ function PaymentsStep({ initial, onDone }: { initial: State["payments"]; onDone:
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    // Check the numbers here so a typo doesn't send buyers' money to the wrong wallet.
+    if (gcashNumber.trim() && !isValidPhMobile(gcashNumber)) {
+      return setError("Your GCash number should be 11 digits, like 0917 123 4567.");
+    }
+    if (gcashNumber.trim() && gcashName.trim().length < 2) {
+      return setError("Add the GCash account name so buyers can check they're paying the right person.");
+    }
+    if (showMaya && mayaNumber.trim() && !isValidPhMobile(mayaNumber)) {
+      return setError("Your Maya number should be 11 digits, like 0917 123 4567.");
+    }
+    if (showMaya && mayaNumber.trim() && mayaName.trim().length < 2) {
+      return setError("Add the Maya account name too.");
+    }
+    if (!gcashNumber.trim() && !(showMaya && mayaNumber.trim()) && !cod) {
+      return setError("Turn on at least one way to get paid — GCash, Maya or cash on delivery. Or tap “I'll finish this later”.");
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/onboarding/payments", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          gcashNumber: gcashNumber.trim() || undefined,
+          gcashNumber: normalizePhMobile(gcashNumber) ?? (gcashNumber.trim() || undefined),
           gcashName: gcashName.trim() || undefined,
-          mayaNumber: showMaya ? mayaNumber.trim() || undefined : undefined,
+          mayaNumber: showMaya ? normalizePhMobile(mayaNumber) ?? (mayaNumber.trim() || undefined) : undefined,
           mayaName: showMaya ? mayaName.trim() || undefined : undefined,
           codEnabled: cod,
         }),
@@ -370,7 +387,7 @@ function PaymentsStep({ initial, onDone }: { initial: State["payments"]; onDone:
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#007dfe] text-xs font-black">G</span> GCash
         </p>
         <div className="mt-3 grid gap-3">
-          <input value={gcashNumber} onChange={(e) => setGcashNumber(e.target.value)} inputMode="tel" className={authInputClassName} placeholder="GCash number, e.g. 0917 123 4567" aria-label="GCash number" />
+          <input value={gcashNumber} onChange={(e) => setGcashNumber(e.target.value)} onBlur={(e) => isValidPhMobile(e.target.value) && setGcashNumber(formatPhPhone(e.target.value))} type="tel" inputMode="tel" autoComplete="tel-national" className={authInputClassName} placeholder="GCash number, e.g. 0917 123 4567" aria-label="GCash number" />
           <input value={gcashName} onChange={(e) => setGcashName(e.target.value)} className={authInputClassName} placeholder="Account name, e.g. Maria S." aria-label="GCash account name" />
         </div>
       </div>
@@ -381,7 +398,7 @@ function PaymentsStep({ initial, onDone }: { initial: State["payments"]; onDone:
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#00b86b] text-xs font-black">M</span> Maya
           </p>
           <div className="mt-3 grid gap-3">
-            <input value={mayaNumber} onChange={(e) => setMayaNumber(e.target.value)} inputMode="tel" className={authInputClassName} placeholder="Maya number" aria-label="Maya number" />
+            <input value={mayaNumber} onChange={(e) => setMayaNumber(e.target.value)} onBlur={(e) => isValidPhMobile(e.target.value) && setMayaNumber(formatPhPhone(e.target.value))} type="tel" inputMode="tel" className={authInputClassName} placeholder="Maya number, e.g. 0918 765 4321" aria-label="Maya number" />
             <input value={mayaName} onChange={(e) => setMayaName(e.target.value)} className={authInputClassName} placeholder="Account name" aria-label="Maya account name" />
           </div>
         </div>
@@ -492,8 +509,8 @@ function LinkStep({
         {finishing && <Loader2 className="h-4 w-4 animate-spin" />} Go to my dashboard
       </button>
       <p className="mt-3 text-center text-xs text-slate-400">
-        Make more links any time from <span className="text-slate-200">Checkout links</span>. Your full online store is
-        optional. Set it up later from <span className="text-slate-200">Storefront look</span>.
+        Make more links any time from <span className="text-slate-200">Checkout links</span>. A full online store is
+        optional — set it up later from <span className="text-slate-200">Online store</span> in the menu.
       </p>
       {showQr && <QrModal link={link} url={url} onClose={() => setShowQr(false)} />}
     </div>

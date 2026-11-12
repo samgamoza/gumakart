@@ -49,9 +49,11 @@ export interface DashboardNavGroup {
 }
 
 /**
- * Seller navigation (plan §10): Sell · Fulfill · Automate · Store, then Settings.
- * The empty placeholder pages (Users, Analytics, Integrations, Domains, Workflows,
- * Code, Logs, API, Security) are no longer listed; they come back when they ship.
+ * Seller navigation, grouped by how often a social seller needs each page:
+ *   1. Daily work (always visible): Overview, Orders, Checkout links, Products, Chats, Customers.
+ *   2. Delivery, POS & store: visible so couriers, POS and the optional online store are easy to find.
+ *   3. Less frequent tools fold away (they open automatically when you're on one of their pages).
+ * Every href is unchanged; staff only see what their role can open (canOpenPage).
  */
 export const DASHBOARD_NAV: DashboardNavGroup[] = [
   {
@@ -66,57 +68,18 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         description: "What needs you today: orders to confirm, pack and ship.",
       },
       {
-        id: "reports",
-        label: "Reports",
-        href: "/reports",
-        icon: BarChart3,
-        badge: "new",
-        description: "Sales, profit, top products and buyers, repeat rate — with CSV exports.",
-      },
-    ],
-  },
-  {
-    id: "sell",
-    label: "Sell",
-    items: [
-      {
-        id: "checkout-links",
-        label: "Checkout links",
-        href: "/checkout-links",
-        icon: Link2,
-        badge: "new",
-        description: "Share a one-page checkout in your posts and chats.",
-      },
-      {
-        id: "inbox",
-        label: "Chats",
-        href: "/inbox",
-        icon: MessageCircle,
-        badge: "new",
-        description: "Messenger and Instagram messages — reply and send products or checkout links.",
-      },
-      {
-        id: "channels",
-        label: "Channels",
-        href: "/channels",
-        icon: Share2,
-        badge: "new",
-        description: "Sales by channel, TikTok/Facebook/Instagram links, Messenger, Shopee and Lazada.",
-      },
-      {
-        id: "pos",
-        label: "POS",
-        href: "/pos",
-        icon: Calculator,
-        badge: "new",
-        description: "Sell in-store: cash, GCash, Maya, card; Senior/PWD; shifts.",
-      },
-      {
         id: "orders",
         label: "Orders",
         href: "/orders",
         icon: ShoppingBag,
         description: "Confirm payments, pack, and ship orders.",
+      },
+      {
+        id: "checkout-links",
+        label: "Checkout links",
+        href: "/checkout-links",
+        icon: Link2,
+        description: "Share a one-page checkout in your posts and chats.",
       },
       {
         id: "products",
@@ -126,19 +89,11 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         description: "Your catalog, photos, prices, and stock.",
       },
       {
-        id: "inventory",
-        label: "Stock",
-        href: "/inventory",
-        icon: Boxes,
-        badge: "new",
-        description: "Count stock, low-stock alerts, CSV import and export.",
-      },
-      {
-        id: "categories",
-        label: "Categories",
-        href: "/categories",
-        icon: Database,
-        description: "Group products for your online store.",
+        id: "inbox",
+        label: "Chats",
+        href: "/inbox",
+        icon: MessageCircle,
+        description: "Messenger and Instagram messages — reply and send products or checkout links.",
       },
       {
         id: "customers",
@@ -147,19 +102,11 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         icon: Users,
         description: "Every buyer by phone number, with their orders.",
       },
-      {
-        id: "reviews",
-        label: "Reviews",
-        href: "/reviews",
-        icon: Star,
-        badge: "new",
-        description: "Verified buyer reviews: reply, hide or report.",
-      },
     ],
   },
   {
     id: "fulfill",
-    label: "Fulfill",
+    label: "Delivery, POS & store",
     items: [
       {
         id: "deliveries",
@@ -168,57 +115,13 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         icon: Truck,
         description: "Orders with a rider booked or on the way.",
       },
-    ],
-  },
-  {
-    id: "automate",
-    label: "Automate",
-    items: [
       {
-        id: "campaigns",
-        label: "SMS campaigns",
-        href: "/campaigns",
-        icon: Megaphone,
-        badge: "new",
-        description: "Text a sale to buyers who said yes — repeat buyers, VIPs, people who haven't ordered lately.",
+        id: "pos",
+        label: "POS (in-store)",
+        href: "/pos",
+        icon: Calculator,
+        description: "Sell in-store: cash, GCash, Maya, card; Senior/PWD; shifts.",
       },
-      {
-        id: "discounts",
-        label: "Discounts",
-        href: "/discounts",
-        icon: BadgePercent,
-        badge: "new",
-        description: "Coupon codes, quantity deals and automatic discounts.",
-      },
-      {
-        id: "gift-cards",
-        label: "Gift cards",
-        href: "/gift-cards",
-        icon: Gift,
-        badge: "new",
-        description: "Gift cards and store credit — buyers use the code online or at the POS.",
-      },
-      {
-        id: "automations",
-        label: "Auto SMS",
-        href: "/automations",
-        icon: Send,
-        badge: "new",
-        description: "Order updates and reminders texted to buyers for you.",
-      },
-      {
-        id: "messages",
-        label: "Messages",
-        href: "/messages",
-        icon: MessagesSquare,
-        description: "Your AI shop assistant's chats with store visitors.",
-      },
-    ],
-  },
-  {
-    id: "store",
-    label: "Store",
-    items: [
       {
         id: "launch",
         label: "Online store",
@@ -231,8 +134,93 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         label: "Apps & integrations",
         href: "/integrations",
         icon: Blocks,
-        badge: "new",
         description: "Payments, chats, Shopee/Lazada, couriers, pixels, Zapier and more — what's on and what to set up.",
+      },
+    ],
+  },
+  {
+    id: "sell",
+    label: "Catalog & insights",
+    collapsible: true,
+    defaultOpen: false,
+    items: [
+      {
+        id: "inventory",
+        label: "Stock",
+        href: "/inventory",
+        icon: Boxes,
+        description: "Count stock, low-stock alerts, CSV import and export.",
+      },
+      {
+        id: "categories",
+        label: "Categories",
+        href: "/categories",
+        icon: Database,
+        description: "Group products for your online store.",
+      },
+      {
+        id: "reports",
+        label: "Reports",
+        href: "/reports",
+        icon: BarChart3,
+        description: "Sales, profit, top products and buyers, repeat rate — with CSV exports.",
+      },
+      {
+        id: "channels",
+        label: "Sales channels",
+        href: "/channels",
+        icon: Share2,
+        description: "Sales by channel, TikTok/Facebook/Instagram links, Messenger, Shopee and Lazada.",
+      },
+      {
+        id: "reviews",
+        label: "Reviews",
+        href: "/reviews",
+        icon: Star,
+        description: "Verified buyer reviews: reply, hide or report.",
+      },
+    ],
+  },
+  {
+    id: "automate",
+    label: "Messages & promos",
+    collapsible: true,
+    defaultOpen: false,
+    items: [
+      {
+        id: "automations",
+        label: "Auto SMS",
+        href: "/automations",
+        icon: Send,
+        description: "Order updates and reminders texted to buyers for you.",
+      },
+      {
+        id: "messages",
+        label: "AI assistant chats",
+        href: "/messages",
+        icon: MessagesSquare,
+        description: "Your AI shop assistant's chats with store visitors.",
+      },
+      {
+        id: "campaigns",
+        label: "SMS campaigns",
+        href: "/campaigns",
+        icon: Megaphone,
+        description: "Text a sale to buyers who said yes — repeat buyers, VIPs, people who haven't ordered lately.",
+      },
+      {
+        id: "discounts",
+        label: "Discounts",
+        href: "/discounts",
+        icon: BadgePercent,
+        description: "Coupon codes, quantity deals and automatic discounts.",
+      },
+      {
+        id: "gift-cards",
+        label: "Gift cards",
+        href: "/gift-cards",
+        icon: Gift,
+        description: "Gift cards and store credit — buyers use the code online or at the POS.",
       },
     ],
   },
@@ -293,7 +281,6 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         label: "Branches",
         href: "/settings/branches",
         icon: MapPin,
-        badge: "new",
         description: "Stores, stalls and warehouses — stock per branch, POS per branch.",
       },
       {
@@ -301,7 +288,6 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         label: "Partner",
         href: "/settings/partner",
         icon: Handshake,
-        badge: "new",
         description: "Let an agency or VA help run your shop.",
       },
       {
@@ -316,7 +302,6 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         label: "API & webhooks",
         href: "/developers",
         icon: Code2,
-        badge: "new",
         description: "API keys and webhooks for your own tools (owner only).",
       },
       {
@@ -324,7 +309,6 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
         label: "Help",
         href: "/help",
         icon: LifeBuoy,
-        badge: "new",
         description: "Short Taglish how-tos, the status page, and support.",
       },
       {
