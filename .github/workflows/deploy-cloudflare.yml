@@ -9,7 +9,7 @@
 #
 # Repo secrets (Settings -> Secrets and variables -> Actions):
 #   CLOUDFLARE_API_TOKEN   same token as scripts/deploy-cloudflare.ps1
-#   CLOUDFLARE_ACCOUNT_ID  optional, defaults below
+#   CLOUDFLARE_ACCOUNT_ID  required: the Cloudflare account the Workers deploy to
 # Optional repo variables (public browser keys): NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
 #   NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY, NEXT_PUBLIC_SUPPORT_EMAIL
 # Runtime secrets (DATABASE_URL_POOLED, AUTH_SECRET, CRON_SECRET, ...) live on the
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@34e114876b0b11a390b2fc2d8b6ad1e4f4b0b5b7 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
@@ -115,7 +115,7 @@ jobs:
           want="${{ github.event.inputs.app || 'all' }}"
           if [ "$want" = "all" ] || [ "$want" = "${{ matrix.app }}" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
 
-      - uses: actions/checkout@34e114876b0b11a390b2fc2d8b6ad1e4f4b0b5b7 # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         if: steps.pick.outputs.run == 'true'
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
@@ -166,7 +166,7 @@ jobs:
         run: pnpm exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID || '14e2cde158da2d561d055949bf5a3f19' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Smoke test
         if: steps.pick.outputs.run == 'true'

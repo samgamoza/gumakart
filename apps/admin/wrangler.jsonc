@@ -18,7 +18,7 @@
   // One every-minute trigger (free plan allows 5 per account); lib/cron-schedule.ts picks the jobs.
   "triggers": { "crons": ["* * * * *"] },
   // Cloudflare Hyperdrive "gumakart-db" -> Neon production (direct). getDb() uses it on Workers.
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "93f8b5636eb1478c9f3d13b3e7d589b8" }],
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "49c1d9115ace4ed0adf541b086e1ed1f" }],
   "vars": {
     "NODE_ENV": "production",
     "NEXT_PUBLIC_STOREFRONT_URL": "https://kart.guma.one",
