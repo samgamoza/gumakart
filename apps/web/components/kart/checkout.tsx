@@ -165,7 +165,7 @@ export function Checkout() {
       {expired && (
         <section className="m-3 mt-6" role="alert">
           <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-            <p className="text-sm font-medium text-amber-900">Your 10-minute hold ended. Nothing was charged, and your details are still here.</p>
+            <p className="text-sm font-medium text-amber-900">{`Your ${CART_HOLD_MINUTES}-minute hold ended. Nothing was charged, and your details are still here.`}</p>
             <button type="button" className="k-btn k-btn-dark shrink-0 !min-h-10 !px-4 text-sm" onClick={() => setSecondsLeft(CART_HOLD_MINUTES * 60)}>
               Reserve again
             </button>

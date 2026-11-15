@@ -36,7 +36,7 @@ export function LandingPricing() {
             Start free. Scale when you&apos;re ready.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            No setup fees. Pay only when you grow — plus a small fee per paid order.
+            No setup fees. No per-order fee on cash on delivery or payments sent straight to your own GCash/Maya. Online payments collected through Guma carry a small fee.
           </p>
         </div>
 

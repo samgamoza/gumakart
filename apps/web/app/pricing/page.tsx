@@ -23,8 +23,9 @@ export default function PricingPage() {
       <LandingPricing />
       <div className="mx-auto max-w-3xl px-4 pb-8 text-center text-sm text-muted-foreground">
         <p>
-          All paid plans include a 2.5% + ₱5 platform fee per successful paid order (excluding COD).
-          Payment gateway fees from PayMongo/Xendit are passed through at cost.
+          Orders you collect yourself, with cash on delivery or GCash/Maya sent straight to your own account, carry no
+          per-order fee from Guma. When a buyer pays online through Guma, a 2.5% + ₱5 platform fee applies to that order,
+          and the payment gateway&apos;s own fee (PayMongo/Xendit) is passed through at cost.
         </p>
       </div>
       <LandingCta />

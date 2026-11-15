@@ -28,7 +28,7 @@ function SweetProductCard({
 }) {
   return (
     <div className="glass-card group overflow-hidden rounded-2xl transition duration-500 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(255,0,127,0.15)]">
-      <div className="relative aspect-square overflow-hidden">
+      <Link href={`/${tenantSlug}/products/${product.slug}`} className="relative block aspect-square overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={sizedImageUrl(product.image, 300)}
@@ -41,15 +41,17 @@ function SweetProductCard({
         />
         {product.category && (
           <span
-            className="absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wider text-white"
+            className="absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-semibold text-white"
             style={{ backgroundColor: accent }}
           >
             {product.category}
           </span>
         )}
-      </div>
+      </Link>
       <div className="p-4">
-        <h3 className="font-heading mb-1 text-lg font-semibold text-[#2d1b1b]">{product.title}</h3>
+        <h3 className="font-heading mb-1 text-lg font-semibold text-[#2d1b1b]">
+          <Link href={`/${tenantSlug}/products/${product.slug}`}>{product.title}</Link>
+        </h3>
         {product.shortDescription && (
           <p className="mb-3 line-clamp-2 text-xs text-[#2d1b1b]/50">{product.shortDescription}</p>
         )}
@@ -67,12 +69,6 @@ function SweetProductCard({
             <Plus className="h-4 w-4" />
           </button>
         </div>
-        <Link
-          href={`/${tenantSlug}/products/${product.slug}`}
-          className="mt-2 block text-center text-xs text-[#2d1b1b]/40 underline"
-        >
-          View details
-        </Link>
       </div>
     </div>
   );
@@ -91,13 +87,13 @@ export function SweetProductGrid({ tenant }: { tenant: DemoTenant }) {
     active === "All" ? tenant.products : tenant.products.filter((p) => p.category === active);
 
   return (
-    <section id="shop" className="relative px-6 py-20">
+    <section id="shop" className="relative px-6 pb-20 pt-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-10 text-center">
-          <p className="font-display text-3xl text-[#ff007f] md:text-4xl">Sweet treats & good eats</p>
+          <p className="font-display text-3xl md:text-4xl" style={{ color: accent }}>Sweet treats & good eats</p>
           <h2 className="font-heading mt-2 text-3xl font-bold text-[#2d1b1b] md:text-4xl">The Shop</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm text-[#2d1b1b]/50">
-            Homemade baked goods and local delicacies — fresh from the kitchen to yours.
+            {tenant.tagline}
           </p>
         </div>
 
@@ -107,9 +103,9 @@ export function SweetProductGrid({ tenant }: { tenant: DemoTenant }) {
               key={cat}
               type="button"
               onClick={() => setActive(cat)}
-              className={`rounded-full px-5 py-2 text-sm font-medium uppercase tracking-wide transition ${
+              className={`rounded-full px-5 py-2 text-sm font-medium transition ${
                 active === cat
-                  ? "text-white shadow-[0_0_15px_rgba(255,0,127,0.4)]"
+                  ? "text-white"
                   : "bg-[#ffd1dc]/20 text-[#2d1b1b]/60 hover:bg-[#ffd1dc]/40"
               }`}
               style={active === cat ? { backgroundColor: accent } : undefined}

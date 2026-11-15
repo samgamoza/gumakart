@@ -8,6 +8,9 @@ import { isOptimizableImageSrc } from "./image-hosts";
  */
 export default function storefrontImageLoader({ src, width, quality }: { src: string; width: number; quality?: number }): string {
   if (!isOptimizableImageSrc(src)) return src;
+  // `next dev` has no /_next/image route when the loader is custom (production's comes from the
+  // Cloudflare worker), so serve the original there.
+  if (process.env.NODE_ENV === "development") return src;
   const params = new URLSearchParams({ url: src, w: String(width), q: String(quality ?? 75) });
   return `/_next/image?${params.toString()}`;
 }

@@ -21,12 +21,31 @@ const isSellerUpload = (src: string) => /^\/uploads\/products\/[^/?#]+\/[^/?#]+$
  *  - other site images and https photos: Next's optimizer
  *  - data:/blob: and SVGs: unchanged
  */
+/**
+ * `images.loader = "custom"` removes Next's own `/_next/image` route; in production the
+ * Cloudflare worker serves it. In `next dev` nothing does, so every optimised URL 404s.
+ * Serve originals there (Unsplash accepts its own `w=` param, so demo photos still shrink).
+ */
+const OPTIMIZER_AVAILABLE = process.env.NODE_ENV !== "development";
+
+function devFallbackUrl(src: string, w: number): string {
+  if (/^https:\/\/images\.unsplash\.com\//.test(src)) {
+    const url = new URL(src);
+    url.searchParams.set("w", String(w));
+    return url.toString();
+  }
+  return src;
+}
+
 export function sizedImageUrl(src: string | null | undefined, px: number): string {
   if (!src) return "";
   if (src.startsWith("data:") || src.startsWith("blob:") || /\.svg($|\?)/i.test(src)) return src;
   const w = snapWidth(px);
   if (isSellerUpload(src)) return `${src}?w=${w}`;
-  if (src.startsWith("/") || /^https?:\/\//.test(src)) return `/_next/image?url=${encodeURIComponent(src)}&w=${w}&q=75`;
+  if (src.startsWith("/") || /^https?:\/\//.test(src)) {
+    if (!OPTIMIZER_AVAILABLE) return devFallbackUrl(src, w);
+    return `/_next/image?url=${encodeURIComponent(src)}&w=${w}&q=75`;
+  }
   return src;
 }
 
