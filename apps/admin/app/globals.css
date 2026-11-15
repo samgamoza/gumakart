@@ -453,6 +453,10 @@
 @layer utilities {
   html:not([data-theme="dark"]) .bg-guma-navy { background-color: #ffffff; }
   html:not([data-theme="dark"]) :not([class*="dark:"])[class~="bg-guma-navy/60"], html:not([data-theme="dark"]) :not([class*="dark:"])[class~="bg-guma-navy/90"] { background-color: rgba(255,255,255,.88); }
+  /* Those surfaces turn white in the light theme, so white text on them (the sign-in and
+     signup fields) must turn dark too — the general text-white rule skips anything with bg-. */
+  html:not([data-theme="dark"]) :not([class*="dark:"])[class~="text-white"][class~="bg-guma-navy/60"],
+  html:not([data-theme="dark"]) :not([class*="dark:"])[class~="text-white"][class~="bg-guma-navy/90"] { color: #0f172a; caret-color: #0f172a; }
   html:not([data-theme="dark"]) .mono-label { font-family: var(--font-body), system-ui, sans-serif; font-weight: 600; color: #94a3b8; letter-spacing: .12em; }
   html:not([data-theme="dark"]) .grid-bg { background-image: none; }
 }

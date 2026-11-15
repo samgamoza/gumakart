@@ -15,14 +15,28 @@ export function Field({
   error?: string | null;
   children: React.ReactNode;
 }) {
+  // Tie the label, hint and error to the control so taps on the label focus it and
+  // screen readers announce the name and the problem.
+  const uid = React.useId();
+  const noteId = error || hint ? `${uid}-note` : undefined;
+  const control = React.isValidElement<Record<string, unknown>>(children)
+    ? React.cloneElement(children, {
+        id: (children.props.id as string | undefined) ?? uid,
+        "aria-describedby": noteId,
+        "aria-invalid": error ? true : children.props["aria-invalid"],
+      })
+    : children;
+  const controlId = React.isValidElement<Record<string, unknown>>(children)
+    ? ((children.props.id as string | undefined) ?? uid)
+    : undefined;
   return (
     <div>
-      <label className="k-label">{label}</label>
-      {children}
+      <label className="k-label" htmlFor={controlId}>{label}</label>
+      {control}
       {error ? (
-        <p className="mt-1 text-xs font-medium text-[color:var(--kart-danger)]">{error}</p>
+        <p id={noteId} role="alert" className="mt-1 text-xs font-medium text-[color:var(--kart-danger)]">{error}</p>
       ) : hint ? (
-        <p className="mt-1 text-xs text-[color:var(--kart-muted)]">{hint}</p>
+        <p id={noteId} className="mt-1 text-xs text-[color:var(--kart-muted)]">{hint}</p>
       ) : null}
     </div>
   );

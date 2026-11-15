@@ -45,6 +45,8 @@ export function Checkout() {
 
   const shipping = useMemo(() => quoteShipping(address.regionCode, address.provinceCode), [address.regionCode, address.provinceCode]);
   const totals = computeTotals(PRODUCT.price, shipping?.amount ?? null, method);
+  const expired = secondsLeft === 0;
+  const lowTime = secondsLeft > 0 && secondsLeft <= 60;
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
   const ss = String(secondsLeft % 60).padStart(2, "0");
 
@@ -101,9 +103,13 @@ export function Checkout() {
         </div>
         <div className="text-right">
           <p className="flex items-center justify-end gap-1 text-[11px] font-semibold text-[color:var(--kart-orange-dark)]">
-            <Clock className="h-3.5 w-3.5" /> Reserved
+            <Clock className="h-3.5 w-3.5" aria-hidden /> {expired ? "Released" : "Reserved"}
           </p>
-          <p className="font-mono text-lg font-bold tabular-nums">
+          <p
+            className={`font-mono text-lg font-bold tabular-nums ${lowTime ? "k-pulse text-[color:var(--kart-danger)]" : ""}`}
+            role="timer"
+            aria-label={expired ? "Reservation released" : `Reserved for ${Number(mm)} minutes ${Number(ss)} seconds`}
+          >
             {mm}:{ss}
           </p>
         </div>
@@ -148,13 +154,24 @@ export function Checkout() {
       <section className="m-3 mt-6 grid gap-4" data-error={Boolean(errors.method)}>
         <SectionTitle n={2}>How will you pay?</SectionTitle>
         <PaymentPicker value={method} onChange={setMethod} />
-        {errors.method && <p className="-mt-2 text-xs font-medium text-[color:var(--kart-danger)]">{errors.method}</p>}
+        {errors.method && <p role="alert" className="-mt-2 text-xs font-medium text-[color:var(--kart-danger)]">{errors.method}</p>}
         {method === "cod" && (
           <p className="rounded-xl bg-[color:var(--kart-orange-soft)] px-4 py-3 text-xs font-medium text-[color:var(--kart-orange-dark)]">
             COD adds a {peso(totals.codFee)} handling fee. Please prepare exact cash for the rider.
           </p>
         )}
       </section>
+
+      {expired && (
+        <section className="m-3 mt-6" role="alert">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-sm font-medium text-amber-900">Your 10-minute hold ended. Nothing was charged, and your details are still here.</p>
+            <button type="button" className="k-btn k-btn-dark shrink-0 !min-h-10 !px-4 text-sm" onClick={() => setSecondsLeft(CART_HOLD_MINUTES * 60)}>
+              Reserve again
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Fee disclosure — always above the CTA */}
       <section className="m-3 mt-6">
@@ -177,9 +194,12 @@ export function Checkout() {
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--kart-muted)]">Total</p>
             <p className="text-lg font-extrabold leading-tight tabular-nums">{peso(totals.total)}</p>
           </div>
-          <button type="button" onClick={submit} disabled={submitting || secondsLeft === 0} className="k-btn k-btn-primary flex-1 text-[15px]">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {secondsLeft === 0 ? "Reservation expired" : "Confirm Payment & Delivery via BayanGo"}
+          <button type="button" onClick={submit} disabled={submitting || expired} className="k-btn k-btn-primary flex-1 flex-col !gap-0 text-[15px]" aria-busy={submitting}>
+            <span className="flex items-center gap-2">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {expired ? "Hold ended" : submitting ? "Placing order…" : method === "cod" ? "Place order" : "Confirm & pay"}
+            </span>
+            {!expired && !submitting && <span className="text-[11px] font-medium opacity-90">Delivered by BayanGo</span>}
           </button>
         </div>
       </div>

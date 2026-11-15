@@ -5,7 +5,8 @@
 */
 .kart {
   --kart-orange: #ff6b00;
-  --kart-orange-dark: #e35f00;
+  --kart-orange-dark: #b43c00; /* ≥5:1 on white and on the soft tint */
+  --kart-orange-action: #cc4a00; /* white text on this passes AA (4.6:1); #ff6b00 did not (2.9:1) */
   --kart-orange-soft: #fff1e6;
   --kart-ink: #0f172a;
   --kart-slate: #1e293b;
@@ -71,16 +72,18 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  height: 3.25rem;
-  padding: 0 1.25rem;
+  min-height: 3.25rem;
+  padding: 0.5rem 1.25rem;
   border-radius: 0.9rem;
   font-weight: 700;
   font-size: 1rem;
+  line-height: 1.2;
+  text-align: center;
   transition: background 0.15s, transform 0.05s, opacity 0.15s;
   user-select: none;
 }
 .kart .k-btn:active { transform: scale(0.985); }
-.kart .k-btn-primary { background: var(--kart-orange); color: #fff; }
+.kart .k-btn-primary { background: var(--kart-orange-action); color: #fff; }
 .kart .k-btn-primary:hover { background: var(--kart-orange-dark); }
 .kart .k-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .kart .k-btn-ghost { background: #fff; border: 1.5px solid var(--kart-line); color: var(--kart-ink); }
@@ -114,3 +117,15 @@
 .kart .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
 .kart .k-pulse { animation: k-pulse 1.6s ease-in-out infinite; }
 @keyframes k-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+
+/* Keyboard focus: inputs already glow orange; everything else gets a clear ring. */
+.kart :is(a, button, [role="radio"], [role="switch"]):focus-visible {
+  outline: 3px solid var(--kart-ink);
+  outline-offset: 2px;
+}
+.kart .k-btn-primary:focus-visible { outline-color: var(--kart-orange-action); box-shadow: 0 0 0 2px #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kart .k-pulse { animation: none; }
+  .kart .k-btn, .kart .k-switch, .kart .k-switch::after, .kart .k-input { transition: none; }
+}
