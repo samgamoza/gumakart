@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAiGenerator } from "@gumakart/ai";
 import {
+  getOrCreateAssistantCheckoutLink,
   getTenantIdBySlug,
   getTenantStorefrontBySlug,
   listShopChatMessages,
@@ -13,6 +14,7 @@ import {
 import { resolveShopTheme } from "@gumakart/storefront-themes";
 import { clientIpFrom, rateLimit } from "@gumakart/services";
 import { assertAiQuota } from "@/lib/ai-quota";
+import { matchProductForMessage } from "@/lib/chat-product-match";
 
 const postSchema = z.object({
   tenantSlug: z.string().min(1),
@@ -129,10 +131,32 @@ export async function POST(request: Request) {
 
     const theme = resolveShopTheme(tenant.themeJson, tenant.name);
     const storefrontBase = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3010";
-    const orderLink = `${storefrontBase}/${tenant.slug}?utm_source=shop_assistant`;
+    const shopLink = `${storefrontBase}/${tenant.slug}?utm_source=shop_assistant`;
 
-    const productSummary = tenant.products
-      .filter((p) => p.status === "active")
+    // Checkout Closer: when the buyer names one product, send a checkout link for exactly that
+    // product. The match and the price come from the catalog, never from the model.
+    const activeProducts = tenant.products.filter((p) => p.status === "active");
+    const asked = body.orderNumber ? null : matchProductForMessage(body.message, activeProducts);
+    let askedLink: string | null = null;
+    if (asked && asked.available) {
+      if (asked.variants.length > 1) {
+        // Sizes/options to pick: the product page is where the buyer chooses one.
+        askedLink = `${storefrontBase}/${tenant.slug}/products/${asked.slug}?utm_source=shop_assistant`;
+      } else {
+        const link = await getOrCreateAssistantCheckoutLink(tenantId, {
+          productId: asked.id,
+          chatSessionId: body.sessionId,
+        }).catch((error) => {
+          console.error("Shop chat: could not make a checkout link:", error);
+          return null;
+        });
+        if (link) askedLink = `${storefrontBase}/c/${link.code}`;
+      }
+    }
+    const askedPrice = asked ? `₱${Number(asked.basePrice).toLocaleString("en-PH")}` : null;
+    const orderLink = askedLink ?? shopLink;
+
+    const productSummary = activeProducts
       .slice(0, 8)
       .map(
         (p) =>
@@ -165,6 +189,13 @@ Payment (MVP): ${paymentLines || "COD + direct GCash/Maya — seller confirms"}
 Delivery: ${settings.delivery?.deliveryNotes || "Metro Manila / seller-defined area"}
 ${settings.minOrderAmount ? `Min order ₱${settings.minOrderAmount}` : ""}
 ${body.orderNumber ? `Customer order: ${body.orderNumber}` : ""}
+${
+  asked
+    ? asked.available
+      ? `The customer is asking about: ${asked.title}, ${askedPrice}${asked.variants.length > 1 ? " (starting price; has sizes/options)" : ""}. It is available. Say so, give that exact price, and end with this link for it: ${orderLink}`
+      : `The customer is asking about: ${asked.title}. It is OUT OF STOCK right now. Say so politely and do not send an order link for it.`
+    : ""
+}
 
 If they ask about paying via GCash/Maya, explain direct transfer to the shop number and that the seller confirms in-app. Suggest using Message seller to send the reference number.
 Never confirm that a payment was received, never invent account numbers, and never promise delivery times you don't know.
@@ -184,9 +215,13 @@ If the question needs a human (payment proof, order change, complaint), tell the
     });
 
     const output = result.output as Record<string, unknown>;
-    const reply =
+    let reply =
       (typeof output.reply === "string" && output.reply) ||
       "Thanks for your message! Browse our products and tap Checkout when ready — or message the seller here about payment.";
+    // The link must reach the buyer even if the model left it out.
+    if (asked && askedLink && !reply.includes(askedLink)) {
+      reply = `${reply.trim()}\n\n${asked.title} · ${askedPrice}\nOrder here: ${askedLink}`;
+    }
 
     await saveShopChatMessage({
       tenantId,

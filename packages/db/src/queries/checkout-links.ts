@@ -4,6 +4,7 @@ import { getDb } from "../client";
 import {
   checkoutLinkItems,
   checkoutLinks,
+  type CheckoutLinkOrigin,
   orders,
   productImages,
   productVariants,
@@ -184,6 +185,10 @@ export interface CreateCheckoutLinkInput {
   paymentMethods?: CheckoutLinkPaymentMethod[] | null;
   expiresAt?: Date | null;
   maxOrders?: number | null;
+  /** AI attribution: who made the link (default: the seller) and the conversation it was made for. */
+  origin?: CheckoutLinkOrigin;
+  chatSessionId?: string | null;
+  socialThreadId?: string | null;
 }
 
 export async function createCheckoutLink(
@@ -309,6 +314,9 @@ export async function createCheckoutLink(
             paymentMethods,
             expiresAt: input.expiresAt ?? null,
             maxOrders: input.maxOrders ?? null,
+            origin: input.origin ?? "seller",
+            chatSessionId: input.chatSessionId ?? null,
+            socialThreadId: input.socialThreadId ?? null,
             createdBy: userId,
           })
           .returning({ id: checkoutLinks.id });
@@ -375,6 +383,8 @@ export interface CheckoutLinkSummary {
   /** Sum of non-cancelled orders placed through this link. */
   salesTotal: number;
   createdAt: Date;
+  /** Who made it: the seller, an AI draft the seller sent, or the shop assistant on its own. */
+  origin: CheckoutLinkOrigin;
   items: CheckoutLinkItemSummary[];
 }
 
@@ -482,8 +492,74 @@ function summarize(
     orderCount: row.orderCount,
     salesTotal,
     createdAt: row.createdAt,
+    origin: row.origin,
     items,
   };
+}
+
+// ─── Shop assistant (AI Checkout Closer) ──────────────────────────────────────
+
+/** At most this many assistant-made links per shop per day; past it the assistant sends the shop link. */
+export const AI_CHAT_LINKS_PER_DAY = 200;
+const AI_CHAT_LINK_DAYS = 7;
+
+/**
+ * The checkout link the shop assistant sends for one product in one chat session.
+ * Reuses the session's live link for that product, otherwise makes one (origin "ai_auto",
+ * 7-day expiry) so the order it produces is counted as AI-closed. Returns null when a link
+ * can't be made (product has options to pick, shop has no payment/delivery set up, daily cap).
+ */
+export async function getOrCreateAssistantCheckoutLink(
+  tenantId: string,
+  input: { productId: string; chatSessionId: string; now?: Date }
+): Promise<{ code: string; reused: boolean } | null> {
+  const db = getDb();
+  const now = input.now ?? new Date();
+
+  const [existing] = await db
+    .select({ code: checkoutLinks.code })
+    .from(checkoutLinks)
+    .innerJoin(checkoutLinkItems, eq(checkoutLinkItems.linkId, checkoutLinks.id))
+    .where(
+      and(
+        eq(checkoutLinks.tenantId, tenantId),
+        eq(checkoutLinks.origin, "ai_auto"),
+        eq(checkoutLinks.chatSessionId, input.chatSessionId),
+        eq(checkoutLinkItems.productId, input.productId),
+        eq(checkoutLinks.active, true),
+        sql`(${checkoutLinks.expiresAt} is null or ${checkoutLinks.expiresAt} > ${now.toISOString()}::timestamptz)`
+      )
+    )
+    .orderBy(desc(checkoutLinks.createdAt))
+    .limit(1);
+  if (existing) return { code: existing.code, reused: true };
+
+  const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+  const [made] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(checkoutLinks)
+    .where(
+      and(
+        eq(checkoutLinks.tenantId, tenantId),
+        eq(checkoutLinks.origin, "ai_auto"),
+        sql`${checkoutLinks.createdAt} > ${dayAgo}::timestamptz`
+      )
+    );
+  if ((made?.n ?? 0) >= AI_CHAT_LINKS_PER_DAY) return null;
+
+  try {
+    const link = await createCheckoutLink(tenantId, null, {
+      items: [{ productId: input.productId, quantity: 1 }],
+      origin: "ai_auto",
+      chatSessionId: input.chatSessionId,
+      expiresAt: new Date(now.getTime() + AI_CHAT_LINK_DAYS * 86_400_000),
+    });
+    return { code: link.code, reused: false };
+  } catch (error) {
+    // Expected "can't link this" cases (options to pick, nothing set up) — fall back to the shop link.
+    if (error instanceof CheckoutLinkError) return null;
+    throw error;
+  }
 }
 
 export async function listCheckoutLinksForTenant(

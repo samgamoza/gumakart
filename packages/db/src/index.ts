@@ -635,6 +635,8 @@ export {
   CheckoutLinkError,
   checkoutLinkStatus,
   createCheckoutLink,
+  getOrCreateAssistantCheckoutLink,
+  AI_CHAT_LINKS_PER_DAY,
   bumpCheckoutLinkCounter,
   generateCheckoutLinkCode,
   getCheckoutLinkByCode,

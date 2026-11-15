@@ -263,7 +263,7 @@ export function ShopAssistant({
                           Seller
                         </p>
                       ) : null}
-                      {message.content}
+                      <LinkedText text={message.content} />
                     </div>
                   </div>
                 );
@@ -306,5 +306,23 @@ export function ShopAssistant({
         </div>
       )}
     </>
+  );
+}
+
+/** Message text with http(s) links made tappable (the assistant sends checkout links). */
+function LinkedText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <span className="whitespace-pre-wrap break-words">
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a key={i} href={part.replace(/[.,!?)]+$/, "")} className="font-semibold underline underline-offset-2">
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </span>
   );
 }
