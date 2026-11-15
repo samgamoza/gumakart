@@ -169,6 +169,8 @@ export function SignupWizard() {
 
   return (
     <AuthLayout
+      wide={step === 3}
+      step={step === 3 ? 1 : undefined}
       title={step === 3 ? "Your business" : "Start your shop free"}
       subtitle={
         step === 1
@@ -188,15 +190,6 @@ export function SignupWizard() {
           <GoogleSignInButton intent="signup" label="Sign up with Google" />
           <AuthDivider />
         </>
-      )}
-
-      {step === 3 && (
-        // Same 4-step bar as /onboarding: this is step 1 of 4.
-        <div className="mb-6 flex gap-2" aria-hidden>
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className={`h-1.5 flex-1 rounded-full ${n === 1 ? "bg-emerald-500" : "bg-white/10"}`} />
-          ))}
-        </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -295,7 +288,7 @@ export function SignupWizard() {
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="h-11 flex-1 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted"
+              className="h-12 flex-1 rounded-xl border border-border text-[15px] font-medium text-foreground hover:bg-muted"
             >
               Back
             </button>

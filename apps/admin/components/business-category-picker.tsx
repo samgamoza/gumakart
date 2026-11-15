@@ -71,9 +71,9 @@ export function BusinessCategoryPicker({
                 key={label}
                 type="button"
                 onClick={() => onChange(label)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                className={`rounded-full border px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
                   active
-                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    ? "border-emerald-700 bg-emerald-700 text-white"
                     : "border-border bg-card text-foreground hover:border-emerald-400"
                 }`}
               >
@@ -84,14 +84,16 @@ export function BusinessCategoryPicker({
         </div>
       )}
 
+      <div className="grid gap-3 sm:grid-cols-2">
       <input
         id={`${id}-filter`}
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Find category…"
-        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none ring-emerald-500/30 placeholder:text-muted-foreground focus:border-emerald-500 focus:ring-2"
+        className="h-12 w-full rounded-xl border border-border bg-background px-3.5 text-[15px] outline-none ring-emerald-500/30 placeholder:text-muted-foreground focus:border-emerald-500 focus:ring-2"
         autoComplete="off"
+        aria-label="Search categories"
       />
 
       {showFilterResults ? (
@@ -129,7 +131,7 @@ export function BusinessCategoryPicker({
         name="category"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none ring-emerald-500/30 focus:border-emerald-500 focus:ring-2"
+        className="h-12 w-full rounded-xl border border-border bg-background px-3.5 text-[15px] text-foreground outline-none ring-emerald-500/30 focus:border-emerald-500 focus:ring-2"
       >
         <option value="">Choose your category…</option>
         {groups.map(({ group, entries }) => (
@@ -142,10 +144,11 @@ export function BusinessCategoryPicker({
           </optgroup>
         ))}
       </select>
+      </div>
 
-      {!value && (
-        <p className="text-xs text-amber-700">Choose a category to continue.</p>
-      )}
+      {showFilterResults ? null : value ? (
+        <p className="text-xs text-muted-foreground">Selected: <span className="font-medium text-foreground">{value}</span></p>
+      ) : null}
     </div>
   );
 }

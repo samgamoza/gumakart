@@ -85,7 +85,8 @@ export function BusinessFields({
   const preview = slugPreview(value.shopName);
 
   return (
-    <>
+    <div className="grid gap-x-5 gap-y-6 sm:grid-cols-2">
+      <div className="sm:col-span-1">
       <AuthField label="Shop or business name" id="shopName">
         <input
           id="shopName"
@@ -103,7 +104,9 @@ export function BusinessFields({
           </p>
         )}
       </AuthField>
+      </div>
 
+      <div className="sm:col-span-1">
       <AuthField label="Mobile number" id="mobile">
         <input
           id="mobile"
@@ -117,14 +120,17 @@ export function BusinessFields({
         />
         <p className="mt-1.5 text-xs text-slate-400">For new-order alerts. Buyers don&apos;t see this.</p>
       </AuthField>
+      </div>
 
-      <BusinessCategoryPicker
-        value={value.category}
-        onChange={(category) => set("category", category)}
-        allowedCategories={categories}
-      />
+      <div className="sm:col-span-2">
+        <BusinessCategoryPicker
+          value={value.category}
+          onChange={(category) => set("category", category)}
+          allowedCategories={categories}
+        />
+      </div>
 
-      <div>
+      <div className="sm:col-span-2">
         <p className="text-sm font-medium text-slate-100">Where do you sell now?</p>
         <p className="mt-0.5 text-xs text-slate-400">Pick all that apply. Your checkout link works with all of them.</p>
         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -136,7 +142,7 @@ export function BusinessFields({
                 type="button"
                 onClick={() => toggleChannel(c.id)}
                 aria-pressed={on}
-                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm transition ${
+                className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
                   on
                     ? "border-emerald-400/60 bg-emerald-400/15 text-emerald-200"
                     : "border-white/10 text-slate-300 hover:bg-white/[0.05]"
@@ -150,6 +156,7 @@ export function BusinessFields({
         </div>
       </div>
 
+      <div className="sm:col-span-2">
       <AuthField label="Your page or chat link (optional)" id="chatUrl">
         <input
           id="chatUrl"
@@ -163,6 +170,7 @@ export function BusinessFields({
           After ordering, buyers get a &ldquo;Back to chat&rdquo; button that opens this.
         </p>
       </AuthField>
-    </>
+      </div>
+    </div>
   );
 }

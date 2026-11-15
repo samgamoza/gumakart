@@ -71,13 +71,15 @@ export function GoogleShopSetupForm() {
 
   return (
     <AuthLayout
+      wide
+      step={1}
       title="Your business"
       subtitle={email ? `Step 1 of 4 · Signed in as ${email}` : "Step 1 of 4"}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <AuthError message={error} />
         <BusinessFields value={business} onChange={setBusiness} />
-        <div className="pt-2">
+        <div className="pt-1">
           <AuthSubmitButton loading={loading}>Continue</AuthSubmitButton>
         </div>
       </form>

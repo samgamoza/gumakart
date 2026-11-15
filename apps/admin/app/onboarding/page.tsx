@@ -37,7 +37,7 @@ const primaryBtn =
 function Progress({ step }: { step: Exclude<Step, "done"> }) {
   const n = STEP_NUMBER[step];
   return (
-    <div className="mb-6 flex gap-2" aria-hidden>
+    <div className="mb-6 flex gap-2 lg:hidden" aria-hidden>
       {[1, 2, 3, 4].map((i) => (
         <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= n ? "bg-emerald-500" : "bg-white/10"}`} />
       ))}
@@ -99,7 +99,7 @@ export default function OnboardingPage() {
 
   if (step === "product") {
     return (
-      <AuthLayout title="Your first product" subtitle="Step 2 of 4 · What do you want to sell first?">
+      <AuthLayout wide step={2} title="Your first product" subtitle="Step 2 of 4 · What do you want to sell first?">
         <Progress step="product" />
         <ProductStep
           existing={state.products}
@@ -115,7 +115,7 @@ export default function OnboardingPage() {
 
   if (step === "payments") {
     return (
-      <AuthLayout title="How you get paid" subtitle="Step 3 of 4 · Buyers pay you directly. Guma never holds your money.">
+      <AuthLayout wide step={3} title="How you get paid" subtitle="Step 3 of 4 · Buyers pay you directly. Guma never holds your money.">
         <Progress step="payments" />
         <PaymentsStep initial={state.payments} onDone={() => setStep("link")} />
         {laterLink}
@@ -124,7 +124,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <AuthLayout title="Your checkout link is ready" subtitle="Step 4 of 4 · Share it where your buyers already are">
+    <AuthLayout wide step={4} title="Your checkout link is ready" subtitle="Step 4 of 4 · Share it where your buyers already are">
       <Progress step="link" />
       <LinkStep
         productId={productId}

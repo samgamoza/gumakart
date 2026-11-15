@@ -175,6 +175,11 @@
     background: linear-gradient(92deg, #a78bfa 0%, #818cf8 55%, #34d399 120%);
   }
 
+  /* Primary button fill: the same purple→teal as .gradient-accent, deep enough for white text (≥4.5:1) */
+  .gradient-cta {
+    background: linear-gradient(92deg, #7c3aed 0%, #4f46e5 52%, #0f766e 110%);
+  }
+
   /* Soft glows */
   .glow-purple {
     box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.22), 0 8px 30px -6px rgba(167, 139, 250, 0.45);
