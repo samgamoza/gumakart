@@ -150,7 +150,16 @@ if ($added.Count -gt 0) {
 
 # ---------------------------------------------------------------- account
 Head "Cloudflare account"
-$verify = Cf GET "/user/tokens/verify"
+# Account-owned tokens verify under /accounts/{id}; user tokens under /user. Try both.
+$verify = $null
+if ($env:CLOUDFLARE_ACCOUNT_ID) {
+  try { $verify = Cf GET "/accounts/$($env:CLOUDFLARE_ACCOUNT_ID)/tokens/verify" } catch { $verify = $null }
+}
+if (-not $verify) {
+  try { $verify = Cf GET "/user/tokens/verify" } catch {
+    throw "Cloudflare rejected CLOUDFLARE_API_TOKEN (401). Check the token in .env, and that no old CLOUDFLARE_API_TOKEN is set in this PowerShell window (Remove-Item Env:CLOUDFLARE_API_TOKEN)."
+  }
+}
 if ($verify.status -ne "active") { throw "Token is $($verify.status)." }
 $zoneObj = @(Cf GET "/zones?name=$Zone") | Select-Object -First 1
 $AccountId = $env:CLOUDFLARE_ACCOUNT_ID

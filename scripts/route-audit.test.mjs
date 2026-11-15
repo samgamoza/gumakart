@@ -122,6 +122,7 @@ const ADMIN_PUBLIC = {
   "apps/admin/app/api/auth/signup/route.ts": "signup — needs the emailed-code ticket",
   "apps/admin/app/api/auth/signup/start/route.ts": "emails a signup code (rate limited)",
   "apps/admin/app/api/auth/signup/verify/route.ts": "checks a signup code (attempt-limited)",
+  "apps/admin/app/api/auth/verify-email/route.ts": "legacy emailed link — the single-use token is the credential; rate limited, never signs anyone in",
   "apps/admin/app/api/auth/check-slug/route.ts": "is a shop URL free",
   "apps/admin/app/api/auth/google/route.ts": "starts Google sign-in",
   "apps/admin/app/api/auth/google/callback/route.ts": "Google OAuth callback (state checked)",
