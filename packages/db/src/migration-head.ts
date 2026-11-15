@@ -4,4 +4,4 @@
  * The live app compares it with drizzle.__drizzle_migrations to catch code deployed ahead of
  * its migration.
  */
-export const MIGRATION_HEAD = { tag: "0045_security_g3", when: 1787600000000 } as const;
+export const MIGRATION_HEAD = { tag: "0046_ai_attribution", when: 1787700000000 } as const;

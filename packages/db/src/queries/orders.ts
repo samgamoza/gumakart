@@ -29,6 +29,7 @@ import {
   socialThreads,
 } from "../schema/index";
 import { salesChannelOf } from "../types/sales-channel";
+import { aiAttributionOf } from "../types/ai-attribution";
 import {
   computeCheckoutTotals,
   findActiveCoupon,
@@ -423,9 +424,20 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
 
     // Phase 13: where the sale came from, and the chat it was sent in (?th=<thread id>).
     let shareChannel: string | null = null;
+    let linkAttribution: { origin: string; chatSessionId: string | null; socialThreadId: string | null } | null = null;
     if (input.checkoutLinkId) {
-      const [link] = await tx.select({ share: checkoutLinks.shareChannel }).from(checkoutLinks).where(eq(checkoutLinks.id, input.checkoutLinkId)).limit(1);
+      const [link] = await tx
+        .select({
+          share: checkoutLinks.shareChannel,
+          origin: checkoutLinks.origin,
+          chatSessionId: checkoutLinks.chatSessionId,
+          socialThreadId: checkoutLinks.socialThreadId,
+        })
+        .from(checkoutLinks)
+        .where(and(eq(checkoutLinks.id, input.checkoutLinkId), eq(checkoutLinks.tenantId, tenant.id)))
+        .limit(1);
       shareChannel = link?.share ?? null;
+      if (link) linkAttribution = { origin: link.origin, chatSessionId: link.chatSessionId, socialThreadId: link.socialThreadId };
     }
     let socialThreadId: string | null = null;
     const threadRef = input.utmJson?.th;
@@ -437,6 +449,11 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         .limit(1);
       if (thread) socialThreadId = thread.id;
     }
+    // AI attribution: an AI-made link carries its conversation (stored on the link, server-side);
+    // the shop assistant's plain shop link is tagged utm_source=shop_assistant (best-effort).
+    if (!socialThreadId && linkAttribution?.socialThreadId) socialThreadId = linkAttribution.socialThreadId;
+    const ai = aiAttributionOf({ linkOrigin: linkAttribution?.origin ?? null, utmSource: input.utmJson?.utm_source ?? null });
+    const chatSessionId = linkAttribution?.chatSessionId ?? null;
     const salesChannel = salesChannelOf({ explicit: input.salesChannel, sourceChannel: input.sourceChannel, utm: input.utmJson, shareChannel });
 
     const [order] = await tx
@@ -465,6 +482,9 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
         utmJson: input.utmJson && Object.keys(input.utmJson).length > 0 ? input.utmJson : null,
         salesChannel,
         socialThreadId,
+        aiAssisted: ai.assisted,
+        aiClosed: ai.closed,
+        chatSessionId,
         orderState: initialFacts.orderState,
         paymentState: initialFacts.paymentState,
         fulfillmentState: initialFacts.fulfillmentState,

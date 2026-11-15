@@ -323,6 +323,13 @@
       "when": 1787600000000,
       "tag": "0045_security_g3",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1787700000000,
+      "tag": "0046_ai_attribution",
+      "breakpoints": true
     }
   ]
 }

@@ -715,6 +715,12 @@ export const orders = pgTable(
     giftCardAmount: decimal("gift_card_amount", { precision: 12, scale: 2 }).default("0").notNull(),
     /** Phase 32: referral code the buyer arrived with (checked against this shop's customers). */
     referralCode: varchar("referral_code", { length: 12 }),
+    /** AI attribution: the order came out of a conversation where the AI replied (draft or automatic). */
+    aiAssisted: boolean("ai_assisted").default(false).notNull(),
+    /** AI attribution: the AI sent the checkout link itself, with no seller action. */
+    aiClosed: boolean("ai_closed").default(false).notNull(),
+    /** The storefront shop-chat session the order came out of, when there was one. */
+    chatSessionId: varchar("chat_session_id", { length: 64 }),
   },
   (table) => [
     uniqueIndex("orders_access_token_idx").on(table.accessToken),
@@ -833,6 +839,8 @@ export const stockMovements = pgTable(
 // A shareable one-page checkout for chosen products: kart.guma.one/c/<code>.
 // Prices are always read from the variant at order time; the link only says what and how many.
 
+export type CheckoutLinkOrigin = "seller" | "ai_draft" | "ai_auto";
+
 export const checkoutLinks = pgTable(
   "checkout_links",
   {
@@ -856,6 +864,11 @@ export const checkoutLinks = pgTable(
     viewCount: integer("view_count").default(0).notNull(),
     startCount: integer("start_count").default(0).notNull(),
     orderCount: integer("order_count").default(0).notNull(),
+    /** Who made the link: the seller, an AI draft the seller sent, or the AI on its own. */
+    origin: varchar("origin", { length: 12 }).$type<CheckoutLinkOrigin>().default("seller").notNull(),
+    /** The shop-chat session / Messenger-Instagram thread an AI-made link was created for. */
+    chatSessionId: varchar("chat_session_id", { length: 64 }),
+    socialThreadId: uuid("social_thread_id").references((): AnyPgColumn => socialThreads.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -2064,6 +2077,8 @@ export const socialMessages = pgTable(
     status: varchar("status", { length: 12 }).$type<"received" | "sent" | "mock" | "failed">().default("sent").notNull(),
     error: varchar("error", { length: 300 }),
     sentByName: varchar("sent_by_name", { length: 80 }),
+    /** Set on replies the AI wrote: "draft" (seller sent it) or "auto" (sent with no seller action). */
+    aiOrigin: varchar("ai_origin", { length: 8 }).$type<"draft" | "auto">(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("social_messages_thread_idx").on(table.threadId, table.createdAt)]

@@ -1005,6 +1005,7 @@ export {
   type ShopPartnerView,
 } from "./queries/partners";
 export { MIGRATION_HEAD } from "./migration-head";
+export { aiAttributionOf } from "./types/ai-attribution";
 export { getSchemaStatus, isApplied, type SchemaStatus } from "./queries/schema-status";
 
 // Phase 26: AI assistant facts and restock suggestions.

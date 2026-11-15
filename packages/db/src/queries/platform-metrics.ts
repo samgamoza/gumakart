@@ -37,6 +37,8 @@ export interface PlatformMetrics {
   pos: { sales: number; total: number };
   /** Phase 12: online orders placed by signed-in Guma ID buyers. */
   gumaId: { orders: number; withGumaId: number; accounts: number };
+  /** AI attribution: conversations the shop assistant answered, and the orders that came out of AI replies. */
+  ai: { conversations: number; assistedOrders: number; assistedSales: number; closedOrders: number; closedSales: number };
   byChannel: Array<{ channel: string; orders: number; sales: number }>;
   weekly: Array<{ week: string; checkoutLink: number; store: number; pos: number }>;
 }
@@ -60,7 +62,7 @@ export async function getPlatformMetrics(options: { days?: number; now?: Date } 
   const now = options.now ?? new Date();
   const since = new Date(now.getTime() - days * 86_400_000).toISOString();
 
-  const [activation, conversion, payConfirm, recovery, fulfillment, messaging, optOuts, retention, buyers, pos, gid, byChannel, weekly] =
+  const [activation, conversion, payConfirm, recovery, fulfillment, messaging, optOuts, retention, buyers, pos, gid, byChannel, weekly, ai] =
     await Promise.all([
       one(sql`
         with s as (select id, created_at from tenants where created_at >= ${since}::timestamptz)
@@ -154,6 +156,21 @@ export async function getPlatformMetrics(options: { days?: number; now?: Date } 
           and coalesce(order_state::text, 'open') <> 'cancelled'
         group by 1 order by 1
       `),
+      one(sql`
+        select
+          (select count(distinct (tenant_id, session_id)) from shop_chat_messages
+             where created_at >= ${since}::timestamptz and role = 'assistant')
+          + (select count(distinct thread_id) from social_messages
+             where created_at >= ${since}::timestamptz and ai_origin is not null) as conversations,
+          (select count(*) from orders where created_at >= ${since}::timestamptz and ai_assisted
+             and coalesce(order_state::text, 'open') <> 'cancelled') as assisted_orders,
+          (select coalesce(sum(total), 0) from orders where created_at >= ${since}::timestamptz and ai_assisted
+             and coalesce(order_state::text, 'open') <> 'cancelled') as assisted_sales,
+          (select count(*) from orders where created_at >= ${since}::timestamptz and ai_closed
+             and coalesce(order_state::text, 'open') <> 'cancelled') as closed_orders,
+          (select coalesce(sum(total), 0) from orders where created_at >= ${since}::timestamptz and ai_closed
+             and coalesce(order_state::text, 'open') <> 'cancelled') as closed_sales
+      `),
     ]);
 
   return {
@@ -190,6 +207,13 @@ export async function getPlatformMetrics(options: { days?: number; now?: Date } 
     },
     pos: { sales: n(pos.sales), total: n(pos.total) },
     gumaId: { orders: n(gid.orders), withGumaId: n(gid.with_id), accounts: n(gid.accounts) },
+    ai: {
+      conversations: n(ai.conversations),
+      assistedOrders: n(ai.assisted_orders),
+      assistedSales: n(ai.assisted_sales),
+      closedOrders: n(ai.closed_orders),
+      closedSales: n(ai.closed_sales),
+    },
     byChannel: byChannel.map((r) => ({ channel: String(r.channel), orders: n(r.orders), sales: n(r.sales) })),
     weekly: weekly.map((r) => ({ week: String(r.week), checkoutLink: n(r.link), store: n(r.store), pos: n(r.pos) })),
   };

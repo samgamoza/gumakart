@@ -90,6 +90,17 @@ export default async function MetricsPage({ searchParams }: PageProps) {
           </Panel>
         </div>
 
+        <Panel>
+          <SectionHeader title="AI" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard label="AI conversations" value={formatNumber(m.ai.conversations)} sub="Chats the assistant replied in" />
+            <StatCard label="AI-assisted orders" value={formatNumber(m.ai.assistedOrders)} sub={formatMoney(m.ai.assistedSales)} />
+            <StatCard label="AI-closed orders" value={formatNumber(m.ai.closedOrders)} sub={formatMoney(m.ai.closedSales)} />
+            <StatCard label="AI conversion rate" value={pct(m.ai.assistedOrders, m.ai.conversations)} sub="AI-assisted orders ÷ AI conversations" />
+            <StatCard label="AI upsell revenue" value="—" sub="Not tracked yet" />
+          </div>
+        </Panel>
+
         <div className="grid gap-6 lg:grid-cols-2">
           <Panel>
             <SectionHeader title="Retention" />
