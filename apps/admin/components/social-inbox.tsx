@@ -39,6 +39,16 @@ interface Message {
   createdAt: string;
 }
 
+interface QuickReply {
+  forMessageId: string;
+  productId: string;
+  title: string;
+  price: number;
+  available: boolean;
+  hasOptions: boolean;
+  preview: string | null;
+}
+
 interface ThreadDetail extends ThreadRow {
   lastInboundAt: string | null;
   messages: Message[];
@@ -282,6 +292,21 @@ function Conversation({ threadId, onBack, onChanged }: { threadId: string; onBac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
+  // One-tap reply: the product the buyer's latest message is about (price and stock from the catalog).
+  const [quick, setQuick] = useState<QuickReply | null>(null);
+  const lastInboundId = useMemo(() => [...(thread?.messages ?? [])].reverse().find((m) => m.direction === "in")?.id ?? null, [thread]);
+  useEffect(() => {
+    let live = true;
+    setQuick(null);
+    if (!lastInboundId) return;
+    void call<{ suggestion: QuickReply | null }>(`/api/inbox/${threadId}/quick-reply`).then((d) => {
+      if (live && d.ok) setQuick(d.suggestion);
+    });
+    return () => {
+      live = false;
+    };
+  }, [threadId, lastInboundId]);
+
   const count = thread?.messages.length ?? 0;
   useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [count]);
 
@@ -384,6 +409,34 @@ function Conversation({ threadId, onBack, onChanged }: { threadId: string; onBac
       {error && <p className="px-3 text-sm text-red-400">{error}</p>}
       {thread.canReply ? (
         <div className="space-y-2 border-t border-white/10 p-3">
+          {quick && (
+            <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3" data-testid="inbox-quick-reply">
+              <p className="text-xs font-semibold text-emerald-200">
+                Buyer is asking about {quick.title} · {formatPrice(quick.price)} · {quick.available ? "In stock" : "Out of stock"}
+              </p>
+              {quick.available && quick.preview ? (
+                <>
+                  <p className="mt-1 whitespace-pre-line text-xs text-slate-300">{quick.preview}</p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+                    onClick={() =>
+                      void send(quick.hasOptions ? { type: "product", productId: quick.productId } : { type: "quick_link", productId: quick.productId }).then(
+                        (ok) => ok && setQuick(null)
+                      )
+                    }
+                    data-testid="inbox-quick-send"
+                  >
+                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    {quick.hasOptions ? "Send product" : "Send price + checkout link"}
+                  </button>
+                </>
+              ) : (
+                <p className="mt-1 text-xs text-slate-300">No link suggested while it&apos;s out of stock. Reply below to let the buyer know.</p>
+              )}
+            </div>
+          )}
           <div className="flex gap-2">
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium" onClick={() => setPicker("product")} data-testid="inbox-send-product">
               <Package className="h-3.5 w-3.5" /> Product

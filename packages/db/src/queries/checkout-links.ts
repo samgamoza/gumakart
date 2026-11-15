@@ -513,18 +513,42 @@ export async function getOrCreateAssistantCheckoutLink(
   tenantId: string,
   input: { productId: string; chatSessionId: string; now?: Date }
 ): Promise<{ code: string; reused: boolean } | null> {
+  const link = await getOrCreateAiCheckoutLink(tenantId, { ...input, origin: "ai_auto" });
+  return link ? { code: link.code, reused: link.reused } : null;
+}
+
+/**
+ * One AI-made checkout link per conversation + product: reused while live, otherwise created.
+ *  - origin "ai_auto":  the shop assistant sent it on its own (storefront chat, chatSessionId).
+ *  - origin "ai_draft": suggested in the seller inbox and sent by the seller in one tap (socialThreadId).
+ * Returns null when a link can't be made (options to pick, nothing set up, daily cap).
+ */
+export async function getOrCreateAiCheckoutLink(
+  tenantId: string,
+  input: {
+    productId: string;
+    origin: "ai_auto" | "ai_draft";
+    chatSessionId?: string | null;
+    socialThreadId?: string | null;
+    userId?: string | null;
+    now?: Date;
+  }
+): Promise<{ id: string; code: string; title: string; reused: boolean } | null> {
   const db = getDb();
   const now = input.now ?? new Date();
+  const conversation = input.socialThreadId
+    ? eq(checkoutLinks.socialThreadId, input.socialThreadId)
+    : eq(checkoutLinks.chatSessionId, input.chatSessionId ?? "");
 
   const [existing] = await db
-    .select({ code: checkoutLinks.code })
+    .select({ id: checkoutLinks.id, code: checkoutLinks.code, title: checkoutLinks.title })
     .from(checkoutLinks)
     .innerJoin(checkoutLinkItems, eq(checkoutLinkItems.linkId, checkoutLinks.id))
     .where(
       and(
         eq(checkoutLinks.tenantId, tenantId),
-        eq(checkoutLinks.origin, "ai_auto"),
-        eq(checkoutLinks.chatSessionId, input.chatSessionId),
+        eq(checkoutLinks.origin, input.origin),
+        conversation,
         eq(checkoutLinkItems.productId, input.productId),
         eq(checkoutLinks.active, true),
         sql`(${checkoutLinks.expiresAt} is null or ${checkoutLinks.expiresAt} > ${now.toISOString()}::timestamptz)`
@@ -532,7 +556,7 @@ export async function getOrCreateAssistantCheckoutLink(
     )
     .orderBy(desc(checkoutLinks.createdAt))
     .limit(1);
-  if (existing) return { code: existing.code, reused: true };
+  if (existing) return { ...existing, reused: true };
 
   const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
   const [made] = await db
@@ -541,20 +565,21 @@ export async function getOrCreateAssistantCheckoutLink(
     .where(
       and(
         eq(checkoutLinks.tenantId, tenantId),
-        eq(checkoutLinks.origin, "ai_auto"),
+        inArray(checkoutLinks.origin, ["ai_auto", "ai_draft"]),
         sql`${checkoutLinks.createdAt} > ${dayAgo}::timestamptz`
       )
     );
   if ((made?.n ?? 0) >= AI_CHAT_LINKS_PER_DAY) return null;
 
   try {
-    const link = await createCheckoutLink(tenantId, null, {
+    const link = await createCheckoutLink(tenantId, input.userId ?? null, {
       items: [{ productId: input.productId, quantity: 1 }],
-      origin: "ai_auto",
-      chatSessionId: input.chatSessionId,
+      origin: input.origin,
+      chatSessionId: input.chatSessionId ?? null,
+      socialThreadId: input.socialThreadId ?? null,
       expiresAt: new Date(now.getTime() + AI_CHAT_LINK_DAYS * 86_400_000),
     });
-    return { code: link.code, reused: false };
+    return { id: link.id, code: link.code, title: link.title, reused: false };
   } catch (error) {
     // Expected "can't link this" cases (options to pick, nothing set up) — fall back to the shop link.
     if (error instanceof CheckoutLinkError) return null;

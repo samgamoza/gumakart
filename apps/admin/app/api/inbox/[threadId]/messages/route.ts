@@ -5,6 +5,7 @@ import {
   finishSocialSend,
   getChatCheckoutLink,
   getChatProductCard,
+  getOrCreateAiCheckoutLink,
   getSocialAccountForSend,
   getTenantSettings,
   InboxError,
@@ -19,6 +20,8 @@ const bodySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string().trim().min(1).max(2000) }),
   z.object({ type: z.literal("product"), productId: z.string().uuid(), variantId: z.string().uuid().nullish(), note: z.string().max(300).optional() }),
   z.object({ type: z.literal("link"), checkoutLinkId: z.string().uuid(), note: z.string().max(300).optional() }),
+  // One-tap suggested reply: price + a checkout link made for this chat and product (counted as AI-assisted).
+  z.object({ type: z.literal("quick_link"), productId: z.string().uuid() }),
 ]);
 
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -40,15 +43,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ thr
 
     let message: MetaOutgoing;
     let kind: "text" | "product" | "link" = "text";
+    const quick = body.type === "quick_link";
     let preview: string;
     let payload: Record<string, unknown> | null = null;
     // The platform is known only after we load the thread; links are tagged per channel below.
     const draft = await beginSocialSend({
       tenantId: session.tenantId,
       threadId,
-      kind: body.type,
+      kind: quick ? "link" : body.type,
       body: body.type === "text" ? body.text : "…",
       sentByName: who,
+      aiOrigin: quick ? "draft" : null,
     });
     const channel: SalesChannel = draft.thread.platform === "instagram" ? "instagram" : "messenger";
     try {
@@ -63,6 +68,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ thr
         message = { type: "product", title: card.title, subtitle: `${peso(card.price)} · ${shop.name}`, imageUrl: publicImageUrl(card.imageUrl), url, buttonTitle: "Order na" };
         preview = `${card.title} · ${peso(card.price)}`;
         payload = { productId: card.productId, variantId: card.variantId, url, price: card.price, title: card.title, imageUrl: card.imageUrl };
+      } else if (body.type === "quick_link") {
+        const card = await getChatProductCard(session.tenantId, body.productId);
+        if (!card) throw new InboxError("That product isn't for sale right now.", "INVALID");
+        const link = await getOrCreateAiCheckoutLink(session.tenantId, {
+          productId: body.productId,
+          origin: "ai_draft",
+          socialThreadId: threadId,
+          userId: session.userId,
+        });
+        if (!link) throw new InboxError("Couldn't make a checkout link for that product. Send it as a product instead.", "INVALID");
+        const url = checkoutLinkShareUrl(link.code, channel, threadId);
+        kind = "link";
+        const text = `Available po! ${card.title} — ${peso(card.price)}.\nOrder here: ${url}`;
+        message = { type: "text", text };
+        preview = text;
+        payload = { checkoutLinkId: link.id, url, title: link.title, price: card.price, quick: true };
       } else {
         const link = await getChatCheckoutLink(session.tenantId, body.checkoutLinkId);
         if (!link) throw new InboxError("That checkout link is off or gone.", "INVALID");

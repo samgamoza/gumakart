@@ -399,6 +399,8 @@ export async function beginSocialSend(input: {
   body: string;
   payload?: Record<string, unknown> | null;
   sentByName: string;
+  /** Set when the AI wrote the reply: "draft" = suggested, the seller sent it; "auto" = sent on its own. */
+  aiOrigin?: "draft" | "auto" | null;
   now?: Date;
 }) {
   const db = getDb();
@@ -424,6 +426,7 @@ export async function beginSocialSend(input: {
       payloadJson: input.payload ?? null,
       status: "sent",
       sentByName: input.sentByName.slice(0, 80),
+      aiOrigin: input.aiOrigin ?? null,
     })
     .returning({ id: socialMessages.id });
   return { messageId: msg!.id, thread: row.t };
@@ -505,6 +508,44 @@ export async function getChatProductCard(tenantId: string, productId: string, va
     .orderBy(asc(productImages.sortOrder))
     .limit(1);
   return { productId, variantId: variantId ?? null, title, slug: p.slug, price, imageUrl: variantImage ?? img?.url ?? null };
+}
+
+export interface ChatMatchableProduct {
+  id: string;
+  title: string;
+  slug: string;
+  /** Lowest active variant price (the price for a product without options). */
+  price: number;
+  /** More than one size/option: the buyer has to pick, so it's sent as a product page. */
+  hasOptions: boolean;
+  /** Something can be bought now (in stock, or the product doesn't track stock). */
+  available: boolean;
+}
+
+/** Active products with price and stock, for matching a buyer's chat message to a product. */
+export async function listChatMatchableProducts(tenantId: string, limit = 300): Promise<ChatMatchableProduct[]> {
+  const rows = await getDb()
+    .select({
+      id: products.id,
+      title: products.title,
+      slug: products.slug,
+      price: sql<string>`min(${productVariants.price})`,
+      variants: sql<number>`count(${productVariants.id})::int`,
+      available: sql<boolean>`bool_or(coalesce(${products.trackInventory}, true) = false or coalesce(${productVariants.stockQty}, 0) > 0)`,
+    })
+    .from(products)
+    .innerJoin(productVariants, and(eq(productVariants.productId, products.id), eq(productVariants.active, true)))
+    .where(and(eq(products.tenantId, tenantId), eq(products.status, "active")))
+    .groupBy(products.id, products.title, products.slug)
+    .limit(limit);
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    slug: r.slug,
+    price: Number(r.price),
+    hasOptions: Number(r.variants) > 1,
+    available: Boolean(r.available),
+  }));
 }
 
 export async function getChatCheckoutLink(tenantId: string, linkId: string): Promise<{ id: string; code: string; title: string } | null> {

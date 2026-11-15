@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./product-match": "./src/product-match.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/seo-permissions.test.ts src/template-skins.test.ts src/seller-assist.test.ts src/product-from-photo.test.ts"
+    "test": "tsx --test src/seo-permissions.test.ts src/template-skins.test.ts src/seller-assist.test.ts src/product-from-photo.test.ts src/product-match.test.ts"
   },
   "dependencies": {
     "@gumakart/plans": "workspace:*",
