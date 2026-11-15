@@ -158,7 +158,9 @@ jobs:
       - name: Build (OpenNext)
         if: steps.pick.outputs.run == 'true'
         working-directory: apps/${{ matrix.app }}
-        run: pnpm exec opennextjs-cloudflare build
+        # Next.js 15 left upstream support in Oct 2026 and OpenNext now refuses it by default.
+        # We stay on the patched 15.5.x line (security fixes) until the Next.js 16 upgrade.
+        run: pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion
 
       - name: Deploy
         if: steps.pick.outputs.run == 'true'

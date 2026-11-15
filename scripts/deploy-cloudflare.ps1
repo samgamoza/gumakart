@@ -250,7 +250,7 @@ foreach ($name in $Selected) {
   try {
     if ($BuildHere) {
       Info "building (OpenNext)..."
-      & pnpm exec opennextjs-cloudflare build 2>&1 | ForEach-Object { Info $_ }
+      & pnpm exec opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion 2>&1 | ForEach-Object { Info $_ }
       if ($LASTEXITCODE -ne 0) { throw "$name : OpenNext build failed." }
 
       Info "deploying..."
