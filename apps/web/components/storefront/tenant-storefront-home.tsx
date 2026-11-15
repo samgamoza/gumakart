@@ -16,10 +16,12 @@ const THEME_RENDERER_IDS = new Set<string>(["sweet-kitchen", "bloom", "sarab", "
 export function TenantStorefrontHome({
   tenant,
   activeCategorySlug,
+  isPreview = false,
 }: {
   tenant: DemoTenant;
   activeCategorySlug?: string;
   utmLabel?: string;
+  isPreview?: boolean;
 }) {
   const patternId = tenant.patternId ?? resolveStorePattern({ templateId: tenant.shopTheme.templateId });
   const pattern = getStorePattern(patternId);
@@ -32,5 +34,5 @@ export function TenantStorefrontHome({
     return <StorefrontExperience tenant={tenant} activeCategorySlug={activeCategorySlug} />;
   }
 
-  return <ThemedStorefrontHome tenant={tenant} />;
+  return <ThemedStorefrontHome tenant={tenant} isPreview={isPreview} />;
 }

@@ -1,20 +1,25 @@
 import Link from "next/link";
 import { sizedImageUrl } from "@/lib/image-sizes";
-import { ShoppingBag, Sparkles } from "lucide-react";
+import { CreditCard, MousePointerClick, PackageCheck, PackagePlus, ShoppingBag, Sparkles } from "lucide-react";
 import { PremiumStorefrontSections } from "@/components/storefront/premium/premium-storefront-sections";
 import { ShopAssistant } from "@/components/storefront/shop-assistant";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { DemoTenant } from "@/lib/demo-data";
+import { adminUrl, shopPublicUrl } from "@/lib/utils";
 import { heroBackground, StorefrontThemeShell } from "./theme-shell";
 import { ThemedProductCard } from "./themed-product-card";
+
+/** Phone column by default; widens on tablet and desktop so the shop doesn't float in a 512px strip. */
+const WRAP = "mx-auto w-full max-w-lg px-4 md:max-w-3xl md:px-6 lg:max-w-5xl";
+const HEAD_WRAP = "mx-auto w-full max-w-lg md:max-w-3xl lg:max-w-5xl";
 
 function PromoBanner({ tenant }: { tenant: DemoTenant }) {
   const theme = tenant.shopTheme;
 
   if (theme.layout === "immersive") {
     return (
-      <section className="mx-auto max-w-lg px-4 py-4">
+      <section className={`${WRAP} py-4`}>
         <div
           className="relative overflow-hidden p-5 shadow-lg"
           style={{
@@ -25,8 +30,8 @@ function PromoBanner({ tenant }: { tenant: DemoTenant }) {
         >
           <Sparkles className="absolute right-4 top-4 h-5 w-5 opacity-60" style={{ color: theme.accentColor }} />
           <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Featured drop</p>
-          <h2 className="mt-1 text-xl font-bold">{theme.promoTitle}</h2>
-          <p className="mt-1 text-sm opacity-80">{theme.promoSubtitle}</p>
+          <h2 className="mt-1 text-xl font-bold md:text-3xl">{theme.promoTitle}</h2>
+          <p className="mt-1 text-sm opacity-80 md:text-base">{theme.promoSubtitle}</p>
         </div>
       </section>
     );
@@ -34,7 +39,7 @@ function PromoBanner({ tenant }: { tenant: DemoTenant }) {
 
   if (theme.card === "brutal") {
     return (
-      <section className="mx-auto max-w-lg px-4 py-4">
+      <section className={`${WRAP} py-4`}>
         <div
           className="border-4 p-4 shadow-[6px_6px_0_0_currentColor]"
           style={{
@@ -53,9 +58,9 @@ function PromoBanner({ tenant }: { tenant: DemoTenant }) {
   }
 
   return (
-    <section className="mx-auto max-w-lg px-4 py-4">
+    <section className={`${WRAP} py-4`}>
       <div
-        className="relative overflow-hidden p-5 text-white shadow-lg"
+        className="relative overflow-hidden p-5 text-white shadow-lg md:px-10 md:py-9"
         style={{
           borderRadius: theme.radius,
           background: `linear-gradient(135deg, ${theme.primaryColor}, ${theme.accentColor})`,
@@ -65,8 +70,8 @@ function PromoBanner({ tenant }: { tenant: DemoTenant }) {
         <p className="relative text-xs font-semibold uppercase tracking-wider opacity-90">
           Promo
         </p>
-        <h2 className="relative mt-1 text-xl font-bold">{theme.promoTitle}</h2>
-        <p className="relative mt-1 text-sm opacity-90">{theme.promoSubtitle}</p>
+        <h2 className="relative mt-1 text-xl font-bold md:text-3xl">{theme.promoTitle}</h2>
+        <p className="relative mt-1 text-sm opacity-90 md:text-base">{theme.promoSubtitle}</p>
       </div>
     </section>
   );
@@ -82,7 +87,7 @@ function StoreHeaderThemed({ tenant }: { tenant: DemoTenant }) {
         <div className="relative h-36" style={heroStyle} />
         <header className="sticky top-0 z-40 px-4 pb-3 pt-2">
           <div
-            className="mx-auto max-w-lg border px-4 py-3 backdrop-blur-xl"
+            className={`${HEAD_WRAP} border px-4 py-3 backdrop-blur-xl`}
             style={{
               borderRadius: theme.radius,
               borderColor: theme.border,
@@ -109,7 +114,7 @@ function StoreHeaderThemed({ tenant }: { tenant: DemoTenant }) {
         className="sticky top-0 z-40 border-b px-4 py-4"
         style={{ borderColor: theme.border, backgroundColor: theme.cardBackground }}
       >
-        <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+        <div className={`${HEAD_WRAP} flex items-center justify-between gap-3 px-4 md:px-6`}>
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-50">
               {tenant.category}
@@ -133,7 +138,7 @@ function StoreHeaderThemed({ tenant }: { tenant: DemoTenant }) {
             Open now
           </div>
         </div>
-        <header className="mx-auto max-w-lg px-4 pb-3">
+        <header className={`${WRAP} pb-3`}>
           <div className="-mt-8 flex items-end gap-3">
             <LogoMark tenant={tenant} large />
             <div className="min-w-0 flex-1 pb-1">
@@ -154,7 +159,7 @@ function StoreHeaderThemed({ tenant }: { tenant: DemoTenant }) {
         className="sticky top-0 z-40 border-b backdrop-blur-xl"
         style={{ borderColor: theme.border, backgroundColor: `${theme.cardBackground}ee` }}
       >
-        <div className="mx-auto max-w-lg px-4">
+        <div className={WRAP}>
           <div className="-mt-10 flex items-end gap-3 pb-3">
             <LogoMark tenant={tenant} large />
             <div className="min-w-0 flex-1 pb-1">
@@ -227,12 +232,82 @@ function OrderButton({
   );
 }
 
+const ORDER_STEPS = [
+  { icon: MousePointerClick, title: "Pick what you need", body: "Browse the shop and add items to your order." },
+  { icon: CreditCard, title: "Check out with your mobile number", body: "No account to create. Add your address and choose how to pay." },
+  { icon: PackageCheck, title: "Follow your order", body: "The shop confirms your payment and arranges delivery or pickup." },
+] as const;
+
+/** Shown while a shop has nothing to sell yet: explains ordering, and tells the owner what to do next. */
+function EmptyShop({ tenant, isPreview }: { tenant: DemoTenant; isPreview: boolean }) {
+  const theme = tenant.shopTheme;
+  const canChat = tenant.storeSettings.shopAssistant.enabled || tenant.storeSettings.shopAssistant.humanInbox !== false;
+  return (
+    <section className={`${WRAP} py-10 md:py-14`} aria-labelledby="empty-shop-title">
+      <div className="mx-auto max-w-xl text-center">
+        <span
+          className="mx-auto flex h-12 w-12 items-center justify-center"
+          style={{ borderRadius: theme.radius, backgroundColor: `${theme.primaryColor}1f`, color: theme.primaryColor }}
+        >
+          <PackagePlus className="h-6 w-6" aria-hidden />
+        </span>
+        <h2 id="empty-shop-title" className="mt-4 text-xl font-bold md:text-2xl">
+          {tenant.name} is getting ready to open
+        </h2>
+        <p className="mt-2 text-sm opacity-75 md:text-base">
+          {canChat
+            ? "Nothing is listed yet. Message the shop to ask what's available, or check back soon."
+            : "Nothing is listed yet. Please check back soon."}
+        </p>
+        {isPreview && (
+          <a
+            href={`${adminUrl}/products?new=1`}
+            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 px-5 text-sm font-semibold transition hover:opacity-90"
+            style={{
+              borderRadius: theme.radius,
+              backgroundColor: theme.primaryColor,
+              color: theme.mode === "dark" ? theme.foreground : "#fff",
+            }}
+          >
+            <PackagePlus className="h-4 w-4" aria-hidden />
+            Add your first product
+          </a>
+        )}
+      </div>
+
+      <ol className="mt-10 grid gap-3 md:grid-cols-3">
+        {ORDER_STEPS.map((step, i) => (
+          <li
+            key={step.title}
+            className="border p-4 md:p-5"
+            style={{ borderRadius: theme.radius, borderColor: theme.border, backgroundColor: theme.cardBackground }}
+          >
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center"
+                style={{ borderRadius: theme.radius, backgroundColor: `${theme.primaryColor}1f`, color: theme.primaryColor }}
+              >
+                <step.icon className="h-4 w-4" aria-hidden />
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider opacity-60">Step {i + 1}</span>
+            </div>
+            <p className="mt-3 text-sm font-bold">{step.title}</p>
+            <p className="mt-1 text-sm opacity-75">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export function ThemedStorefrontHome({
   tenant,
   utmLabel,
+  isPreview = false,
 }: {
   tenant: DemoTenant;
   utmLabel?: string;
+  isPreview?: boolean;
 }) {
   const theme = tenant.shopTheme;
   const categories = [...new Set(tenant.products.map((p) => p.category))];
@@ -243,7 +318,7 @@ export function ThemedStorefrontHome({
       <StoreHeaderThemed tenant={tenant} />
 
       {utmLabel && (
-        <div className="mx-auto max-w-lg px-4 pt-3">
+        <div className={`${WRAP} pt-3`}>
           <Badge variant="social" className="gap-1">
             <Sparkles className="h-3 w-3" />
             Welcome from {utmLabel}!
@@ -256,7 +331,7 @@ export function ThemedStorefrontHome({
       <PremiumStorefrontSections tenant={tenant} />
 
       {categories.length > 0 && (
-        <div className="mx-auto max-w-lg overflow-x-auto px-4 pb-2">
+        <div className={`${WRAP} overflow-x-auto pb-2`}>
           <div className="flex gap-2">
             <button
               className="shrink-0 px-4 py-1.5 text-xs font-semibold text-white"
@@ -278,15 +353,12 @@ export function ThemedStorefrontHome({
       )}
 
       {categories.length === 0 ? (
-        <section className="mx-auto max-w-lg px-4 py-12 text-center">
-          <p className="text-lg font-bold">Products coming soon</p>
-          <p className="mt-2 text-sm opacity-70">This shop is setting up. Check back shortly.</p>
-        </section>
+        <EmptyShop tenant={tenant} isPreview={isPreview} />
       ) : (
         categories.map((category) => (
-          <section key={category} className="mx-auto max-w-lg px-4 py-3">
+          <section key={category} className={`${WRAP} py-3`}>
             <h2 className="mb-3 text-base font-bold">{category}</h2>
-            <div className={gridLayout ? "grid grid-cols-2 gap-3" : "grid gap-3"}>
+            <div className={gridLayout ? "grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" : "grid gap-3 md:grid-cols-2 lg:grid-cols-3"}>
               {tenant.products
                 .filter((p) => p.category === category)
                 .map((product) => (
@@ -302,28 +374,30 @@ export function ThemedStorefrontHome({
         ))
       )}
 
-      <section className="mx-auto max-w-lg px-4 py-6">
-        <div
-          className="border border-dashed p-5 text-center"
-          style={{
-            borderRadius: theme.radius,
-            borderColor: `${theme.primaryColor}55`,
-            backgroundColor: `${theme.primaryColor}11`,
-          }}
-        >
-          <p className="text-sm font-medium">Share your Order Now link</p>
-          <code
-            className="mt-2 block truncate px-3 py-2.5 text-xs"
+      {isPreview && (
+        <section className={`${WRAP} py-6`}>
+          <div
+            className="border border-dashed p-5 text-center"
             style={{
               borderRadius: theme.radius,
-              backgroundColor: theme.cardBackground,
-              color: theme.primaryColor,
+              borderColor: `${theme.primaryColor}55`,
+              backgroundColor: `${theme.primaryColor}11`,
             }}
           >
-            {process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3000"}/{tenant.slug}
-          </code>
-        </div>
-      </section>
+            <p className="text-sm font-medium">Your shop link (owner preview only)</p>
+            <code
+              className="mx-auto mt-2 block max-w-xl truncate px-3 py-2.5 text-xs"
+              style={{
+                borderRadius: theme.radius,
+                backgroundColor: theme.cardBackground,
+                color: theme.primaryColor,
+              }}
+            >
+              {shopPublicUrl(tenant.slug)}
+            </code>
+          </div>
+        </section>
+      )}
 
       {(tenant.storeSettings.shopAssistant.enabled || tenant.storeSettings.shopAssistant.humanInbox !== false) && (
         <ShopAssistant

@@ -119,6 +119,7 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
       <TenantStorefrontHome
         tenant={tenant}
         activeCategorySlug={query.category}
+        isPreview={isPreview}
         utmLabel={UTM_LABELS[utmSource] ?? (utmSource || undefined)}
       />
     </>
