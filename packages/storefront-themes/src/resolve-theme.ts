@@ -42,8 +42,9 @@ export function resolveShopTheme(
     card: template.card,
     hero: template.hero,
     tagline: themeJson?.tagline?.trim() || `Welcome to ${shopName}`,
-    promoTitle: themeJson?.promoTitle?.trim() || "Free delivery on orders ₱500+",
-    promoSubtitle: themeJson?.promoSubtitle?.trim() || "Metro Manila · Until 9 PM",
+    // Fallback for shops with no saved promo: nothing a shop might not actually offer.
+    promoTitle: themeJson?.promoTitle?.trim() || "Order online in a few taps",
+    promoSubtitle: themeJson?.promoSubtitle?.trim() || "Message us if you have questions",
     primaryColor: themeJson?.primaryColor ?? template.tokens.primary,
     accentColor: themeJson?.accentColor ?? template.tokens.accent,
     background: template.tokens.background,

@@ -129,13 +129,27 @@ const PROMO_COPY_RETAIL: Array<{ title: string; subtitle: string }> = [
   { title: "Handled with care, shipped fast", subtitle: "Packed same day · Tracked delivery" },
 ];
 
-const PROMO_COPY_PROFESSIONAL: Array<{ title: string; subtitle: string }> = [
-  { title: "Book a consultation today", subtitle: "Clear next steps · No pressure" },
-  { title: "Trusted guidance for every stage", subtitle: "Ask about a free discovery call" },
-  { title: "Plans built around your goals", subtitle: "Transparent options · Local support" },
+// Non-retail starter copy. Every line is something any shop in the group can truthfully show
+// before the seller edits it: no invented discounts, free offers, delivery promises or numbers.
+const PROMO_COPY_FINANCIAL: Array<{ title: string; subtitle: string }> = [
   { title: "Protection that grows with you", subtitle: "Family · Business · Retirement" },
-  { title: "Talk to an advisor", subtitle: "Weekday evenings available by appointment" },
-  { title: "Start with a free assessment", subtitle: "Know where you stand in 15 minutes" },
+  { title: "Plans built around your goals", subtitle: "Transparent options · Local support" },
+  { title: "Talk to an advisor", subtitle: "Message us to set an appointment" },
+  { title: "Know your options before you commit", subtitle: "Ask us anything · No pressure" },
+];
+
+const PROMO_COPY_PROFESSIONAL: Array<{ title: string; subtitle: string }> = [
+  { title: "Book a consultation", subtitle: "Clear next steps · No pressure" },
+  { title: "Tell us what you need", subtitle: "Message us and we'll reply with next steps" },
+  { title: "Trusted help when you need it", subtitle: "Local team · Straight answers" },
+  { title: "Request a quote", subtitle: "Share the details and we'll get back to you" },
+];
+
+const PROMO_COPY_SERVICE: Array<{ title: string; subtitle: string }> = [
+  { title: "Book your schedule with us", subtitle: "Message us for available slots" },
+  { title: "Request a quote", subtitle: "Send photos or details · We reply with a price" },
+  { title: "Serving your area", subtitle: "Message us to check if we cover your location" },
+  { title: "Easy booking, no app needed", subtitle: "Message us or book online" },
 ];
 
 const TAGLINE_PATTERNS_RETAIL: Array<(shopName: string, category: string) => string> = [
@@ -147,20 +161,60 @@ const TAGLINE_PATTERNS_RETAIL: Array<(shopName: string, category: string) => str
   (name, category) => `Small-batch ${category.toLowerCase()}, big heart`,
 ];
 
-const TAGLINE_PATTERNS_PROFESSIONAL: Array<(shopName: string, category: string) => string> = [
+const TAGLINE_PATTERNS_FINANCIAL: Array<(shopName: string, category: string) => string> = [
   (name) => `Welcome to ${name}`,
   (name) => `${name} — clarity you can act on`,
-  (name, category) => `Professional ${category.toLowerCase()} you can trust`,
   (name) => `${name} · advice first, products second`,
   (name) => `Protect what matters with ${name}`,
   (name) => `${name} — planning for every stage of life`,
 ];
 
-function isProfessionalCategory(category: string): boolean {
-  return /insurance|financial|consult|professional|healthcare|real estate|education|legal|account/i.test(
-    category
-  );
+const TAGLINE_PATTERNS_PROFESSIONAL: Array<(shopName: string, category: string) => string> = [
+  (name) => `Welcome to ${name}`,
+  (name) => `${name} — clarity you can act on`,
+  (name) => `${name} · straight answers, clear next steps`,
+  (name) => `Tell ${name} what you need`,
+  (name) => `${name} · local experts you can reach`,
+];
+
+const TAGLINE_PATTERNS_SERVICE: Array<(shopName: string, category: string) => string> = [
+  (name) => `Welcome to ${name}`,
+  (name) => `Book ${name} without the back-and-forth`,
+  (name) => `${name} · message us, we'll take it from there`,
+  (name) => `${name} — service near you`,
+];
+
+export type BrandCopyGroup = "financial" | "professional" | "service" | "retail";
+
+const FINANCIAL_RE = /insurance|financ|fintech|banking|lending|loan/i;
+const PROFESSIONAL_RE = /consult|professional|legal|lawyer|law firm|account|bookkeep|tax|real.?estate|property|broker|education|training|tutor|school|healthcare|clinic|dental|medical/i;
+const SERVICE_RE = /service|repair|hvac|air.?con|pest|construction|renovat|painting|decorat|cleaning|janitor|laundry|landscap|garden|solar|renewable|security|surveillance|photograph|creative|events?|wedding|entertain|logistic|shipping|courier|hotel|resort|travel|tour|childcare|daycare|fitness|wellness|gym|attraction|leisure|salon|spa|barber|car.?wash|detailing|auto.?body|auto shop|mechanic|plumb|electrician/i;
+
+/**
+ * Which starter copy a category gets. Order matters: financial before professional (both are
+ * advice businesses, only one sells protection plans); food always counts as retail.
+ */
+export function brandCopyGroupOf(category: string): BrandCopyGroup {
+  if (isFoodBusinessCategory(category)) return "retail";
+  if (FINANCIAL_RE.test(category)) return "financial";
+  if (PROFESSIONAL_RE.test(category)) return "professional";
+  if (SERVICE_RE.test(category)) return "service";
+  return "retail";
 }
+
+const PROMO_BY_GROUP: Record<BrandCopyGroup, Array<{ title: string; subtitle: string }>> = {
+  financial: PROMO_COPY_FINANCIAL,
+  professional: PROMO_COPY_PROFESSIONAL,
+  service: PROMO_COPY_SERVICE,
+  retail: PROMO_COPY_RETAIL,
+};
+
+const TAGLINES_BY_GROUP: Record<BrandCopyGroup, Array<(shopName: string, category: string) => string>> = {
+  financial: TAGLINE_PATTERNS_FINANCIAL,
+  professional: TAGLINE_PATTERNS_PROFESSIONAL,
+  service: TAGLINE_PATTERNS_SERVICE,
+  retail: TAGLINE_PATTERNS_RETAIL,
+};
 
 /** FNV-1a — tiny, stable, good spread for short strings. */
 function hashString(value: string): number {
@@ -249,13 +303,9 @@ export function deriveBrandKit(input: DeriveBrandKitInput): DerivedBrandKit {
   const palettePool = BRAND_PALETTES.filter((p) => vibe.paletteIds.includes(p.id));
   const palette = pick(palettePool.length > 0 ? palettePool : BRAND_PALETTES, seed, 3);
 
-  const professional = isProfessionalCategory(category) && !isFoodBusinessCategory(category);
-  const promo = pick(professional ? PROMO_COPY_PROFESSIONAL : PROMO_COPY_RETAIL, seed, 4);
-  const taglineFn = pick(
-    professional ? TAGLINE_PATTERNS_PROFESSIONAL : TAGLINE_PATTERNS_RETAIL,
-    seed,
-    5
-  );
+  const copyGroup = brandCopyGroupOf(category);
+  const promo = pick(PROMO_BY_GROUP[copyGroup], seed, 4);
+  const taglineFn = pick(TAGLINES_BY_GROUP[copyGroup], seed, 5);
   const displayFont = pick(DISPLAY_FONTS, seed, 6);
   const storeLook = deriveStoreLook(seed);
   const patternId = matchStorePattern({
