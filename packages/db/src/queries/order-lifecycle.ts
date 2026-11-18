@@ -454,7 +454,7 @@ export async function applyOrderActionInTx(
       status: legacyStatusOf(after),
       paymentStatus: legacyPaymentStatusOf(after.paymentState),
     })
-    .where(eq(orders.id, order.id));
+    .where(and(eq(orders.id, order.id), eq(orders.tenantId, order.tenantId)));
 
   await applyPaymentRow(tx, order, input, plan.codCollected, now);
 
@@ -757,7 +757,7 @@ export async function refundOrder(params: {
         note: baseNote,
         payment: { refundId: null, viaRefundFlow: true },
       });
-      await tx.update(orders).set({ refundedAmount: order.total }).where(eq(orders.id, order.id));
+      await tx.update(orders).set({ refundedAmount: order.total }).where(and(eq(orders.id, order.id), eq(orders.tenantId, params.tenantId)));
       return {
         applied,
         refundRowId,

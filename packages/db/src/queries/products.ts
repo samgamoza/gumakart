@@ -311,7 +311,7 @@ export async function updateProductForTenant(
           ...(input.metadataJson !== undefined ? { metadataJson: input.metadataJson } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(products.id, productId));
+        .where(and(eq(products.id, productId), eq(products.tenantId, tenantId)));
 
       // Keep the default (first active) variant in sync for price/stock/image —
       // only for products without options (those are edited per variant).
@@ -416,7 +416,7 @@ export async function deleteProductForTenant(
       await tx
         .update(products)
         .set({ status: "archived", isMain: false, updatedAt: new Date() })
-        .where(eq(products.id, productId));
+        .where(and(eq(products.id, productId), eq(products.tenantId, tenantId)));
       return "archived";
     }
 
@@ -424,7 +424,7 @@ export async function deleteProductForTenant(
     // so remove images first, then variants, then the product row.
     await tx.delete(productImages).where(eq(productImages.productId, productId));
     await tx.delete(productVariants).where(eq(productVariants.productId, productId));
-    await tx.delete(products).where(eq(products.id, productId));
+    await tx.delete(products).where(and(eq(products.id, productId), eq(products.tenantId, tenantId)));
     return "deleted";
   });
 }

@@ -703,6 +703,7 @@ export async function bumpCheckoutLinkCounter(linkId: string, counter: "view" | 
   const db = getDb();
   const column = counter === "view" ? checkoutLinks.viewCount : checkoutLinks.startCount;
   await db
+    // tenant-scope: system — public view/start counter keyed by the link id the buyer opened
     .update(checkoutLinks)
     .set(counter === "view" ? { viewCount: sql`${column} + 1` } : { startCount: sql`${column} + 1` })
     .where(eq(checkoutLinks.id, linkId))

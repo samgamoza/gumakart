@@ -509,7 +509,7 @@ export async function importMarketplaceOrder(
       await tx
         .update(orders)
         .set({ staffNote: `${label} order ${input.externalOrderId} — shipped and paid through ${label}. Oversold: ${short.map((s) => `${s.title} by ${s.short}`).join("; ")}. Recount.` })
-        .where(eq(orders.id, order!.id));
+        .where(and(eq(orders.id, order!.id), eq(orders.tenantId, tenantId)));
     }
     return { status: "imported" as const, orderId: order!.id, orderNumber, short };
   });
@@ -546,7 +546,7 @@ async function cancelImportedOrder(tenantId: string, orderId: string, reason: st
     await tx
       .update(orders)
       .set({ orderState: "cancelled", paymentState: "refunded", fulfillmentState: "returned", status: legacyStatusOf(facts), cancelledAt: new Date(), cancelReason: reason.slice(0, 200) })
-      .where(eq(orders.id, orderId));
+      .where(and(eq(orders.id, orderId), eq(orders.tenantId, tenantId)));
     await tx.insert(orderStatusHistory).values({ orderId, status: legacyStatusOf(facts), event: "marketplace_cancel", toState: describeStates(facts), note: reason });
     return { status: "cancelled" as const, orderId, restocked };
   });

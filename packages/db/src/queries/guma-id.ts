@@ -329,6 +329,7 @@ export async function listBuyerOrders(buyer: { id: string; phone: string }, limi
 /** Links an order to the buyer when the order's phone is the buyer's verified number. */
 export async function linkOrderToBuyer(orderId: string, buyer: { id: string; phone: string }): Promise<boolean> {
   const rows = await getDb()
+    // tenant-scope: system — buyer-scoped: matched on the verified buyer's mobile number, not a shop
     .update(orders)
     .set({ buyerAccountId: buyer.id })
     .where(and(eq(orders.id, orderId), sql`${phoneTail(orders.guestPhone)} = ${buyer.phone.slice(-10)}`))
@@ -408,6 +409,7 @@ export async function deleteBuyerAccount(buyerId: string): Promise<void> {
   await db.transaction(async (tx) => {
     const [b] = await tx.select().from(buyerAccounts).where(eq(buyerAccounts.id, buyerId)).for("update");
     if (!b) return;
+    // tenant-scope: system — buyer deleting their own Guma ID; detaches it from every shop's orders
     await tx.update(orders).set({ buyerAccountId: null }).where(eq(orders.buyerAccountId, buyerId));
     // Phase 22: saved items cascade with the account; back-in-stock alerts hold contact details, so remove them.
     await tx.delete(stockAlerts).where(eq(stockAlerts.buyerAccountId, buyerId));

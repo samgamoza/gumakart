@@ -312,7 +312,7 @@ export async function saveProductVariants(
         compareAtPrice: cheapest.compareAtPrice,
         updatedAt: new Date(),
       })
-      .where(eq(products.id, productId));
+      .where(and(eq(products.id, productId), eq(products.tenantId, tenantId)));
   });
 
   return (await getProductVariantsForTenant(tenantId, productId))!;

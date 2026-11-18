@@ -552,6 +552,7 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       });
       const paidFacts = { ...initialFacts, paymentState: "paid" as const };
       await tx
+        // tenant-scope: system — the order was inserted for this shop earlier in the same transaction
         .update(orders)
         .set({
           giftCardAmount: fromCentavos(giftCentavos),
@@ -824,6 +825,7 @@ export async function markOrderPaidByIntent(
       // available) but never reopen the order or credit the seller.
       if (!wasPaid && facts.paymentState !== "paid" && facts.paymentState !== "refunded") {
         await tx
+          // tenant-scope: system — payment webhook: the order was locked by its payment intent above
           .update(orders)
           .set({ paymentState: "paid", paymentStatus: "paid", paidAt: now })
           .where(eq(orders.id, order.id));

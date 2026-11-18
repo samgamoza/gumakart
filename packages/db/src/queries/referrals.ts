@@ -34,7 +34,7 @@ export async function ensureReferralCode(tenantId: string, customerId: string): 
       const [u] = await db
         .update(customers)
         .set({ referralCode: code })
-        .where(and(eq(customers.id, customerId), sql`${customers.referralCode} is null`))
+        .where(and(eq(customers.id, customerId), eq(customers.tenantId, tenantId), sql`${customers.referralCode} is null`))
         .returning({ code: customers.referralCode });
       if (u?.code) return u.code;
       const [again] = await db.select({ code: customers.referralCode }).from(customers).where(eq(customers.id, customerId)).limit(1);

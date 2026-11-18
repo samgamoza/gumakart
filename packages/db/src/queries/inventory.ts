@@ -218,7 +218,7 @@ export async function applyStockChanges(
           basePrice: sql`(select min(${productVariants.price}) from ${productVariants} where ${productVariants.productId} = ${productId} and ${productVariants.active})`,
           updatedAt: new Date(),
         })
-        .where(eq(products.id, productId));
+        .where(and(eq(products.id, productId), eq(products.tenantId, tenantId)));
     }
 
     return { changed, unchanged: current.length - changed };

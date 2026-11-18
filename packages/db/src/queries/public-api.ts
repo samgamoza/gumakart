@@ -655,7 +655,7 @@ export async function apiUpdateVariant(tenantId: string, id: string, patch: ApiV
       await tx
         .update(products)
         .set({ basePrice: cheapest.price, compareAtPrice: cheapest.compareAtPrice, updatedAt: new Date() })
-        .where(eq(products.id, row.v.productId));
+        .where(and(eq(products.id, row.v.productId), eq(products.tenantId, tenantId)));
     }
     return true;
   });

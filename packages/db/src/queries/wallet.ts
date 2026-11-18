@@ -217,6 +217,7 @@ export async function creditSaleForOrder(
 
     // Record platform fee on the order for reporting.
     await tx
+      // tenant-scope: system — the order was loaded by id in this transaction; only paid platform charges reach here
       .update(orders)
       .set({ serviceFee: fromCentavos(feeCentavos) })
       .where(eq(orders.id, order.id));

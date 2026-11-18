@@ -483,7 +483,7 @@ export async function editOrderItems(
     await tx
       .update(orders)
       .set({ subtotal: peso(subtotalC), discount: peso(discountC), tax: peso(taxC), serviceFee: peso(serviceFeeC), total: peso(newTotalC), editedAt: new Date() })
-      .where(eq(orders.id, orderId));
+      .where(and(eq(orders.id, orderId), eq(orders.tenantId, tenantId)));
     const summary = `Edited: ${changes.join(", ")}. Total ₱${peso(oldTotalC)} → ₱${peso(newTotalC)}${refundDueC ? ` (give back ₱${peso(refundDueC)})` : ""}`;
     await tx.insert(orderStatusHistory).values({
       orderId,
@@ -675,7 +675,7 @@ export async function recordReturn(
     }
 
     const refundedAfterC = c(order.refundedAmount) + refundC;
-    await tx.update(orders).set({ refundedAmount: peso(refundedAfterC) }).where(eq(orders.id, orderId));
+    await tx.update(orders).set({ refundedAmount: peso(refundedAfterC) }).where(and(eq(orders.id, orderId), eq(orders.tenantId, tenantId)));
 
     // Phase 17: refund as store credit — a credit the buyer spends on a later order.
     let storeCredit: { code: string; amount: number } | null = null;
@@ -735,7 +735,7 @@ export async function recordReturn(
         payment: { refundId: gatewayRefundId, viaRefundFlow: true },
       });
       // The gift-card part was put back on its card by the refund action.
-      if (giftC > 0) await tx.update(orders).set({ refundedAmount: order.total }).where(eq(orders.id, orderId));
+      if (giftC > 0) await tx.update(orders).set({ refundedAmount: order.total }).where(and(eq(orders.id, orderId), eq(orders.tenantId, tenantId)));
     }
     return { out: { returnId: row!.id, orderNumber: order.orderNumber, refunded: refundC / 100, fullyRefunded, restockedUnits, gatewayRefundId, summary, storeCredit } as ReturnResult, refundRowId, refundC, fullyRefunded };
   });
@@ -801,7 +801,7 @@ export async function voidPosSale(
       note: `Voided by ${actor.name}: ${reason}`,
       payment: { viaRefundFlow: true },
     });
-    await tx.update(orders).set({ voidedAt: new Date(), refundedAmount: order.total }).where(eq(orders.id, orderId));
+    await tx.update(orders).set({ voidedAt: new Date(), refundedAmount: order.total }).where(and(eq(orders.id, orderId), eq(orders.tenantId, tenantId)));
     const lines = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderId));
     await tx.insert(orderReturns).values({
       tenantId,
