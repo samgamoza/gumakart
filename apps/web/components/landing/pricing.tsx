@@ -1,30 +1,23 @@
 import Link from "next/link";
 import { ArrowRight, Check, ShieldCheck, Sparkles, Zap } from "lucide-react";
-import { SELLER_PLANS, PLAN_AI_LIMITS } from "@gumakart/plans";
+import { PUBLIC_PLANS } from "@gumakart/plans";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { adminUrl } from "@/lib/utils";
 
-const plans = SELLER_PLANS.map((plan) => {
-  const limits = PLAN_AI_LIMITS[plan.id];
-  return {
-    id: plan.id,
-    name: plan.name,
-    price: plan.priceMonthly === 0 ? "₱0" : `₱${plan.priceMonthly}`,
-    period: "/month",
-    desc: plan.tagline,
-    features: plan.marketingFeatures.length
-      ? plan.marketingFeatures
-      : [
-          `${limits.generationsPerMonth} AI generations / month`,
-          ...plan.features,
-        ],
-    cta: plan.id === "free" ? "Start free" : plan.id === "growth" ? "Get Pro" : "Talk to sales",
-    href: plan.id === "pro" ? "/contact" : `${adminUrl}/signup`,
-    highlighted: plan.id === "growth",
-  };
-});
+// AI suite Phase 5.3 (D2): Free · Starter ₱999 · Pro Live ₱2,999 · Enterprise Vibe ₱5,999.
+const plans = PUBLIC_PLANS.map((plan) => ({
+  id: plan.id,
+  name: plan.name,
+  price: plan.priceMonthly === 0 ? "₱0" : `₱${plan.priceMonthly.toLocaleString("en-PH")}`,
+  period: "/month",
+  desc: plan.tagline,
+  features: plan.features,
+  cta: plan.id === "free" ? "Start free" : `Get ${plan.name}`,
+  href: plan.id === "free" ? `${adminUrl}/signup` : `${adminUrl}/signup?plan=${plan.id}`,
+  highlighted: plan.highlighted,
+}));
 
 export function LandingPricing() {
   return (
@@ -52,14 +45,14 @@ export function LandingPricing() {
               See the flagship model store
             </span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
-              Live selling, flash deals, reviews &amp; instant chat — preview what Pro &amp; Advance
-              unlock.
+              Live selling, flash deals, reviews &amp; instant chat — preview what Starter, Pro Live
+              &amp; Enterprise Vibe unlock.
             </span>
           </span>
           <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
         </Link>
 
-        <div className="mt-14 grid items-start gap-6 lg:grid-cols-3">
+        <div className="mt-14 grid items-start gap-6 md:grid-cols-2 lg:grid-cols-4">
           {plans.map((plan) => (
             <Card
               key={plan.id}

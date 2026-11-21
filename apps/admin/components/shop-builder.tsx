@@ -366,12 +366,12 @@ export function ShopBuilder() {
             <div>
               <p className="text-sm font-semibold text-amber-900">
                 {lockedPrompt.label} requires{" "}
-                {lockedPrompt.minPlan === "pro" ? "Advance" : "Pro"}
+                {lockedPrompt.minPlan === "pro" ? "Pro Live" : "Starter"}
               </p>
               <p className="mt-1 max-w-xl text-sm text-muted-foreground">
                 Preview how flagship shops look with live selling, flash deals, and more on our model
                 store — then upgrade to unlock{" "}
-                {lockedPrompt.minPlan === "pro" ? "Advance" : "Pro"} templates for your shop.
+                {lockedPrompt.minPlan === "pro" ? "Pro Live" : "Starter"} templates for your shop.
               </p>
             </div>
             <button
@@ -396,7 +396,7 @@ export function ShopBuilder() {
               href={`/settings/subscription?highlight=${lockedPrompt.minPlan}&ref=shop-builder`}
               className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
             >
-              Upgrade to {lockedPrompt.minPlan === "pro" ? "Advance" : "Pro"}
+              Upgrade to {lockedPrompt.minPlan === "pro" ? "Pro Live" : "Starter"}
             </Link>
           </div>
         </Card>

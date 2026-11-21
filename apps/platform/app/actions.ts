@@ -41,6 +41,7 @@ import {
 } from "@gumakart/db";
 import { createSupportAccessGrantToken } from "@gumakart/auth";
 import { curateTemplateSkins } from "@gumakart/ai";
+import { isAiSuiteTierId } from "@gumakart/plans";
 import { notifyHelpdeskAgentReply } from "@gumakart/services";
 import {
   BRAND_PALETTES,
@@ -135,6 +136,7 @@ export async function updateTenantPlanAction(
 ): Promise<ActionResult> {
   try {
     const session = await guard();
+    if (!isAiSuiteTierId(plan)) return { ok: false, error: "Unknown plan." };
     await setTenantPlan(tenantId, plan);
     await writeAudit({
       actorId: session.userId,

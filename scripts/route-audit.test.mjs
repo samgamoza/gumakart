@@ -135,6 +135,7 @@ const ADMIN_PUBLIC = {
   "apps/admin/app/api/invite/route.ts": "staff invite — the token in the link is the credential",
   "apps/admin/app/api/pos/login/route.ts": "cashier PIN unlock on a paired register",
   "apps/admin/app/api/webhooks/meta/route.ts": "Meta webhook — X-Hub-Signature-256 checked",
+  "apps/admin/app/api/webhooks/whatsapp/route.ts": "WhatsApp Cloud API webhook — X-Hub-Signature-256 checked",
   "apps/admin/app/api/inngest/route.ts": "Inngest — signed with INNGEST_SIGNING_KEY by the SDK",
   "apps/admin/app/api/v1/openapi.json/route.ts": "public API spec",
   "apps/admin/app/api/health/integrations/route.ts": "behind the session middleware; configured/missing flags only",

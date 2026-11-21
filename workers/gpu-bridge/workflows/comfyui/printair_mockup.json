@@ -1,0 +1,473 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "flux1-fill-dev.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Flux.1 Fill"
+    }
+  },
+  "2": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp8_e4m3fn.safetensors",
+      "type": "flux"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "",
+      "clip": [
+        "2",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "DifferentialDiffusion",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example_flat_thank_you_card.png"
+    },
+    "_meta": {
+      "title": "Flat: thank_you_card"
+    }
+  },
+  "7": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "6",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 424,
+      "height": 632,
+      "crop": "disabled"
+    }
+  },
+  "8": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1,
+      "color": 8421504
+    }
+  },
+  "9": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "8",
+        0
+      ],
+      "source": [
+        "7",
+        0
+      ],
+      "x": 300,
+      "y": 269,
+      "resize_source": false
+    }
+  },
+  "10": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": 424,
+      "height": 632
+    }
+  },
+  "11": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 0,
+      "width": 1024,
+      "height": 1024
+    }
+  },
+  "12": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "11",
+        0
+      ],
+      "source": [
+        "10",
+        0
+      ],
+      "x": 300,
+      "y": 269,
+      "operation": "add"
+    }
+  },
+  "13": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "12",
+        0
+      ],
+      "expand": -4,
+      "tapered_corners": false
+    }
+  },
+  "14": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "13",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "a printed thank-you card lying on a light wooden table beside a kraft paper parcel, soft natural window light, top-down flat lay product photography",
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Scene: thank_you_card"
+    }
+  },
+  "16": {
+    "class_type": "FluxGuidance",
+    "inputs": {
+      "conditioning": [
+        "15",
+        0
+      ],
+      "guidance": 30
+    }
+  },
+  "17": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "pixels": [
+        "9",
+        0
+      ],
+      "mask": [
+        "14",
+        0
+      ],
+      "noise_mask": false
+    }
+  },
+  "18": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "seed": 42,
+      "steps": 28,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "17",
+        0
+      ],
+      "negative": [
+        "17",
+        1
+      ],
+      "latent_image": [
+        "17",
+        2
+      ],
+      "denoise": 1
+    }
+  },
+  "19": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "18",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "19",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 1080,
+      "height": 1080,
+      "crop": "center"
+    }
+  },
+  "21": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "20",
+        0
+      ],
+      "filename_prefix": "gk_example_mockup_thank_you_card"
+    },
+    "_meta": {
+      "title": "Export thank_you_card"
+    }
+  },
+  "22": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example_flat_mailer_box.png"
+    },
+    "_meta": {
+      "title": "Flat: mailer_box"
+    }
+  },
+  "23": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "22",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 632,
+      "height": 480,
+      "crop": "disabled"
+    }
+  },
+  "24": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1,
+      "color": 8421504
+    }
+  },
+  "25": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "24",
+        0
+      ],
+      "source": [
+        "23",
+        0
+      ],
+      "x": 196,
+      "y": 421,
+      "resize_source": false
+    }
+  },
+  "26": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 1,
+      "width": 632,
+      "height": 480
+    }
+  },
+  "27": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 0,
+      "width": 1024,
+      "height": 1024
+    }
+  },
+  "28": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "27",
+        0
+      ],
+      "source": [
+        "26",
+        0
+      ],
+      "x": 196,
+      "y": 421,
+      "operation": "add"
+    }
+  },
+  "29": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "28",
+        0
+      ],
+      "expand": -4,
+      "tapered_corners": false
+    }
+  },
+  "30": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "29",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the printed front panel of a corrugated mailer box on a clean white desk, soft studio light, product photography",
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Scene: mailer_box"
+    }
+  },
+  "32": {
+    "class_type": "FluxGuidance",
+    "inputs": {
+      "conditioning": [
+        "31",
+        0
+      ],
+      "guidance": 30
+    }
+  },
+  "33": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "32",
+        0
+      ],
+      "negative": [
+        "4",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "pixels": [
+        "25",
+        0
+      ],
+      "mask": [
+        "30",
+        0
+      ],
+      "noise_mask": false
+    }
+  },
+  "34": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "seed": 7961,
+      "steps": 28,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "33",
+        0
+      ],
+      "negative": [
+        "33",
+        1
+      ],
+      "latent_image": [
+        "33",
+        2
+      ],
+      "denoise": 1
+    }
+  },
+  "35": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "34",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "36": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "35",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 1080,
+      "height": 1080,
+      "crop": "center"
+    }
+  },
+  "37": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "36",
+        0
+      ],
+      "filename_prefix": "gk_example_mockup_mailer_box"
+    },
+    "_meta": {
+      "title": "Export mailer_box"
+    }
+  }
+}

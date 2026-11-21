@@ -12,7 +12,7 @@ import {
   setSocialMessageContent,
   type SalesChannel,
 } from "@gumakart/db";
-import { openToken, sendMetaMessage, type MetaOutgoing } from "@gumakart/services";
+import { openToken, sendSocialMessage, type MetaOutgoing } from "@gumakart/services";
 import { requireTenantSession } from "@/lib/api-auth";
 import { channelFail, checkoutLinkShareUrl, productShareUrl, publicImageUrl } from "@/lib/channels";
 
@@ -55,7 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ thr
       sentByName: who,
       aiOrigin: quick ? "draft" : null,
     });
-    const channel: SalesChannel = draft.thread.platform === "instagram" ? "instagram" : "messenger";
+    const channel: SalesChannel = draft.thread.platform;
     try {
       if (body.type === "text") {
         message = { type: "text", text: body.text };
@@ -100,9 +100,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ thr
     }
 
     const account = await getSocialAccountForSend(session.tenantId, draft.thread.accountId);
-    const pageId = account?.pageId ?? account?.externalId ?? "";
+    // Messenger / Instagram through the Page, WhatsApp through the number (AI suite Phase 3).
     const result = account
-      ? await sendMetaMessage({ pageId, pageToken: await openToken(account.accessTokenSealed), recipientId: draft.thread.externalUserId, message })
+      ? await sendSocialMessage({
+          platform: account.platform,
+          account: { externalId: account.externalId, pageId: account.pageId, phoneNumberId: account.phoneNumberId },
+          token: await openToken(account.accessTokenSealed),
+          recipientId: draft.thread.externalUserId,
+          message,
+        })
       : { success: false, error: "This chat's Page is no longer connected." };
     await finishSocialSend(
       session.tenantId,

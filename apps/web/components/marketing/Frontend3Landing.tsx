@@ -19,7 +19,7 @@ import {
   WifiOff,
   Zap,
 } from "lucide-react";
-import { SELLER_PLANS } from "@gumakart/plans";
+import { PUBLIC_PLANS } from "@gumakart/plans";
 import { CheckoutDemo } from "@/components/marketing/palenke/CheckoutDemo";
 import { adminUrl } from "@/lib/utils";
 
@@ -93,7 +93,8 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 export function Frontend3Landing() {
-  const plans = SELLER_PLANS;
+  // AI suite Phase 5.3 (D2): the new AI Marketing Suite tiers.
+  const plans = PUBLIC_PLANS;
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900" data-landing="palenke">
       {/* Nav */}
@@ -272,9 +273,9 @@ export function Frontend3Landing() {
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-purple-600">Simple pricing</p>
             <h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Start free. Upgrade when you grow.</h2>
           </div>
-          <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
+          <div className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 lg:grid-cols-4">
             {plans.map((p) => {
-              const featured = p.id === "growth";
+              const featured = p.highlighted;
               return (
                 <div
                   key={p.id}
@@ -294,7 +295,7 @@ export function Frontend3Landing() {
                     <span className={`ml-1 text-sm font-semibold ${featured ? "text-slate-400" : "text-slate-400"}`}>/ mo</span>
                   </p>
                   <ul className="mt-5 flex-1 space-y-2 text-sm">
-                    {p.marketingFeatures.map((f) => (
+                    {p.features.map((f) => (
                       <li key={f} className="flex items-start gap-2">
                         <Check className={`mt-0.5 h-4 w-4 shrink-0 ${featured ? "text-amber-300" : "text-emerald-500"}`} />
                         <span>{f}</span>
@@ -302,7 +303,7 @@ export function Frontend3Landing() {
                     ))}
                   </ul>
                   <a
-                    href={`${adminUrl}/signup`}
+                    href={p.id === "free" ? `${adminUrl}/signup` : `${adminUrl}/signup?plan=${p.id}`}
                     className={`mt-6 rounded-xl px-4 py-3 text-center text-xs font-extrabold uppercase tracking-widest ${
                       featured ? "bg-gradient-to-r from-purple-500 to-indigo-500 text-white" : "border border-slate-200 text-slate-800 hover:bg-slate-50"
                     }`}

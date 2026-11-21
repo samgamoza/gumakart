@@ -145,3 +145,18 @@ test("Phase 24: parcel waybill text carries the courier and tracking number", ()
   assert.ok(body.includes("Naipadala na ang order #TES-0001 via J&T Express. Tracking no. JT77889900."));
   assert.ok(!riderBookedSms({ ...base, courier: "Lalamove" }).includes("Tracking no."));
 });
+
+test("Pro funnel: thank-you note is ASCII, opt-in, fits one SMS and the funnel set is right", async () => {
+  const { thankYouSms, FUNNEL_RECIPES, smsSegments } = await import("./recipes");
+  const body = thankYouSms({ ...base, buyerName: "Ána Reyes", shopUrl: "https://kart.guma.one/tess" });
+  assert.ok(ascii(body), body);
+  assert.ok(body.startsWith("Tess Lifestyle PH: Salamat, Ana!"));
+  assert.ok(body.includes("#TES-0001"));
+  assert.ok(body.endsWith("https://kart.guma.one/tess"));
+  assert.ok(smsSegments(body) <= 1, `${body.length} chars`);
+  assert.match(thankYouSms({ ...base, buyerName: null, shopUrl: "x" }), /: Salamat! /);
+  assert.equal(isRecipeEnabled({}, "thank_you"), false);
+  assert.equal(isRecipeEnabled({ thank_you: true }, "thank_you"), true);
+  for (const r of ["abandoned_checkout", "unpaid_reminder", "review_request", "thank_you"] as const) assert.ok(FUNNEL_RECIPES.has(r), r);
+  for (const r of ["order_created", "payment_confirmed", "shipped", "out_for_delivery", "delivered"] as const) assert.ok(!FUNNEL_RECIPES.has(r), r);
+});

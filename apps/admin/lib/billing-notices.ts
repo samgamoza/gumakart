@@ -1,12 +1,12 @@
 import { markNoticeEmailed, runPlanLifecycle, type BillingNoticeToSend, PLAN_GRACE_DAYS } from "@gumakart/db";
-import { planDisplayName, normalizePlanId } from "@gumakart/plans";
+import { tierDisplayName } from "@gumakart/plans";
 import { sendTransactionalEmail } from "@gumakart/services";
 import { adminBaseUrl } from "@/lib/kyc-url";
 
 const day = (d: Date) => d.toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "long", day: "numeric", year: "numeric" });
 
 export function billingNoticeEmail(n: BillingNoticeToSend, renewUrl: string): { subject: string; text: string } {
-  const plan = planDisplayName(normalizePlanId(n.plan));
+  const plan = tierDisplayName(n.plan);
   const grace = new Date(n.periodEnd.getTime() + PLAN_GRACE_DAYS * 86_400_000);
   const days = n.kind === "reminder_7" ? 7 : n.kind === "reminder_3" ? 3 : 1;
   if (n.kind === "expired") {

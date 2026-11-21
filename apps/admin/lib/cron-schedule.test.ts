@@ -7,8 +7,20 @@ const paths = (iso: string) => dueJobs(at(iso)).map((j) => j.path);
 
 test("cron schedule (one every-minute trigger)", async (t) => {
   await t.test("outbox and webhooks every minute, 5-minute jobs on :x0/:x5", () => {
-    assert.deepEqual(paths("2026-10-06T03:01:00Z"), ["/api/cron/outbox", "/api/cron/webhooks"]);
-    assert.deepEqual(paths("2026-10-06T03:05:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/automations", "/api/cron/marketplaces", "/api/cron/campaigns", "/api/cron/loyalty"]);
+    assert.deepEqual(paths("2026-10-06T03:01:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/broadcasts"]);
+    assert.deepEqual(paths("2026-10-06T03:05:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/automations", "/api/cron/marketplaces", "/api/cron/campaigns", "/api/cron/loyalty", "/api/cron/broadcasts"]);
+  });
+  await t.test("social AI (cart recovery + closer sweep) every 2 minutes", () => {
+    assert.deepEqual(paths("2026-10-06T03:02:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/social-ai"]);
+    assert.ok(paths("2026-10-06T03:10:00Z").includes("/api/cron/social-ai"));
+  });
+  await t.test("AI suite Phases 4–5: broadcasts odd minutes, review loop :x3/:x8, printair hourly, segments nightly, payday alerts daily", () => {
+    assert.ok(paths("2026-10-06T03:07:00Z").includes("/api/cron/broadcasts"));
+    assert.ok(!paths("2026-10-06T03:02:00Z").includes("/api/cron/broadcasts"));
+    assert.deepEqual(paths("2026-10-06T03:08:00Z"), ["/api/cron/outbox", "/api/cron/webhooks", "/api/cron/social-ai", "/api/cron/review-loop"]);
+    assert.ok(paths("2026-10-06T03:35:00Z").includes("/api/cron/printair"));
+    assert.ok(paths("2026-10-06T18:45:00Z").includes("/api/cron/segments"));
+    assert.ok(paths("2026-11-14T01:05:00Z").includes("/api/cron/payday-alerts"));
   });
   await t.test("hourly jobs at their minute; daily/weekly at their hour", () => {
     assert.ok(paths("2026-10-06T03:20:00Z").includes("/api/cron/expire-orders"));

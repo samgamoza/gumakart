@@ -40,9 +40,11 @@ export default async function TenantsPage({ searchParams }: PageProps) {
             label: "All plans",
             options: [
               { value: "free", label: "Free" },
-              { value: "growth", label: "Pro" },
-              { value: "pro", label: "Advance" },
-              { value: "starter", label: "Pro (legacy starter)" },
+              { value: "growth", label: "Pro (legacy)" },
+              { value: "pro", label: "Advance (legacy)" },
+              { value: "starter", label: "Starter" },
+              { value: "pro_live", label: "Pro Live" },
+              { value: "enterprise_vibe", label: "Enterprise Vibe" },
             ],
           },
         ]}

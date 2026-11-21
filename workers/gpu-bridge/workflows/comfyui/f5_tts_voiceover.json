@@ -1,0 +1,43 @@
+{
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "example.wav"
+    },
+    "_meta": {
+      "title": "Reference voice"
+    }
+  },
+  "2": {
+    "class_type": "F5TTSAudioInputs",
+    "inputs": {
+      "sample_audio": [
+        "1",
+        0
+      ],
+      "sample_text": "Hello po, ito ang reference recording ko.",
+      "speech": "Uy, wait lang! Ito na ang tumbler na hinahanap mo!",
+      "seed": 42,
+      "model": "F5v1",
+      "vocoder": "vocos",
+      "speed": 1,
+      "model_type": "F5TTS_v1_Base"
+    },
+    "_meta": {
+      "title": "F5-TTS"
+    }
+  },
+  "3": {
+    "class_type": "SaveAudio",
+    "inputs": {
+      "audio": [
+        "2",
+        0
+      ],
+      "filename_prefix": "gk_example_voice"
+    },
+    "_meta": {
+      "title": "Voiceover"
+    }
+  }
+}

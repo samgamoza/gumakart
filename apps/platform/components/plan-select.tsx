@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Check, Loader2 } from "lucide-react";
-import { CLIENT_PLANS } from "@/lib/plans";
+import { ADMIN_ASSIGNABLE_PLANS } from "@/lib/plans";
 import { updateTenantPlanAction } from "@/app/actions";
 
 export function PlanSelect({
@@ -46,7 +46,7 @@ export function PlanSelect({
         onChange={(e) => change(e.target.value)}
         className="h-8 rounded-lg border border-border bg-card px-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-50"
       >
-        {CLIENT_PLANS.map((p) => (
+        {ADMIN_ASSIGNABLE_PLANS.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name} · ₱{p.priceMonthly}/mo
           </option>

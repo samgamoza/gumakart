@@ -25,6 +25,7 @@ interface CustomerStats {
 
 interface CustomerDetail extends CustomerRow {
   notes: string | null;
+  chats?: Array<{ threadId: string; platform: string; buyerName: string | null; lastMessageAt: string }>;
   orders: Array<{
     id: string;
     orderNumber: string;
@@ -73,6 +74,11 @@ export function CustomersManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Deep link from the Inbox: /customers?q=<phone> opens on that buyer.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
   const [sort, setSort] = useState<SortId>("recent");
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -222,6 +228,20 @@ export function CustomersManager() {
                       <CustomerSuki customerId={c.id} />
                       {detail.email && (
                         <p className="text-xs text-muted-foreground">{detail.email}</p>
+                      )}
+                      {detail.chats && detail.chats.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">Chats:</span>
+                          {detail.chats.map((ch) => (
+                            <a
+                              key={ch.threadId}
+                              href={`/inbox?t=${ch.threadId}`}
+                              className="rounded-full bg-sky-500/15 px-2 py-0.5 font-medium text-sky-300 hover:underline"
+                            >
+                              {ch.platform === "instagram" ? "Instagram" : ch.platform === "whatsapp" ? "WhatsApp" : "Messenger"} · {relativeTime(ch.lastMessageAt)}
+                            </a>
+                          ))}
+                        </div>
                       )}
                       <p className="text-xs font-medium text-muted-foreground">Order history</p>
                       {detail.orders.map((o) => (

@@ -5,11 +5,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./product-match": "./src/product-match.ts"
+    "./product-match": "./src/product-match.ts",
+    "./studio": "./src/studio-presets.ts",
+    "./bridge": "./src/gpu-bridge-client.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/seo-permissions.test.ts src/template-skins.test.ts src/seller-assist.test.ts src/product-from-photo.test.ts src/product-match.test.ts"
+    "test": "tsx --test src/seo-permissions.test.ts src/template-skins.test.ts src/seller-assist.test.ts src/product-from-photo.test.ts src/product-match.test.ts src/gpu-bridge-client.test.ts src/taglish-copywriter.test.ts src/comment-triggers.test.ts src/agents/taglish-closer.test.ts src/growth.test.ts"
   },
   "dependencies": {
     "@gumakart/plans": "workspace:*",

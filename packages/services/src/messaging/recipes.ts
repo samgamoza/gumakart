@@ -19,7 +19,8 @@ export type BuyerRecipe =
   | "delivered"
   | "abandoned_checkout"
   | "unpaid_reminder"
-  | "review_request";
+  | "review_request"
+  | "thank_you";
 
 export const BUYER_RECIPES: Array<{
   id: BuyerRecipe;
@@ -50,10 +51,27 @@ export const BUYER_RECIPES: Array<{
     when: "2 days after delivery, once — only if they ticked SMS reminders. Off until you turn it on.",
     kind: "marketing",
   },
+  {
+    id: "thank_you",
+    label: "Thank-you note",
+    when: "1 day after delivery, once — only if they ticked SMS reminders. Off until you turn it on.",
+    kind: "marketing",
+  },
 ];
 
 /** Recipes that stay off until the seller turns them on (new texts shouldn't start costing credits by themselves). */
-export const OPT_IN_RECIPES: ReadonlySet<BuyerRecipe> = new Set<BuyerRecipe>(["review_request"]);
+export const OPT_IN_RECIPES: ReadonlySet<BuyerRecipe> = new Set<BuyerRecipe>(["review_request", "thank_you"]);
+
+/**
+ * The follow-up funnel (reminders, review request, thank-you): a Pro (growth) plan feature.
+ * Order-update texts stay on every plan, Free included.
+ */
+export const FUNNEL_RECIPES: ReadonlySet<BuyerRecipe> = new Set<BuyerRecipe>([
+  "abandoned_checkout",
+  "unpaid_reminder",
+  "review_request",
+  "thank_you",
+]);
 
 const PAYMENT_NAMES: Record<string, string> = {
   gcash: "GCash",
@@ -226,6 +244,13 @@ export function backInStockSms(input: { shopName: string; productTitle: string; 
 /** Phase 23: "Kumusta ang order mo?" with the order link (where the review form is). ASCII only. */
 export function reviewRequestSms(c: OrderSmsContext): string {
   return `${smsShopName(c.shopName)}: Kumusta ang order #${c.orderNumber}? I-rate ang items mo dito, salamat! ${c.orderUrl ?? ""}`.trim();
+}
+
+/** Thank-you note 1 day after delivery, with the shop link for the next order. ASCII only. */
+export function thankYouSms(c: OrderSmsContext & { buyerName?: string | null; shopUrl: string }): string {
+  const first = asciiText((c.buyerName ?? "").trim().split(/\s+/)[0] ?? "", 20);
+  const hi = first ? `Salamat, ${first}!` : "Salamat!";
+  return `${smsShopName(c.shopName)}: ${hi} Sana nagustuhan mo ang order #${c.orderNumber}. Pag kailangan mo ulit, nandito lang kami: ${c.shopUrl}`;
 }
 
 // ─── POS receipt ─────────────────────────────────────────────────────────────

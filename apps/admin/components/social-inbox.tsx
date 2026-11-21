@@ -12,7 +12,7 @@ import { Button, Card, formatPrice } from "@gumakart/ui";
  * page explains what's needed; in local/dev a demo Page lets you try it.
  */
 
-type Platform = "messenger" | "instagram";
+type Platform = "messenger" | "instagram" | "whatsapp";
 
 interface ThreadRow {
   id: string;
@@ -53,6 +53,9 @@ interface ThreadDetail extends ThreadRow {
   lastInboundAt: string | null;
   messages: Message[];
   linkedOrders: Array<{ id: string; orderNumber: string; total: number; orderState: string | null; createdAt: string }>;
+  customer?: { id: string; name: string | null; phone: string; lastOrderAt: string | null } | null;
+  aiPaused?: boolean;
+  escalationReason?: string | null;
 }
 
 interface ListData {
@@ -84,6 +87,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T & { ok: boole
 const PLATFORM: Record<Platform, { label: string; dot: string }> = {
   messenger: { label: "Messenger", dot: "bg-sky-500" },
   instagram: { label: "Instagram", dot: "bg-pink-500" },
+  whatsapp: { label: "WhatsApp", dot: "bg-emerald-500" },
 };
 
 function ago(iso: string): string {
@@ -368,8 +372,31 @@ function Conversation({ threadId, onBack, onChanged }: { threadId: string; onBac
         </Button>
       </div>
 
+      {thread.aiPaused && (
+        <div data-testid="inbox-ai-paused" className="flex flex-wrap items-center gap-2 border-b border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <Sparkles className="h-3.5 w-3.5" />
+          <span className="min-w-0 flex-1">AI sales closer is paused here{thread.escalationReason ? ` — ${thread.escalationReason}` : ""}. You're handling this chat.</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              await call(`/api/inbox/${threadId}`, { method: "PATCH", body: JSON.stringify({ ai: "resume" }) });
+              await load();
+            }}
+          >
+            Let AI continue
+          </Button>
+        </div>
+      )}
+
       {thread.linkedOrders.length > 0 && (
         <div className="flex flex-wrap gap-2 border-b border-white/10 px-3 py-2 text-xs">
+          {thread.customer && (
+            <Link href={`/customers?q=${encodeURIComponent(thread.customer.phone)}`} className="rounded-full bg-sky-500/15 px-2 py-0.5 font-medium text-sky-300 hover:underline">
+              Buyer: {thread.customer.name || thread.customer.phone}
+            </Link>
+          )}
           <span className="text-muted-foreground">Orders from this chat:</span>
           {thread.linkedOrders.map((o) => (
             <Link key={o.id} href={`/orders?q=${encodeURIComponent(o.orderNumber)}`} className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-300 hover:underline">

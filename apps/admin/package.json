@@ -9,7 +9,8 @@
     "start": "next start --port 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test lib/format-ph.test.ts lib/pos-offline.test.ts lib/cron-schedule.test.ts lib/code128.test.ts"
+    "test": "tsx --test lib/format-ph.test.ts lib/pos-offline.test.ts lib/cron-schedule.test.ts lib/code128.test.ts",
+    "test:integration": "tsx --test --test-force-exit lib/social-automation.integration.test.ts lib/ai-suite-growth.integration.test.ts"
   },
   "dependencies": {
     "@gumakart/ai": "workspace:*",

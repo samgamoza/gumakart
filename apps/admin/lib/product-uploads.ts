@@ -206,3 +206,59 @@ export async function saveEnhancedProductImage(
   const filename = `${randomUUID()}-enhanced.jpg`;
   return storeBuffer(tenantId, filename, buffer, "image/jpeg");
 }
+
+// ─── AI Marketing Suite Phase 2: voice samples + media ownership ─────────────
+
+const AUDIO_MIME_TO_EXT: Record<string, string> = {
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/mpeg": "mp3",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/ogg": "ogg",
+  "audio/webm": "webm",
+  "audio/flac": "flac",
+};
+
+/**
+ * Enterprise Vibe custom voice: the seller's ~10-second recording. Stored beside their product
+ * photos (products/<tenant>/voice-<uuid>.<ext>) so the same storage, serving and ownership rules apply.
+ */
+export async function saveVoiceSample(tenantId: string, file: File): Promise<{ url: string; filename: string }> {
+  const ext = AUDIO_MIME_TO_EXT[file.type] ?? ({ wav: "wav", mp3: "mp3", m4a: "m4a", ogg: "ogg", webm: "webm", flac: "flac" } as Record<string, string>)[file.name.split(".").pop()?.toLowerCase() ?? ""];
+  if (!ext) throw new Error("Use a WAV, MP3, M4A, OGG, WebM or FLAC recording.");
+  if (file.size > MAX_BYTES) throw new Error("Recording must be 5 MB or smaller.");
+  if (file.size < 8 * 1024) throw new Error("That recording is too short — record about 10 seconds.");
+  const contentType = file.type && AUDIO_MIME_TO_EXT[file.type] ? file.type : `audio/${ext === "m4a" ? "mp4" : ext === "mp3" ? "mpeg" : ext}`;
+  return storeBuffer(tenantId, `voice-${randomUUID()}.${ext}`, Buffer.from(await file.arrayBuffer()), contentType);
+}
+
+/**
+ * A media URL a seller hands to the Marketing Studio must be theirs: one of their uploads
+ * (relative /uploads/products/<tenant>/… or our Blob host under products/<tenant>/), or one of
+ * their own earlier AI outputs in the media bucket (<AI_MEDIA_PUBLIC_BASE_URL>/ai-media/<tenant>/…).
+ * The GPU bridge enforces its own host allowlist on top of this.
+ */
+export function assertTenantOwnsMedia(tenantId: string, mediaUrl: string): void {
+  const aiBase = (process.env.AI_MEDIA_PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
+  if (aiBase && mediaUrl.startsWith(`${aiBase}/ai-media/${tenantId}/`) && !mediaUrl.includes("..")) return;
+  assertTenantOwnsImage(tenantId, mediaUrl);
+}
+
+/** AI suite Phase 4: a photo a buyer sent in chat for their review (bytes already downloaded from Meta). */
+export async function saveReviewPhotoBytes(tenantId: string, bytes: Uint8Array): Promise<{ url: string; filename: string } | null> {
+  if (bytes.byteLength > MAX_BYTES * 2 || bytes.byteLength < 100) return null;
+  const b = bytes;
+  const mime =
+    b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff
+      ? "image/jpeg"
+      : b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47
+        ? "image/png"
+        : b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+          ? "image/webp"
+          : null;
+  if (!mime) return null;
+  const filename = `review-${randomUUID()}.${MIME_TO_EXT[mime]}`;
+  return storeBuffer(tenantId, filename, Buffer.from(bytes), mime);
+}

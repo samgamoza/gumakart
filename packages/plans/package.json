@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "tsx --test src/catalog.test.ts src/template-switch.test.ts"
+    "test": "tsx --test src/catalog.test.ts src/template-switch.test.ts src/ai-suite.test.ts src/public-plans.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -122,6 +122,8 @@ export default async function CheckoutLinkPage({ params, searchParams }: PagePro
     freeDeliveryAbove: deliveryAllowed ? resolveDelivery(1, settings).freeAbove ?? null : null,
     requireEmail: Boolean(settings.checkout.customer?.requireEmail),
     utm: utmFromSearchParams(query),
+    // AI suite Phase 3: what the buyer told the AI closer (stored server-side on the link, never in the URL).
+    prefill: link.prefill,
   };
 
   return <LinkCheckout data={data} />;

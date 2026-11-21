@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { cancelCampaign, queueCampaign, updateCampaign } from "@gumakart/db";
+import { cancelCampaign, getTenantPlanId, queueCampaign, updateCampaign } from "@gumakart/db";
+import { FUNNEL_UPGRADE_MESSAGE, planHasFunnel } from "@/lib/funnel-plan";
 import { requireTenantSession } from "@/lib/api-auth";
 import { recordActivity } from "@/lib/activity";
 import { campaignFail, segmentSchema } from "@/lib/campaign-api";
@@ -27,6 +28,10 @@ export async function POST(request: Request, { params }: Ctx) {
     const session = await requireTenantSession();
     const { campaignId } = await params;
     z.string().uuid().parse(campaignId);
+    // Pro funnel: drafts are free to prepare; sending a campaign needs Pro or Advance.
+    if (!planHasFunnel(await getTenantPlanId(session.tenantId))) {
+      return NextResponse.json({ ok: false, error: FUNNEL_UPGRADE_MESSAGE, upgradeRequired: true }, { status: 402 });
+    }
     if (!smsReady()) return NextResponse.json({ ok: false, error: "SMS sending isn't connected yet. Your draft is saved — send it once texts are on." }, { status: 400 });
     const { sendAt } = z.object({ sendAt: z.string().datetime({ offset: true }).nullable().optional() }).parse(await request.json().catch(() => ({})));
     const campaign = await queueCampaign(session.tenantId, campaignId, sendAt ? new Date(sendAt) : null);

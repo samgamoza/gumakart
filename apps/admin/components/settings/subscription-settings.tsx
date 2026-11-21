@@ -3,17 +3,20 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card } from "@gumakart/ui";
-import { SELLER_PLANS, normalizePlanId, planDisplayName } from "@gumakart/plans";
+import { PAID_PLAN_PRICES_PHP, PUBLIC_PLANS, isGrandfatheredPlan, tierDisplayName, type PaidPlanId } from "@gumakart/plans";
 import { SettingsShell } from "@/components/settings/settings-shell";
 import { BillingStatus } from "@/components/settings/billing-status";
 import { useTenantSettings } from "@/components/settings/settings-forms";
 import { modelStoreUrl } from "@/lib/utils";
 
-const PLANS = SELLER_PLANS.map((p) => ({
-  id: p.id,
+// AI suite Phase 5.3 (D2): the new tiers are what's sold; legacy plans can only be renewed.
+const PLANS = PUBLIC_PLANS.map((p) => ({
+  id: p.id as string,
   name: p.name,
-  price: p.priceMonthly === 0 ? "₱0" : `₱${p.priceMonthly}/mo`,
-  features: p.marketingFeatures,
+  tagline: p.tagline,
+  price: p.priceMonthly === 0 ? "₱0" : `₱${p.priceMonthly.toLocaleString("en-PH")}/mo`,
+  features: p.features,
+  popular: p.highlighted,
 }));
 
 const PAY_METHODS = [
@@ -38,16 +41,18 @@ export function SubscriptionSettingsPage() {
   const highlightRef = useRef<HTMLDivElement | null>(null);
 
   const { settings, loading, error } = useTenantSettings();
-  const currentPlan = normalizePlanId(settings?.subscriptionPlan);
+  const rawPlan = (settings?.subscriptionPlan ?? "free").trim().toLowerCase();
+  const currentPlan = rawPlan === "advance" ? "pro" : rawPlan;
+  const grandfathered = isGrandfatheredPlan(rawPlan);
   const [method, setMethod] = useState<(typeof PAY_METHODS)[number]["id"]>("gcash");
   const [payingPlan, setPayingPlan] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (highlight !== "growth" && highlight !== "pro") return;
+    if (!highlight || !["growth", "pro", "starter", "pro_live", "enterprise_vibe"].includes(highlight)) return;
     highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlight, loading]);
-  async function upgrade(plan: "growth" | "pro") {
+  async function upgrade(plan: PaidPlanId) {
     setPayingPlan(plan);
     setPayError(null);
     try {
@@ -93,8 +98,13 @@ export function SubscriptionSettingsPage() {
       <Card className="mb-4 border-emerald-500/30 bg-emerald-500/10 p-5">
         <p className="text-sm text-muted-foreground">Current plan</p>
         <p className="mt-1 text-2xl font-bold text-emerald-300">
-          {planDisplayName(currentPlan)}
+          {tierDisplayName(currentPlan)}
         </p>
+        {grandfathered && (
+          <p className="mt-2 text-sm text-muted-foreground" data-testid="grandfathered-note">
+            You&apos;re on a grandfathered plan (₱{PAID_PLAN_PRICES_PHP[currentPlan as PaidPlanId]}/mo). It stays yours — renew it anytime, or move to a new AI plan below.
+          </p>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">
           Shop status: <span className="font-medium capitalize">{settings?.status}</span>
         </p>
@@ -155,10 +165,10 @@ export function SubscriptionSettingsPage() {
         ))}
       </div>
 
-      <div ref={highlightRef} className="grid gap-4 md:grid-cols-3">
+      <div ref={highlightRef} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {PLANS.map((plan) => {
           const active = plan.id === currentPlan;
-          const highlighted = highlight === plan.id;
+          const highlighted = highlight === plan.id || (highlight === "growth" && plan.id === "starter") || (highlight === "pro" && plan.id === "pro_live");
           return (
             <Card
               key={plan.id}
@@ -169,13 +179,17 @@ export function SubscriptionSettingsPage() {
                     ? "ring-2 ring-amber-400 shadow-lg shadow-amber-100"
                     : ""
               }`}
-            >              <div className="flex items-center justify-between gap-2">
+            >
+              <div className="flex items-center justify-between gap-2">
                 <h3 className="font-semibold">{plan.name}</h3>
                 {active && <Badge className="bg-emerald-100 text-emerald-800">Current</Badge>}
                 {!active && highlighted && (
                   <Badge className="bg-amber-100 text-amber-800">Recommended</Badge>
                 )}
-              </div>              <p className="mt-2 text-2xl font-bold">{plan.price}</p>
+                {!active && !highlighted && plan.popular && <Badge className="bg-violet-100 text-violet-800">Most popular</Badge>}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{plan.tagline}</p>
+              <p className="mt-2 text-2xl font-bold">{plan.price}</p>
               <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
                 {plan.features.map((feature) => (
                   <li key={feature}>• {feature}</li>
@@ -192,7 +206,7 @@ export function SubscriptionSettingsPage() {
                   type="button"
                   disabled={payingPlan !== null}
                   onClick={() => {
-                    if (plan.id === "growth" || plan.id === "pro") upgrade(plan.id);
+                    if (plan.id !== "free") void upgrade(plan.id as PaidPlanId);
                   }}
                 >
                   {payingPlan === plan.id ? "Opening payment…" : `Upgrade — ${plan.price}`}

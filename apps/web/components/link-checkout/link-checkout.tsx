@@ -51,6 +51,8 @@ export interface LinkCheckoutData {
   freeDeliveryAbove?: number | null;
   requireEmail: boolean;
   utm: Record<string, string> | null;
+  /** AI suite Phase 3: details the buyer gave in chat (only on links made by the AI closer, before the first order). */
+  prefill?: { name?: string; phone?: string; addressLine?: string; barangay?: string; city?: string; landmark?: string; paymentMethod?: string } | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -89,12 +91,17 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
   const [quantities, setQuantities] = useState<Record<string, number>>(() =>
     Object.fromEntries(data.items.map((i) => [i.key, Math.min(i.quantity, Math.max(1, i.maxQuantity))]))
   );
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const pre = data.prefill ?? null;
+  const [name, setName] = useState(pre?.name ?? "");
+  const [phone, setPhone] = useState(pre?.phone ?? "");
   const [email, setEmail] = useState("");
   const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">(data.delivery ? "delivery" : "pickup");
-  const [address, setAddress] = useState<KartAddress>(EMPTY_ADDRESS);
-  const [method, setMethod] = useState<LinkPaymentId | null>(data.payments.length === 1 ? data.payments[0]!.id : null);
+  const [address, setAddress] = useState<KartAddress>(() => (pre?.addressLine || pre?.landmark ? { ...EMPTY_ADDRESS, line1: pre.addressLine ?? "", landmark: pre.landmark ?? "" } : EMPTY_ADDRESS));
+  const [method, setMethod] = useState<LinkPaymentId | null>(() => {
+    if (data.payments.length === 1) return data.payments[0]!.id;
+    const wanted = data.payments.find((p) => p.id === pre?.paymentMethod);
+    return wanted ? wanted.id : null;
+  });
   const [smsConsent, setSmsConsent] = useState(false);
   // Phase 32: remember a ?ref= Suki referral code for this shop.
   useEffect(() => captureReferral(data.shop.slug), [data.shop.slug]);
@@ -527,6 +534,11 @@ export function LinkCheckout({ data }: { data: LinkCheckoutData }) {
               onChange={(e) => setPhone(e.target.value)}
             />
           </Field>
+          {pre && (pre.name || pre.phone || pre.addressLine) && (
+            <p className="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-900" data-testid="chat-prefill-banner">
+              Na-fill mula sa chat mo with {data.shop.name}. Pakicheck at kumpletuhin ang city at barangay.
+            </p>
+          )}
           {fromDevice && !gid.buyer && (
             <div className="flex items-center justify-between gap-2 rounded-xl bg-sky-50 px-3 py-2 text-sm text-sky-900" data-testid="remembered-banner">
               <span>Na-fill mula sa huling order mo sa device na ito.</span>

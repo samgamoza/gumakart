@@ -1,5 +1,5 @@
 import type { ResolvedShopTheme } from "@gumakart/storefront-themes";
-import { PLAN_PRICES_PHP, planDisplayName } from "@gumakart/plans";
+import { PAID_PLAN_PRICES_PHP, tierDisplayName } from "@gumakart/plans";
 import { hasGrowthFeatures, hasProFeatures, upgradeUrl } from "@/lib/storefront-plans";
 import { PlanTierBadge } from "./plan-tier-badge";
 
@@ -39,7 +39,7 @@ export function UpgradeHintBanner({
             className="font-semibold underline-offset-2 hover:underline"
             style={{ color: theme.primaryColor }}
           >
-            {planDisplayName("growth")} from ₱{PLAN_PRICES_PHP.growth}/mo
+            {tierDisplayName("starter")} from ₱{PAID_PLAN_PRICES_PHP.starter.toLocaleString("en-PH")}/mo
           </a>
         )}
         {!hasProFeatures(plan) && (
@@ -48,7 +48,7 @@ export function UpgradeHintBanner({
             className="font-semibold underline-offset-2 hover:underline"
             style={{ color: theme.accentColor }}
           >
-            {planDisplayName("pro")} from ₱{PLAN_PRICES_PHP.pro}/mo
+            {tierDisplayName("pro_live")} from ₱{PAID_PLAN_PRICES_PHP.pro_live.toLocaleString("en-PH")}/mo
           </a>
         )}
       </div>

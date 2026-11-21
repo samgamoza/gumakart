@@ -258,6 +258,7 @@ export const PAGE_PERMISSIONS: Array<{ prefix: string; permission: Permission }>
   { prefix: "/agents", permission: "marketing.manage" },
   { prefix: "/ai-studio", permission: "marketing.manage" },
   { prefix: "/workspace", permission: "marketing.manage" },
+  { prefix: "/marketing-studio", permission: "marketing.manage" },
   { prefix: "/shop-builder", permission: "settings.shop" },
   { prefix: "/launch", permission: "settings.shop" },
   { prefix: "/onboarding", permission: "settings.shop" },

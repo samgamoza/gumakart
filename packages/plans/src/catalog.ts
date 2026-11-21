@@ -50,6 +50,7 @@ export const SELLER_PLANS: PlanDefinition[] = [
       "5 AI generations / month",
       "Shop chatbot (daily limits)",
       "GCash & COD",
+      "Order-update texts to buyers",
       "Up to 20 products",
     ],
     workspaceEnabled: false,
@@ -76,7 +77,8 @@ export const SELLER_PLANS: PlanDefinition[] = [
       "100 AI generations / month",
       "Live selling & agents",
       "Unlimited products",
-      "SMS reminders",
+      "Follow-up texts: reminders, thank-you notes, review requests",
+      "SMS campaigns with AI-written promos",
     ],
     workspaceEnabled: true,
     productCap: null,
@@ -120,13 +122,14 @@ export const PLAN_ORDER: Record<SubscriptionPlanId, number> = {
 
 /**
  * Normalize any stored / legacy / marketing alias to a canonical plan id.
- * - starter → growth (legacy platform)
+ * - starter → growth (AI-suite Starter tier; also the legacy platform alias)
  * - advance → pro (constitution spelling)
+ * - pro_live, enterprise_vibe → pro (AI-suite tiers get every Advance feature; see ai-suite.ts)
  * - sulit → free (legacy marketing)
  */
 export function normalizePlanId(id: string | null | undefined): SubscriptionPlanId {
   const raw = (id ?? "").trim().toLowerCase();
-  if (raw === "pro" || raw === "advance") return "pro";
+  if (raw === "pro" || raw === "advance" || raw === "pro_live" || raw === "enterprise_vibe") return "pro";
   if (raw === "growth" || raw === "starter") return "growth";
   if (raw === "free" || raw === "sulit" || raw === "") return "free";
   return "free";

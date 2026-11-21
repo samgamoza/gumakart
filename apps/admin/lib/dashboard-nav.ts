@@ -12,6 +12,7 @@ import {
   Boxes,
   Bot,
   Calculator,
+  Clapperboard,
   Database,
   LayoutDashboard,
   Link2,
@@ -230,6 +231,22 @@ export const DASHBOARD_NAV: DashboardNavGroup[] = [
     collapsible: true,
     defaultOpen: false,
     items: [
+      {
+        id: "marketing-studio",
+        label: "Marketing Studio",
+        href: "/marketing-studio",
+        icon: Clapperboard,
+        badge: "new",
+        description: "AI studio product photos, Taglish video ads and viral copy — made on the Guma GPU.",
+      },
+      {
+        id: "broadcasts",
+        label: "Broadcasts",
+        href: "/campaigns/broadcasts",
+        icon: Megaphone,
+        badge: "new",
+        description: "Payday & restock broadcasts to VIP and payday buyers on Messenger, Instagram and WhatsApp (Pro Live+).",
+      },
       {
         id: "workspace",
         label: "GUMA Workspace",

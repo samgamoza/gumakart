@@ -153,3 +153,21 @@ export * from "./webhooks/sign";
 export * from "./channels/marketplaces";
 // Phase 24: parcel waybills (ready to hook up an aggregator).
 export { createWaybillProvider, type WaybillProvider, type WaybillParcel, type WaybillBooking } from "./delivery/waybill";
+// AI suite Phase 3: comments, private replies, post-id lookup, WhatsApp, unified send, chat delivery quote.
+export {
+  parseWhatsAppWebhook,
+  whatsAppPayload,
+  sendWhatsAppMessage,
+  getWhatsAppNumberInfo,
+  whatsAppAppSecret,
+  whatsAppVerifyToken,
+  sendWhatsAppTemplate,
+  fetchWhatsAppMedia,
+  fetchMetaAttachment,
+  isMetaCdnUrl,
+  type WhatsAppInboundEvent,
+} from "./channels/whatsapp";
+export { sendSocialMessage } from "./channels/social-send";
+export { quoteChatDelivery, type ChatDeliveryQuote, type ChatQuoteDeps } from "./delivery/chat-quote";
+// AI suite Phase 5: kart → Printair handoff tokens.
+export * from "./ecosystem/jwt";

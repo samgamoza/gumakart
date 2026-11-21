@@ -13,13 +13,14 @@
  *  6. otherwise "direct".
  */
 
-export const SALES_CHANNELS = ["facebook", "instagram", "messenger", "tiktok", "shopee", "lazada", "sms", "pos", "direct", "other"] as const;
+export const SALES_CHANNELS = ["facebook", "instagram", "messenger", "whatsapp", "tiktok", "shopee", "lazada", "sms", "pos", "direct", "other"] as const;
 export type SalesChannel = (typeof SALES_CHANNELS)[number];
 
 export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = {
   facebook: "Facebook",
   instagram: "Instagram",
   messenger: "Messenger",
+  whatsapp: "WhatsApp",
   tiktok: "TikTok",
   shopee: "Shopee",
   lazada: "Lazada",
@@ -47,6 +48,9 @@ const ALIASES: Record<string, SalesChannel> = {
   "instagram.com": "instagram",
   messenger: "messenger",
   msgr: "messenger",
+  whatsapp: "whatsapp",
+  wa: "whatsapp",
+  "wa.me": "whatsapp",
   "m.me": "messenger",
   tiktok: "tiktok",
   tt: "tiktok",

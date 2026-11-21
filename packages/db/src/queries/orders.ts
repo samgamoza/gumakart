@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { getDb } from "../client";
 import { recordStockMovement } from "./stock-ledger";
@@ -493,6 +493,23 @@ export async function createOrderForTenant(input: CreateOrderInput): Promise<Cre
       .returning();
 
     if (!order) throw new Error("Failed to create order");
+
+    // Messenger/IG CRM link: when the order came from a checkout link the shop sent in a
+    // chat (thread stored on the link, server-side, never the buyer-editable utm), tie that
+    // conversation to the buyer's customer record. Only fills an empty link, never moves one.
+    const linkThreadId = linkAttribution?.socialThreadId ?? null;
+    if (linkThreadId && customerRecordId) {
+      await tx
+        .update(socialThreads)
+        .set({ customerId: customerRecordId })
+        .where(
+          and(
+            eq(socialThreads.id, linkThreadId),
+            eq(socialThreads.tenantId, tenant.id),
+            isNull(socialThreads.customerId)
+          )
+        );
+    }
 
     await tx.insert(orderItems).values(
       lines.map((line) => ({

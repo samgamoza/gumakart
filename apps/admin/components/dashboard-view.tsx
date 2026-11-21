@@ -24,6 +24,7 @@ import { Card, formatPrice } from "@gumakart/ui";
 import type { LowStockSummary, SellerToday } from "@gumakart/db";
 import { AskGuma } from "@/components/ai/ask-guma";
 import { RestockCard } from "@/components/ai/restock-card";
+import { PaydayBroadcastBanner, PrintairUpsellCard } from "@/components/ai-suite/growth-cards";
 
 /**
  * Plan §10 — "What needs me today?"
@@ -199,6 +200,7 @@ export function DashboardView({ displayName }: { displayName: string }) {
 
   return (
     <div className="space-y-6">
+      <PaydayBroadcastBanner />
       {/* Greeting — Phase 34 Palenke header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -366,6 +368,7 @@ export function DashboardView({ displayName }: { displayName: string }) {
       </section>
 
       <RestockCard />
+      <PrintairUpsellCard />
 
       {/* Checkout link */}
       <Card className="border-white/10 bg-white/[0.03]">

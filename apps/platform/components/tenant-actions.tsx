@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Ban, Check, CircleSlash, ExternalLink, Headphones, Loader2 } from "lucide-react";
-import { CLIENT_PLANS } from "@/lib/plans";
+import { ADMIN_ASSIGNABLE_PLANS } from "@/lib/plans";
 import {
   setTenantPaymentsModeAction,
   startSupportAccessAction,
@@ -141,7 +141,7 @@ export function TenantActions({
             onChange={(e) => setSelectedPlan(e.target.value)}
             className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
           >
-            {CLIENT_PLANS.map((p) => (
+            {ADMIN_ASSIGNABLE_PLANS.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · ₱{p.priceMonthly}/mo
               </option>

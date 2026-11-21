@@ -5,15 +5,20 @@ import {
   deletePushSubscriptions,
   recordSocialMessage,
 } from "@gumakart/db";
-import { getMetaProfileName, isPushConfigured, openToken, parseMetaWebhook, sendPushNotifications, verifyMetaSignature } from "@gumakart/services";
+import { getMetaProfileName, isPushConfigured, openToken, parseMetaCommentEvents, parseMetaWebhook, sendPushNotifications, verifyMetaSignature } from "@gumakart/services";
+import { handleReviewReply } from "@/lib/ai-suite-growth";
+import { CLOSER_DEBOUNCE_MS, handleCloserPostback, handleCommentEvent, isCloserPostback, runAfterResponse, runCloserForThread } from "@/lib/social-automation";
 
 /**
- * Meta webhook for Messenger + Instagram (Phase 13, ready to hook up).
+ * Meta webhook for Messenger + Instagram (Phase 13) + Page feed / IG comments (AI suite Phase 3).
  * Callback URL in the Meta app: https://admin.guma.one/api/webhooks/meta
  *  - GET: subscription check (hub.verify_token must equal META_VERIFY_TOKEN).
  *  - POST: X-Hub-Signature-256 checked against META_APP_SECRET, then each message is saved
  *    to the shop that connected that Page / Instagram account (repeats are ignored).
  * Always answers fast with 200 once the signature is good (Meta retries otherwise).
+ * AI suite Phase 3: comments that match a comment-to-DM rule, and buyer messages on shops with
+ * the AI closer, are handled after the response (next/server `after`); the 5-minute
+ * social-recovery cron answers anything a background run missed.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -38,6 +43,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: "not json" });
   }
   let saved = 0;
+  const background: Array<() => Promise<unknown>> = [];
+  for (const comment of parseMetaCommentEvents(body)) {
+    if (!comment.isOwn) background.push(() => handleCommentEvent(comment));
+  }
   for (const event of parseMetaWebhook(body)) {
     try {
       const account = await findSocialAccountByExternal(event.platform, event.accountExternalId);
@@ -54,6 +63,23 @@ export async function POST(request: Request) {
       });
       if (!result.created) continue;
       saved += 1;
+      if (!event.echo) {
+        const { tenantId } = account;
+        const threadId = result.threadId;
+        if (isCloserPostback(event.postbackPayload)) {
+          background.push(() => handleCloserPostback({ tenantId, threadId, payload: event.postbackPayload! }));
+        } else {
+          const attachmentUrls = event.attachments.filter((a) => a.type === "image" && a.url).map((a) => a.url!);
+          background.push(async () => {
+            // AI suite Phase 4: a reply to the post-delivery review question is the review, not a chat for the closer.
+            const reviewed = await handleReviewReply({ tenantId, threadId, accountId: account.id, platform: account.platform, recipientId: event.userId, text: event.text, attachmentUrls }).catch((error) => {
+              console.error("[webhooks/meta] review reply failed", error);
+              return false;
+            });
+            if (!reviewed) await runCloserForThread(tenantId, threadId, { debounceMs: CLOSER_DEBOUNCE_MS });
+          });
+        }
+      }
       if (result.isNewThread && !event.echo) {
         // First message from this buyer: fetch their name (best effort).
         const token = await openToken(account.accessTokenSealed);
@@ -86,5 +112,6 @@ export async function POST(request: Request) {
       console.error("[webhooks/meta] event failed", error);
     }
   }
-  return NextResponse.json({ ok: true, saved });
+  if (background.length) runAfterResponse(background, "webhooks/meta");
+  return NextResponse.json({ ok: true, saved, queued: background.length });
 }

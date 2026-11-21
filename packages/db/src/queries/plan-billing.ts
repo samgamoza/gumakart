@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import { planPayments, tenants } from "../schema/index";
+import type { PaidPlanId } from "@gumakart/plans";
 import { PLAN_PERIOD_DAYS, PLAN_PRICES_PHP } from "../plans";
 import { nextReceiptNumber } from "./billing";
 
@@ -8,7 +9,8 @@ export { PLAN_PERIOD_DAYS, PLAN_PRICES_PHP };
 
 export interface CreatePlanPaymentInput {
   tenantId: string;
-  plan: "growth" | "pro";
+  /** AI suite Phase 5.3: starter / pro_live / enterprise_vibe, or growth / pro for grandfathered renewals. */
+  plan: PaidPlanId;
   amount: string;
   gatewayIntentId: string;
 }

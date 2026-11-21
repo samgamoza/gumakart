@@ -29,6 +29,14 @@ export const CRON_JOBS: CronJob[] = [
   { path: "/api/cron/campaigns", due: every(5), maxGapMinutes: 20 },
   // Phase 27: Suki loyalty points for paid orders (and take-backs). Every 5 minutes.
   { path: "/api/cron/loyalty", due: every(5), maxGapMinutes: 20 },
+  // AI suite Phase 3: abandoned-cart nudges (30 min, inside Meta's 24 h window) + AI closer safety net. Every 2 minutes.
+  { path: "/api/cron/social-ai", due: every(2), maxGapMinutes: 15 },
+  // AI suite Phase 4: payday / restock broadcasts, paced ≤ 10 msg/s inside each run. Odd minutes (social-ai has the even ones).
+  { path: "/api/cron/broadcasts", due: (t) => t.getUTCMinutes() % 2 === 1, maxGapMinutes: 10 },
+  // AI suite Phase 4: BayanGo review asks (2 h after delivery) + expiry. Every 5 minutes at :x3 / :x8.
+  { path: "/api/cron/review-loop", due: (t) => t.getUTCMinutes() % 5 === 3, maxGapMinutes: 20 },
+  // AI suite Phase 5: Printair packaging mockups at shop milestones. Hourly.
+  { path: "/api/cron/printair", due: hourlyAt(35), maxGapMinutes: 130 },
   // Unpaid orders past each shop's window (1–72 h) → cancelled + restocked. Hourly.
   { path: "/api/cron/expire-orders", due: hourlyAt(20), maxGapMinutes: 130 },
   // Wallet: release cleared earnings / payouts (no-op while WALLET_PAYOUTS_ENABLED=false). Hourly.
@@ -37,6 +45,10 @@ export const CRON_JOBS: CronJob[] = [
   { path: "/api/cron/billing", due: hourlyAt(50), maxGapMinutes: 130 },
   // Security G3: audit chain verification, daily at 18:15 UTC (02:15 Manila).
   { path: "/api/cron/audit-chain", due: (t) => t.getUTCHours() === 18 && t.getUTCMinutes() === 15, maxGapMinutes: 26 * 60 },
+  // AI suite Phase 4: nightly buyer segments (VIP_REPEAT / PAYDAY_SHOPPER / INACTIVE_60D), 18:45 UTC (02:45 Manila).
+  { path: "/api/cron/segments", due: (t) => t.getUTCHours() === 18 && t.getUTCMinutes() === 45, maxGapMinutes: 26 * 60 },
+  // AI suite Phase 4: payday broadcast reminders to sellers on the 14th / 29th, 01:05 UTC (09:05 Manila; no-op other days).
+  { path: "/api/cron/payday-alerts", due: (t) => t.getUTCHours() === 1 && t.getUTCMinutes() === 5, maxGapMinutes: 26 * 60 },
   // AI agents — same times as the old vercel.json (UTC).
   { path: "/api/cron/agent-reminders", due: (t) => t.getUTCHours() === 9 && t.getUTCMinutes() === 0, maxGapMinutes: 26 * 60 },
   { path: "/api/cron/agents?mode=daily", due: (t) => t.getUTCHours() === 10 && t.getUTCMinutes() === 0, maxGapMinutes: 26 * 60 },

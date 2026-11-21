@@ -39,7 +39,7 @@ interface ChannelsData {
   ok: boolean;
   error?: string;
   modes: { meta: Mode; shopee: Mode; lazada: Mode; email: "live" | "off" };
-  social: Array<{ id: string; platform: "messenger" | "instagram"; name: string; status: string }>;
+  social: Array<{ id: string; platform: "messenger" | "instagram" | "whatsapp"; name: string; status: string; aiCloserMode?: "auto" | "off" }>;
   marketplaces: MarketAccount[];
   imported: Array<{ id: string; orderNumber: string; salesChannel: string; externalOrderId: string; total: number; orderState: string | null; createdAt: string; staffNote: string | null }>;
 }
@@ -61,6 +61,7 @@ const LABEL: Record<string, string> = {
   facebook: "Facebook",
   instagram: "Instagram",
   messenger: "Messenger",
+  whatsapp: "WhatsApp",
   tiktok: "TikTok",
   shopee: "Shopee",
   lazada: "Lazada",
@@ -73,6 +74,7 @@ const COLOR: Record<string, string> = {
   facebook: "bg-blue-500",
   instagram: "bg-pink-500",
   messenger: "bg-sky-400",
+  whatsapp: "bg-emerald-400",
   tiktok: "bg-slate-200",
   shopee: "bg-orange-500",
   lazada: "bg-indigo-500",
@@ -211,7 +213,7 @@ export function ChannelsView() {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h2 className="flex items-center gap-2 font-semibold">
-              <MessageCircle className="h-4 w-4" /> Messenger & Instagram
+              <MessageCircle className="h-4 w-4" /> Messenger, Instagram &amp; WhatsApp
             </h2>
             <p className="text-sm text-muted-foreground">Answer DMs in Guma Kart, send product cards and checkout links — orders show in the chat they came from.</p>
           </div>
@@ -224,9 +226,21 @@ export function ChannelsView() {
                 <span>
                   {a.name}
                   <span className="block text-xs text-muted-foreground">
-                    {a.platform === "instagram" ? "Instagram" : "Messenger"} · {a.status === "mock" ? "demo" : a.status}
+                    {a.platform === "instagram" ? "Instagram" : a.platform === "whatsapp" ? "WhatsApp" : "Messenger"} · {a.status === "mock" ? "demo" : a.status}
                   </span>
                 </span>
+                <button
+                  type="button"
+                  data-testid="ai-closer-toggle"
+                  title="Pro Live / Enterprise Vibe: the AI answers buyers 24/7 with real stock, delivery quotes and checkout links."
+                  className={`ml-auto rounded-full px-2.5 py-1 text-xs font-medium ${a.aiCloserMode === "off" ? "bg-white/5 text-muted-foreground" : "bg-violet-500/20 text-violet-200"}`}
+                  onClick={async () => {
+                    await call(`/api/channels/meta/${a.id}`, { method: "PATCH", body: JSON.stringify({ aiCloserMode: a.aiCloserMode === "off" ? "auto" : "off" }) });
+                    await load();
+                  }}
+                >
+                  AI closer: {a.aiCloserMode === "off" ? "off" : "on"}
+                </button>
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-300"
@@ -252,6 +266,7 @@ export function ChannelsView() {
             Open Chats
           </Link>
         </div>
+        <WhatsAppConnect onConnected={load} />
         {data.modes.meta === "off" && <p className="mt-2 text-xs text-muted-foreground">Malapit na — waiting for Meta&apos;s app review. Nothing to do on your side yet.</p>}
       </Card>
 
@@ -487,5 +502,41 @@ function MarketplaceAccountPanel({ account, name, reload }: { account: MarketAcc
         </div>
       )}
     </div>
+  );
+}
+
+/** AI suite Phase 3: connect a WhatsApp Business number (Cloud API: Phone number ID + permanent token). */
+function WhatsAppConnect({ onConnected }: { onConnected: () => Promise<void> | void }) {
+  const [phoneNumberId, setPhoneNumberId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <details className="mt-3 rounded-xl border border-white/10 p-3 text-sm">
+      <summary className="cursor-pointer font-medium">Connect WhatsApp Business</summary>
+      <p className="mt-2 text-xs text-muted-foreground">From WhatsApp Manager → API Setup: the Phone number ID and a permanent System User token with whatsapp_business_messaging. Messages then show in Chats.</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <input className="rounded-lg border border-white/15 bg-transparent px-2 py-1.5" placeholder="Phone number ID" value={phoneNumberId} onChange={(e) => setPhoneNumberId(e.target.value)} inputMode="numeric" />
+        <input className="rounded-lg border border-white/15 bg-transparent px-2 py-1.5" placeholder="Access token" type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} autoComplete="off" />
+      </div>
+      <button
+        type="button"
+        disabled={busy || !phoneNumberId.trim() || !accessToken.trim()}
+        className="mt-2 inline-flex h-9 items-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+        onClick={async () => {
+          setBusy(true);
+          const r = await call<{ account?: { name: string } }>("/api/channels/whatsapp", { method: "POST", body: JSON.stringify({ phoneNumberId: phoneNumberId.trim(), accessToken: accessToken.trim() }) });
+          setBusy(false);
+          setMsg(r.ok ? `Connected ${r.account?.name ?? "WhatsApp"}.` : r.error ?? "Couldn't connect.");
+          if (r.ok) {
+            setAccessToken("");
+            await onConnected();
+          }
+        }}
+      >
+        {busy ? "Checking…" : "Connect number"}
+      </button>
+      {msg && <p className="mt-2 text-xs text-muted-foreground">{msg}</p>}
+    </details>
   );
 }

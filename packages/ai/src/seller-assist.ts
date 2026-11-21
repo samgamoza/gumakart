@@ -4,6 +4,7 @@
  *  - captions  → Facebook / Instagram / TikTok captions for a product or checkout link, link included
  *  - replies   → three suggested Taglish replies to a buyer message (the seller picks and edits)
  *  - advisor   → "Ask Guma": answers grounded ONLY in the shop facts we pass in (no invented numbers)
+ *  - promo     → three SMS campaign texts for the chosen buyers (Pro funnel; the seller picks, edits, sends)
  *
  * Every output is validated and cleaned here; nothing is ever sent to a buyer automatically.
  * Without an AI key (dev/test) a deterministic template answer is returned so the UI still works.
@@ -12,7 +13,7 @@ import { z } from "zod";
 import { callLlm, resolveEffectiveModel } from "./providers/llm";
 import { normalizePlan, resolveBudgetAwareModel, type AiTaskType } from "./plan-limits";
 
-export type AssistTask = "captions" | "replies" | "advisor" | "supplier";
+export type AssistTask = "captions" | "replies" | "advisor" | "supplier" | "promo";
 
 export interface CaptionsInput {
   shopName: string;
@@ -55,7 +56,18 @@ export interface SupplierInput {
   items: Array<{ title: string; qty: number; stock: number }>;
 }
 
-export type AssistInput = CaptionsInput | RepliesInput | AdvisorInput | SupplierInput;
+/** Pro funnel: an SMS campaign text. The offer comes from the seller only; the AI never invents one. */
+export interface PromoInput {
+  shopName: string;
+  /** Who gets it, in plain words, e.g. "repeat buyers", "buyers who haven't ordered in 60 days". */
+  audience: string;
+  /** The seller's own offer / news, e.g. "10% off this weekend, code SALE10". Empty = no discount. */
+  offer?: string;
+  /** A few real products with real prices the text may mention. */
+  products: Array<{ title: string; price: number }>;
+}
+
+export type AssistInput = CaptionsInput | RepliesInput | AdvisorInput | SupplierInput | PromoInput;
 
 export const captionsOutput = z.object({
   facebook: z.string().min(1),
@@ -66,14 +78,33 @@ export const captionsOutput = z.object({
 export const repliesOutput = z.object({ replies: z.array(z.string().min(1)).min(1) });
 export const advisorOutput = z.object({ answer: z.string().min(1), actions: z.array(z.string()).default([]) });
 export const supplierOutput = z.object({ message: z.string().min(1) });
+export const promoOutput = z.object({ options: z.array(z.string().min(1)).min(1) });
 
 export type CaptionsOutput = z.infer<typeof captionsOutput>;
 export type RepliesOutput = z.infer<typeof repliesOutput>;
 export type AdvisorOutput = z.infer<typeof advisorOutput>;
 export type SupplierOutput = z.infer<typeof supplierOutput>;
+export type PromoOutput = z.infer<typeof promoOutput>;
 
-const TASK_TYPE: Record<AssistTask, AiTaskType> = { captions: "generation", replies: "chat", advisor: "chat", supplier: "chat" };
-const MAX_TOKENS: Record<AssistTask, number> = { captions: 700, replies: 300, advisor: 600, supplier: 350 };
+const TASK_TYPE: Record<AssistTask, AiTaskType> = { captions: "generation", replies: "chat", advisor: "chat", supplier: "chat", promo: "chat" };
+const MAX_TOKENS: Record<AssistTask, number> = { captions: 700, replies: 300, advisor: 600, supplier: 350, promo: 300 };
+
+/** Campaign body limit: the shop name, link and Stop footer are added at send time. */
+export const PROMO_MAX_CHARS = 140;
+
+/** SMS-safe: fold accents, "₱" → "P", drop emoji and other non-ASCII (one would double the SMS cost). */
+export function smsSafeText(s: string): string {
+  return s
+    .replace(/₱\s*/g, "P")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 const peso = (n: number) => `₱${n.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -118,6 +149,27 @@ export function buildAssistPrompt(task: AssistTask, input: AssistInput): { syste
         .join("\n"),
     };
   }
+  if (task === "promo") {
+    const i = input as PromoInput;
+    return {
+      system: SYSTEM,
+      maxTokens: MAX_TOKENS.promo,
+      user: [
+        `Write an SMS promo from shop "${i.shopName}" to ${clip(i.audience, 120)} who agreed to get texts.`,
+        i.offer?.trim()
+          ? `The seller's offer (use exactly this, do not change numbers or codes): ${clip(i.offer.trim(), 200)}`
+          : "No discount or promo code — do NOT mention any discount, sale price, freebie or code.",
+        i.products.length
+          ? `Products you may mention (real prices): ${i.products.slice(0, 5).map((p) => `${clip(p.title, 60)} P${p.price}`).join("; ")}`
+          : "",
+        `Each text: at most ${PROMO_MAX_CHARS} characters, plain letters only (no emoji, write P not the peso sign), friendly Taglish, may start with "Hi {name}!".`,
+        "Do not add the shop name, a link or opt-out words — those are added automatically.",
+        'Return {"options": string[3]} — three different texts.',
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    };
+  }
   if (task === "supplier") {
     const i = input as SupplierInput;
     return {
@@ -150,7 +202,8 @@ export function parseAssistOutput(task: "captions", raw: string, input: Captions
 export function parseAssistOutput(task: "replies", raw: string, input: RepliesInput): RepliesOutput;
 export function parseAssistOutput(task: "advisor", raw: string, input: AdvisorInput): AdvisorOutput;
 export function parseAssistOutput(task: "supplier", raw: string, input: SupplierInput): SupplierOutput;
-export function parseAssistOutput(task: AssistTask, raw: string, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput;
+export function parseAssistOutput(task: "promo", raw: string, input: PromoInput): PromoOutput;
+export function parseAssistOutput(task: AssistTask, raw: string, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput | PromoOutput;
 export function parseAssistOutput(task: AssistTask, raw: string, input: AssistInput) {
   const json = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ""));
   if (task === "captions") {
@@ -170,6 +223,10 @@ export function parseAssistOutput(task: AssistTask, raw: string, input: AssistIn
     const o = repliesOutput.parse(json);
     return { replies: [...new Set(o.replies.map((r) => clip(clean(r), 400)).filter(Boolean))].slice(0, 3) };
   }
+  if (task === "promo") {
+    const o = promoOutput.parse(json);
+    return { options: cleanPromoOptions(o.options, input as PromoInput) };
+  }
   if (task === "supplier") {
     const i = input as SupplierInput;
     let message = clip(clean(supplierOutput.parse(json).message), 1200);
@@ -182,9 +239,38 @@ export function parseAssistOutput(task: AssistTask, raw: string, input: AssistIn
   return { answer: clip(clean(o.answer), 1200), actions: o.actions.map((a) => clip(clean(a), 200)).filter(Boolean).slice(0, 3) };
 }
 
+/**
+ * Promo guardrails: SMS-safe, under the limit, no links/shop name the sender adds anyway, and no
+ * discount the seller didn't give (a % or "off"/"sale"/"libre" without an offer drops the option).
+ */
+export function cleanPromoOptions(options: string[], input: PromoInput): string[] {
+  const hasOffer = Boolean(input.offer?.trim());
+  const invented = /\d+\s*%|\boff\b|\bsale\b|\bdiscount\b|\bfree\b|\blibre\b|\bpromo code\b|\bcode\b/i;
+  const out = options
+    .map((o) => smsSafeText(clean(o)).replace(/https?:\/\/\S+/gi, "").replace(/\s+/g, " ").trim())
+    .map((o) => (o.length > PROMO_MAX_CHARS ? `${o.slice(0, PROMO_MAX_CHARS - 3).trimEnd()}...` : o))
+    .filter((o) => o.length >= 10 && (hasOffer || !invented.test(o)));
+  return [...new Set(out)].slice(0, 3);
+}
+
 // ─── no-key fallback (dev/test only; production refuses mocks in resolveEffectiveModel) ───
 
-export function mockAssist(task: AssistTask, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput {
+export function mockAssist(task: AssistTask, input: AssistInput): CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput | PromoOutput {
+  if (task === "promo") {
+    const i = input as PromoInput;
+    const top = i.products[0];
+    const offer = i.offer?.trim() ? smsSafeText(i.offer.trim()) : "";
+    return {
+      options: cleanPromoOptions(
+        [
+          offer ? `Hi {name}! ${offer}. Order na habang meron pa!` : `Hi {name}! Salamat sa pagiging suki. May bago kami, silipin mo!`,
+          top ? `Hi {name}! Balik na ang ${top.title} sa P${top.price}. Order ka na ulit!` : `Hi {name}! Miss ka na namin. Tingnan ang mga bago sa shop!`,
+          offer ? `{name}, para sa'yo: ${offer}. Tara, order na!` : `{name}, salamat ulit! Nandito lang kami pag kailangan mo ulit.`,
+        ],
+        i
+      ),
+    };
+  }
   if (task === "captions") {
     const i = input as CaptionsInput;
     const price = i.price != null ? ` — ${peso(i.price)} lang!` : "";
@@ -251,7 +337,7 @@ export async function runSellerAssist(
   task: AssistTask,
   input: AssistInput,
   opts: { plan?: string | null; tokensUsedThisMonth?: number } = {}
-): Promise<AssistRunResult<CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput>> {
+): Promise<AssistRunResult<CaptionsOutput | RepliesOutput | AdvisorOutput | SupplierOutput | PromoOutput>> {
   const requested = resolveBudgetAwareModel(normalizePlan(opts.plan ?? "free"), TASK_TYPE[task], opts.tokensUsedThisMonth);
   const model = resolveEffectiveModel(requested);
   if (model === "mock") return { output: mockAssist(task, input), tokensUsed: 0, model: "mock", provider: "mock" };

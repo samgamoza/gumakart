@@ -11,6 +11,9 @@ import {
 } from "@gumakart/db";
 import { resolvePaymentsMode } from "@gumakart/services";
 import { ApiAuthError, assertCan, requireTenantSession } from "@/lib/api-auth";
+import { FUNNEL_RECIPES, type BuyerRecipe } from "@gumakart/services";
+import { getTenantPlanId } from "@gumakart/db";
+import { FUNNEL_UPGRADE_MESSAGE, planHasFunnel } from "@/lib/funnel-plan";
 import { birMissing } from "@gumakart/db";
 import { recordActivity } from "@/lib/activity";
 
@@ -198,6 +201,7 @@ const patchSchema = z.object({
           abandoned_checkout: z.boolean().optional(),
           unpaid_reminder: z.boolean().optional(),
           review_request: z.boolean().optional(),
+          thank_you: z.boolean().optional(),
           email_copies: z.boolean().optional(),
         })
         .strict()
@@ -281,6 +285,13 @@ export async function PATCH(request: Request) {
       }
     }
     if (body.settings?.wallet) assertCan(session, "billing.manage");
+    // Pro funnel: follow-up texts can only be switched ON on Pro or Advance (turning off is always fine).
+    const autos = body.settings?.automations as Record<string, boolean | undefined> | undefined;
+    if (autos && Object.entries(autos).some(([k, v]) => v === true && FUNNEL_RECIPES.has(k as BuyerRecipe))) {
+      if (!planHasFunnel(await getTenantPlanId(session.tenantId))) {
+        return NextResponse.json({ ok: false, error: FUNNEL_UPGRADE_MESSAGE, upgradeRequired: true }, { status: 402 });
+      }
+    }
     const updated = await updateTenantSettings(session.tenantId, body);
     if (!updated) {
       return NextResponse.json({ ok: false, error: "Shop not found." }, { status: 404 });

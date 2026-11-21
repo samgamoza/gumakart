@@ -111,7 +111,8 @@ export interface BayanGoWebhookRider {
 
 export interface BayanGoWebhookEvent {
   eventId: string;
-  type: "delivery.status_changed" | "delivery.location";
+  /** "delivery.completed" (AI suite Phase 4 review loop) is a status change to "delivered". */
+  type: "delivery.status_changed" | "delivery.location" | "delivery.completed";
   occurredAt?: string;
   delivery: {
     deliveryId: string;
@@ -348,9 +349,10 @@ export function parseBayanGoWebhook(payload: unknown): BayanGoWebhookEvent | nul
   const p = payload as Record<string, unknown>;
   const delivery = p.delivery as Record<string, unknown> | undefined;
   if (typeof p.eventId !== "string" || !delivery) return null;
-  if (p.type !== "delivery.status_changed" && p.type !== "delivery.location") return null;
+  if (p.type !== "delivery.status_changed" && p.type !== "delivery.location" && p.type !== "delivery.completed") return null;
   if (typeof delivery.deliveryId !== "string" || !delivery.deliveryId) return null;
-  const status = normalizeBayanGoStatus(delivery.status);
+  const status = p.type === "delivery.completed" ? normalizeBayanGoStatus(delivery.status ?? "delivered") : normalizeBayanGoStatus(delivery.status);
+  if (p.type === "delivery.completed" && status !== "delivered") return null;
   if (!status) return null;
 
   const loc = delivery.location as Record<string, unknown> | undefined;

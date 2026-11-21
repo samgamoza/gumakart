@@ -1,6 +1,7 @@
-import { claimCampaignBatches, campaignTag, finishCampaignIfDone, getTenantSettings, isCampaignActive, recordCampaignSend, sendWithLog } from "@gumakart/db";
+import { claimCampaignBatches, campaignTag, finishCampaignIfDone, getTenantPlanId, getTenantSettings, isCampaignActive, recordCampaignSend, sendWithLog } from "@gumakart/db";
 import { allowIntegrationMocks, campaignSms, createSemaphoreClient, isQuietHours, withOptOutFooter } from "@gumakart/services";
 import { storefrontBaseUrl } from "@/lib/utils";
+import { planHasFunnel } from "@/lib/funnel-plan";
 
 /**
  * Phase 14: sends due SMS campaigns in small batches (admin cron, every 5 minutes).
@@ -43,6 +44,7 @@ export async function runCampaigns(now = new Date()): Promise<CampaignRunResult>
   const batches = await claimCampaignBatches(now, 100, 10);
   const sms = createSemaphoreClient();
   const shops = new Map<string, { name: string; slug: string } | null>();
+  const onPro = new Map<string, boolean>();
   for (const batch of batches) {
     result.campaigns += 1;
     if (!shops.has(batch.campaign.tenantId)) {
@@ -50,7 +52,15 @@ export async function runCampaigns(now = new Date()): Promise<CampaignRunResult>
       shops.set(batch.campaign.tenantId, s ? { name: s.name, slug: s.slug } : null);
     }
     const shop = shops.get(batch.campaign.tenantId);
+    // Pro funnel: a shop that dropped below Pro after scheduling doesn't send.
+    if (!onPro.has(batch.campaign.tenantId)) onPro.set(batch.campaign.tenantId, planHasFunnel(await getTenantPlanId(batch.campaign.tenantId)));
+    const allowed = onPro.get(batch.campaign.tenantId) === true;
     for (const r of batch.recipients) {
+      if (!allowed) {
+        await recordCampaignSend(r.id, batch.campaign.id, "failed", "SMS campaigns need the Pro plan");
+        result.failed += 1;
+        continue;
+      }
       // A seller can cancel mid-way: stop at the next text.
       if (!(await isCampaignActive(batch.campaign.id))) break;
       if (!shop) {

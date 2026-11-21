@@ -100,6 +100,8 @@ export async function issueGiftCardInTx(
     expiresAt?: Date | null;
     createdByName: string;
     orderId?: string | null;
+    /** AI suite Phase 4: used up by its first order (review thank-you vouchers). */
+    singleUse?: boolean;
   }
 ): Promise<GiftCardRow> {
   const amount = money(Number(input.amount));
@@ -121,6 +123,7 @@ export async function issueGiftCardInTx(
         note: input.note?.trim().slice(0, 200) || null,
         expiresAt: input.expiresAt ?? null,
         createdByName: input.createdByName.slice(0, 80),
+        singleUse: input.singleUse ?? false,
       })
       .onConflictDoNothing()
       .returning();
@@ -271,6 +274,21 @@ export async function redeemGiftCardInTx(
     balanceAfter: after.toFixed(2),
     actorName: input.actorName.slice(0, 80),
   });
+  // A single-use voucher is spent by its first order: whatever is left over is forfeited.
+  if (card.singleUse && after > 0) {
+    await tx.update(giftCards).set({ balance: "0.00", updatedAt: new Date() }).where(eq(giftCards.id, card.id));
+    await tx.insert(giftCardTxns).values({
+      cardId: card.id,
+      tenantId: input.tenantId,
+      orderId: input.orderId,
+      kind: "adjust",
+      amount: (-after).toFixed(2),
+      balanceAfter: "0.00",
+      note: "Single-use voucher — remainder not carried over",
+      actorName: input.actorName.slice(0, 80),
+    });
+    return { cardId: card.id, code: card.code, amount, balanceAfter: 0 };
+  }
   return { cardId: card.id, code: card.code, amount, balanceAfter: after };
 }
 

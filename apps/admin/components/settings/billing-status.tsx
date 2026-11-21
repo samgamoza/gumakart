@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card } from "@gumakart/ui";
-import { normalizePlanId, planDisplayName } from "@gumakart/plans";
+import { PAID_PLAN_PRICES_PHP, tierDisplayName, type PaidPlanId } from "@gumakart/plans";
 
 /** Phase 16 — when the plan renews or ends, the grace period, and past payments with receipts. */
 
@@ -16,7 +16,7 @@ interface Overview {
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "long", day: "numeric", year: "numeric" }) : "—");
 const peso = (v: string) => `₱${Number(v).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\.00$/, "")}`;
 
-export function BillingStatus({ onRenew, renewing }: { onRenew: (plan: "growth" | "pro") => void; renewing: boolean }) {
+export function BillingStatus({ onRenew, renewing }: { onRenew: (plan: PaidPlanId) => void; renewing: boolean }) {
   const [data, setData] = useState<Overview | null>(null);
   useEffect(() => {
     void fetch("/api/billing/overview", { cache: "no-store" })
@@ -25,8 +25,9 @@ export function BillingStatus({ onRenew, renewing }: { onRenew: (plan: "growth" 
   }, []);
   if (!data) return null;
   const s = data.status;
-  const plan = planDisplayName(normalizePlanId(s.plan));
-  const renewable = (s.plan === "growth" || s.plan === "pro") && data.billingEnabled;
+  const plan = tierDisplayName(s.plan);
+  // Grandfathered growth / pro shops renew at their old price; new tiers renew at theirs.
+  const renewable = Object.prototype.hasOwnProperty.call(PAID_PLAN_PRICES_PHP, s.plan) && data.billingEnabled;
   const tone =
     s.state === "grace"
       ? "border-red-400/60 bg-red-500/10 text-red-100"
@@ -61,7 +62,7 @@ export function BillingStatus({ onRenew, renewing }: { onRenew: (plan: "growth" 
             <button
               type="button"
               disabled={renewing}
-              onClick={() => onRenew(s.plan as "growth" | "pro")}
+              onClick={() => onRenew(s.plan as PaidPlanId)}
               className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {renewing ? "Opening payment…" : `Renew ${plan} — 30 days`}
@@ -88,7 +89,7 @@ export function BillingStatus({ onRenew, renewing }: { onRenew: (plan: "growth" 
                 {data.payments.map((p) => (
                   <tr key={p.id}>
                     <td className="py-2">{day(p.paidAt ?? p.createdAt)}</td>
-                    <td>{planDisplayName(normalizePlanId(p.plan))}</td>
+                    <td>{tierDisplayName(p.plan)}</td>
                     <td>{peso(p.amount)}</td>
                     <td className="capitalize">{p.status === "pending" ? "Not completed" : p.status}</td>
                     <td>

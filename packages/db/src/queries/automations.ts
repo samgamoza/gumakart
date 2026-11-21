@@ -30,6 +30,8 @@ export interface OrderMessagingContext {
   tenantName: string;
   tenantSlug: string;
   tenantStatus: string;
+  /** Seller plan id (free | growth | pro): the follow-up funnel needs Pro (growth) or higher. */
+  subscriptionPlan: string;
   settings: TenantSettingsJson;
   orderNumber: string;
   total: string;
@@ -59,7 +61,7 @@ const COURIER_NAMES: Record<string, string> = {
 export async function getOrderMessagingContext(orderId: string): Promise<OrderMessagingContext | null> {
   const db = getDb();
   const [row] = await db
-    .select({ order: orders, tenant: { name: tenants.name, slug: tenants.slug, status: tenants.status, settingsJson: tenants.settingsJson } })
+    .select({ order: orders, tenant: { name: tenants.name, slug: tenants.slug, status: tenants.status, plan: tenants.subscriptionPlan, settingsJson: tenants.settingsJson } })
     .from(orders)
     .innerJoin(tenants, eq(orders.tenantId, tenants.id))
     .where(eq(orders.id, orderId))
@@ -78,6 +80,7 @@ export async function getOrderMessagingContext(orderId: string): Promise<OrderMe
     tenantName: row.tenant.name,
     tenantSlug: row.tenant.slug,
     tenantStatus: row.tenant.status,
+    subscriptionPlan: row.tenant.plan ?? "free",
     settings: (row.tenant.settingsJson ?? {}) as TenantSettingsJson,
     orderNumber: row.order.orderNumber,
     total: row.order.total,
@@ -136,6 +139,7 @@ export interface RecoveryCandidate {
   tenantId: string;
   tenantName: string;
   tenantSlug: string;
+  subscriptionPlan: string;
   settings: TenantSettingsJson;
   phone: string;
   cartJson: unknown;
@@ -165,6 +169,7 @@ export async function listRecoveryCandidates(options: { now?: Date; limit?: numb
       createdAt: checkoutSessions.createdAt,
       tenantName: tenants.name,
       tenantSlug: tenants.slug,
+      subscriptionPlan: tenants.subscriptionPlan,
       settingsJson: tenants.settingsJson,
     })
     .from(checkoutSessions)
@@ -206,6 +211,7 @@ export async function listRecoveryCandidates(options: { now?: Date; limit?: numb
     tenantId: r.tenantId,
     tenantName: r.tenantName,
     tenantSlug: r.tenantSlug,
+    subscriptionPlan: r.subscriptionPlan ?? "free",
     settings: (r.settingsJson ?? {}) as TenantSettingsJson,
     phone: r.phone!,
     cartJson: r.cartJson,
@@ -413,4 +419,40 @@ export async function getAutomationSummary(tenantId: string, now = new Date()): 
   }
   summary.recovered = { orders: Number(recovered?.orders ?? 0), sales: Number(recovered?.sales ?? 0) };
   return summary;
+}
+
+// ─── Thank-you note (timed automation, Pro funnel) ──────────────────────────────────────────────
+
+/**
+ * Orders delivered/completed 1–7 days ago at shops that turned the thank-you recipe on and are on
+ * Pro (growth) or Advance, whose buyer said yes to texts, with no thank-you sent yet (one per order).
+ */
+export async function listThankYouCandidates(now = new Date(), limit = 50): Promise<string[]> {
+  const rows = (await getDb().execute(sql`
+    select o.id from orders o
+    join tenants t on t.id = o.tenant_id
+    where (t.settings_json -> 'automations' ->> 'thank_you') = 'true'
+      and t.status = 'active'
+      and lower(coalesce(t.subscription_plan, 'free')) in ('growth', 'starter', 'pro', 'advance', 'pro_live', 'enterprise_vibe')
+      and coalesce(o.order_state::text, 'open') <> 'cancelled' and o.voided_at is null
+      and (o.fulfillment_state::text = 'delivered' or o.order_state::text = 'completed')
+      and o.guest_phone is not null
+      and coalesce(o.completed_at, o.created_at) between ${new Date(now.getTime() - 7 * 86_400_000).toISOString()}::timestamptz
+                                                     and ${new Date(now.getTime() - 86_400_000).toISOString()}::timestamptz
+      and exists (select 1 from customers c where c.tenant_id = o.tenant_id and c.sms_marketing_opt_in = true
+                  and right(regexp_replace(c.phone, '\\D', '', 'g'), 10) = right(regexp_replace(o.guest_phone, '\\D', '', 'g'), 10))
+      and not exists (select 1 from message_log m where m.idempotency_key = 'thank_you:' || o.id::text || ':1')
+    order by o.created_at
+    limit ${limit}`)) as unknown as Array<{ id: string }>;
+  return rows.map((r) => r.id);
+}
+
+/** The shop's stored plan id (free | growth | pro), for gating the Pro follow-up funnel. */
+export async function getTenantPlanId(tenantId: string): Promise<string> {
+  const [row] = await getDb()
+    .select({ plan: tenants.subscriptionPlan })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  return row?.plan ?? "free";
 }

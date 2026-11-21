@@ -1,0 +1,508 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    },
+    "_meta": {
+      "title": "Source product photo"
+    }
+  },
+  "2": {
+    "class_type": "RMBG",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "model": "RMBG-2.0",
+      "sensitivity": 1,
+      "process_res": 1024,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "background": "Alpha"
+    },
+    "_meta": {
+      "title": "RMBG-2.0 background removal"
+    }
+  },
+  "3": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "2",
+        1
+      ]
+    }
+  },
+  "4": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "flux1-fill-dev.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Flux.1 Fill"
+    }
+  },
+  "5": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp8_e4m3fn.safetensors",
+      "type": "flux"
+    }
+  },
+  "6": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "a matte black stainless steel tumbler, soft light from the left, placed in a minimalist photo studio, seamless off-white backdrop. Professional product photography, photorealistic, natural soft contact shadow under the product",
+      "clip": [
+        "5",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Scene prompt"
+    }
+  },
+  "8": {
+    "class_type": "FluxGuidance",
+    "inputs": {
+      "conditioning": [
+        "7",
+        0
+      ],
+      "guidance": 30
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "",
+      "clip": [
+        "5",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "DifferentialDiffusion",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 632,
+      "height": 632,
+      "crop": "disabled"
+    }
+  },
+  "12": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "3",
+        0
+      ],
+      "upscale_method": "bilinear",
+      "width": 632,
+      "height": 632,
+      "crop": "disabled"
+    }
+  },
+  "13": {
+    "class_type": "ImageToMask",
+    "inputs": {
+      "image": [
+        "12",
+        0
+      ],
+      "channel": "red"
+    }
+  },
+  "14": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1,
+      "color": 8421504
+    }
+  },
+  "15": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "14",
+        0
+      ],
+      "source": [
+        "11",
+        0
+      ],
+      "x": 196,
+      "y": 269,
+      "resize_source": false,
+      "mask": [
+        "13",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 0,
+      "width": 1024,
+      "height": 1024
+    }
+  },
+  "17": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "16",
+        0
+      ],
+      "source": [
+        "13",
+        0
+      ],
+      "x": 196,
+      "y": 269,
+      "operation": "add"
+    }
+  },
+  "18": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "17",
+        0
+      ],
+      "expand": -6,
+      "tapered_corners": true
+    }
+  },
+  "19": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "18",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "9",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "pixels": [
+        "15",
+        0
+      ],
+      "mask": [
+        "19",
+        0
+      ],
+      "noise_mask": false
+    }
+  },
+  "21": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "10",
+        0
+      ],
+      "seed": 42,
+      "steps": 28,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "20",
+        0
+      ],
+      "negative": [
+        "20",
+        1
+      ],
+      "latent_image": [
+        "20",
+        2
+      ],
+      "denoise": 1
+    }
+  },
+  "22": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "21",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    }
+  },
+  "23": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "22",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 1080,
+      "height": 1080,
+      "crop": "center"
+    }
+  },
+  "24": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "23",
+        0
+      ],
+      "filename_prefix": "gk_example_1x1"
+    },
+    "_meta": {
+      "title": "Export 1x1"
+    }
+  },
+  "25": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 600,
+      "height": 600,
+      "crop": "disabled"
+    }
+  },
+  "26": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "3",
+        0
+      ],
+      "upscale_method": "bilinear",
+      "width": 600,
+      "height": 600,
+      "crop": "disabled"
+    }
+  },
+  "27": {
+    "class_type": "ImageToMask",
+    "inputs": {
+      "image": [
+        "26",
+        0
+      ],
+      "channel": "red"
+    }
+  },
+  "28": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": 768,
+      "height": 1344,
+      "batch_size": 1,
+      "color": 8421504
+    }
+  },
+  "29": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "28",
+        0
+      ],
+      "source": [
+        "25",
+        0
+      ],
+      "x": 84,
+      "y": 475,
+      "resize_source": false,
+      "mask": [
+        "27",
+        0
+      ]
+    }
+  },
+  "30": {
+    "class_type": "SolidMask",
+    "inputs": {
+      "value": 0,
+      "width": 768,
+      "height": 1344
+    }
+  },
+  "31": {
+    "class_type": "MaskComposite",
+    "inputs": {
+      "destination": [
+        "30",
+        0
+      ],
+      "source": [
+        "27",
+        0
+      ],
+      "x": 84,
+      "y": 475,
+      "operation": "add"
+    }
+  },
+  "32": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "31",
+        0
+      ],
+      "expand": -6,
+      "tapered_corners": true
+    }
+  },
+  "33": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "32",
+        0
+      ]
+    }
+  },
+  "34": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "9",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ],
+      "pixels": [
+        "29",
+        0
+      ],
+      "mask": [
+        "33",
+        0
+      ],
+      "noise_mask": false
+    }
+  },
+  "35": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "10",
+        0
+      ],
+      "seed": 42,
+      "steps": 28,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "34",
+        0
+      ],
+      "negative": [
+        "34",
+        1
+      ],
+      "latent_image": [
+        "34",
+        2
+      ],
+      "denoise": 1
+    }
+  },
+  "36": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "35",
+        0
+      ],
+      "vae": [
+        "6",
+        0
+      ]
+    }
+  },
+  "37": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "36",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 1080,
+      "height": 1920,
+      "crop": "center"
+    }
+  },
+  "38": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "37",
+        0
+      ],
+      "filename_prefix": "gk_example_9x16"
+    },
+    "_meta": {
+      "title": "Export 9x16"
+    }
+  }
+}

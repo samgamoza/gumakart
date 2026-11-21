@@ -5,6 +5,7 @@ import {
   checkoutLinkItems,
   checkoutLinks,
   type CheckoutLinkOrigin,
+  type CheckoutPrefill,
   orders,
   productImages,
   productVariants,
@@ -35,6 +36,7 @@ export const CHECKOUT_LINK_SHARE_CHANNELS = [
   "instagram",
   "tiktok",
   "messenger",
+  "whatsapp",
   "other",
 ] as const;
 export type CheckoutLinkShareChannel = (typeof CHECKOUT_LINK_SHARE_CHANNELS)[number];
@@ -667,6 +669,11 @@ export interface PublicCheckoutLink {
   couponCode: string | null;
   status: CheckoutLinkStatus;
   items: CheckoutLinkItemSummary[];
+  /**
+   * AI suite Phase 3: buyer details the AI closer collected for this chat's link. Only returned
+   * while no order has been placed from the link, so a forwarded link stops showing them.
+   */
+  prefill: CheckoutPrefill | null;
 }
 
 /** Looks a link up by its public code. Returns closed links too (status says why). */
@@ -695,6 +702,7 @@ export async function getCheckoutLinkByCode(rawCode: string): Promise<PublicChec
     couponCode: row.link.couponCode,
     status: checkoutLinkStatus(row.link),
     items,
+    prefill: row.link.orderCount === 0 ? row.link.prefillJson ?? null : null,
   };
 }
 

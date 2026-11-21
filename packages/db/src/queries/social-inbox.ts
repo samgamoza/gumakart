@@ -2,6 +2,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "../client";
 import {
   checkoutLinks,
+  customers,
   orders,
   productImages,
   productVariants,
@@ -39,6 +40,8 @@ export interface SocialAccountRow {
   status: ChannelAccountStatus;
   lastError: string | null;
   connectedAt: Date;
+  /** AI suite Phase 3: "auto" = the AI closer answers DMs (on plans that include it). */
+  aiCloserMode: "auto" | "off";
 }
 
 function toAccount(r: typeof socialAccounts.$inferSelect): SocialAccountRow {
@@ -51,6 +54,7 @@ function toAccount(r: typeof socialAccounts.$inferSelect): SocialAccountRow {
     status: r.status,
     lastError: r.lastError,
     connectedAt: r.connectedAt,
+    aiCloserMode: r.aiCloserMode === "off" ? "off" : "auto",
   };
 }
 
@@ -315,6 +319,11 @@ export interface SocialThreadDetail extends SocialThreadRow {
   lastInboundAt: Date | null;
   messages: SocialMessageRow[];
   linkedOrders: Array<{ id: string; orderNumber: string; total: number; orderState: string | null; createdAt: Date }>;
+  /** The shop-CRM buyer this chat is tied to (after they ordered from a chat link). */
+  customer: { id: string; name: string | null; phone: string; lastOrderAt: Date | null } | null;
+  /** AI suite Phase 3: the AI closer is paused on this chat (escalated or taken over). */
+  aiPaused: boolean;
+  escalationReason: string | null;
 }
 
 export async function getSocialThread(tenantId: string, threadId: string): Promise<SocialThreadDetail | null> {
@@ -336,6 +345,15 @@ export async function getSocialThread(tenantId: string, threadId: string): Promi
       .limit(20),
   ]);
   const t = row.t;
+  let customer: SocialThreadDetail["customer"] = null;
+  if (t.customerId) {
+    const [c] = await db
+      .select({ id: customers.id, name: customers.name, phone: customers.phone, lastOrderAt: customers.lastOrderAt })
+      .from(customers)
+      .where(and(eq(customers.id, t.customerId), eq(customers.tenantId, tenantId)))
+      .limit(1);
+    customer = c ?? null;
+  }
   return {
     id: t.id,
     accountId: t.accountId,
@@ -350,6 +368,8 @@ export async function getSocialThread(tenantId: string, threadId: string): Promi
     status: t.status,
     canReply: canReplyNow(t.lastInboundAt),
     orders: linked.length,
+    aiPaused: t.aiPaused,
+    escalationReason: t.escalationReason ?? null,
     messages: messages.reverse().map((m) => ({
       id: m.id,
       direction: m.direction,
@@ -362,6 +382,7 @@ export async function getSocialThread(tenantId: string, threadId: string): Promi
       createdAt: m.createdAt,
     })),
     linkedOrders: linked.map((o) => ({ ...o, total: Number(o.total), orderState: o.orderState ?? null })),
+    customer,
   };
 }
 

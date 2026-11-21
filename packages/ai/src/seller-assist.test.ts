@@ -60,3 +60,36 @@ describe("seller assist", () => {
     assert.match(m.message, /Canvas Backpack — Sand — 20 pcs/);
   });
 });
+
+it("Pro funnel: promo texts are SMS-safe, short, link-free, and never invent a discount", async () => {
+  const { buildAssistPrompt, parseAssistOutput, mockAssist, PROMO_MAX_CHARS } = await import("./seller-assist");
+  const noOffer = { shopName: "Tess", audience: "repeat buyers", products: [{ title: "Piña Tote", price: 450 }] };
+  const prompt = buildAssistPrompt("promo", noOffer);
+  assert.match(prompt.user, /do NOT mention any discount/);
+  assert.match(prompt.user, /P450/);
+
+  const raw = JSON.stringify({
+    options: [
+      "Hi {name}! 20% off lahat ngayong weekend 🎉",
+      "Hi {name}! Balik na ang Piña Tote sa ₱450 ✨ https://evil.example/x",
+      "Hi {name}! " + "salamat ".repeat(40),
+    ],
+  });
+  const out = parseAssistOutput("promo", raw, noOffer).options;
+  assert.equal(out.length, 2, "the invented 20% off is dropped");
+  for (const o of out) {
+    assert.ok(/^[\x20-\x7E]*$/.test(o), o);
+    assert.ok(o.length <= PROMO_MAX_CHARS, `${o.length}`);
+    assert.ok(!/https?:/.test(o), o);
+  }
+  assert.ok(out[0]!.includes("Pina Tote sa P450"));
+
+  const withOffer = { ...noOffer, offer: "10% off this weekend, code SALE10" };
+  assert.match(buildAssistPrompt("promo", withOffer).user, /code SALE10/);
+  const kept = parseAssistOutput("promo", JSON.stringify({ options: ["Hi {name}! 10% off this weekend, code SALE10."] }), withOffer).options;
+  assert.equal(kept.length, 1, "the seller's own offer is kept");
+
+  const mock = mockAssist("promo", noOffer) as { options: string[] };
+  assert.equal(mock.options.length, 3);
+  for (const o of mock.options) assert.ok(!/%|\boff\b/i.test(o), o);
+});

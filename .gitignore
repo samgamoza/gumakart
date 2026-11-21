@@ -61,3 +61,7 @@ v0-import/
 .open-next/
 .wrangler/
 .transfer/
+
+.claude-tmp/
+
+.claude-tmp/

@@ -16,6 +16,8 @@ interface Recipe {
   when: string;
   kind: "transactional" | "marketing";
   enabled: boolean;
+  /** Pro funnel recipe on a plan below Pro: shown, can't be turned on. */
+  locked?: boolean;
   example: string;
 }
 
@@ -33,6 +35,8 @@ interface Data {
   ok: boolean;
   error?: string;
   recipes: Recipe[];
+  /** The shop's plan includes the Pro follow-up funnel. */
+  funnel?: boolean;
   seller: { smsOnNewOrder: boolean; mobile: string | null };
   smsLive: boolean;
   email?: { enabled: boolean; live: boolean };
@@ -48,6 +52,8 @@ const RECIPE_NAMES: Record<string, string> = {
   delivered: "Delivered",
   abandoned_checkout: "Unfinished checkout",
   unpaid_reminder: "Unpaid reminder",
+  review_request: "Review request",
+  thank_you: "Thank-you note",
   seller_new_order: "Alert to you: new order",
   seller_payment_proof: "Alert to you: payment proof",
   seller_delivery_failed: "Alert to you: delivery failed",
@@ -192,6 +198,9 @@ export function AutomationsView() {
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
             {r.label}
+            {r.locked && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">Pro</span>
+            )}
             {savedKey === r.id && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved
@@ -224,7 +233,7 @@ export function AutomationsView() {
         <Toggle
           on={r.enabled}
           label={r.label}
-          disabled={saving === r.id}
+          disabled={saving === r.id || r.locked === true}
           onChange={(v) =>
             void patch(r.id, { automations: { [r.id]: v } }, (d) => ({
               ...d,
@@ -326,6 +335,14 @@ export function AutomationsView() {
           Only to buyers who ticked &ldquo;text me reminders&rdquo; at checkout. Max 2 per checkout, never
           9 PM–8 AM, and every reminder has a &ldquo;Stop reminders&rdquo; link.
         </p>
+        {data.funnel === false && (
+          <p className="mt-2 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+            Follow-up texts (reminders, review requests, thank-you notes) and SMS campaigns are part of the Pro plan.{" "}
+            <Link href="/settings/subscription?highlight=growth&ref=auto-sms" className="font-semibold underline">
+              See Pro
+            </Link>
+          </p>
+        )}
         <ul className="mt-2 divide-y divide-white/10">{marketing.map(recipeRow)}</ul>
       </Card>
 

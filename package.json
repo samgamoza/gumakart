@@ -22,7 +22,9 @@
     "brand-guard:scan": "node scripts/brand-guard-scan.mjs",
     "db:status": "pnpm --filter @gumakart/db status",
     "test:routes": "node --test scripts/route-audit.test.mjs",
-    "test:smoke": "node e2e/smoke.mjs"
+    "test:smoke": "node e2e/smoke.mjs",
+    "gpu-bridge": "pnpm --filter @gumakart/gpu-bridge start",
+    "test:gpu-bridge": "pnpm --filter @gumakart/gpu-bridge test"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

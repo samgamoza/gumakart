@@ -110,7 +110,7 @@ export async function listMetaPages(userToken: string): Promise<MetaPage[]> {
 export async function subscribeMetaPage(pageId: string, pageToken: string): Promise<void> {
   await graph(`/${pageId}/subscribed_apps`, {
     method: "POST",
-    params: { access_token: pageToken, subscribed_fields: "messages,messaging_postbacks,message_echoes" },
+    params: { access_token: pageToken, subscribed_fields: "messages,messaging_postbacks,message_echoes,feed" },
   });
 }
 
@@ -162,6 +162,8 @@ export interface MetaInboundEvent {
   kind: "text" | "image" | "other";
   attachments: Array<{ type: string; url: string | null }>;
   at: Date;
+  /** AI suite Phase 3: payload of a tapped button (e.g. "CLOSER:SWITCH_COD:<linkId>"). */
+  postbackPayload?: string;
 }
 
 interface RawMessaging {
@@ -200,6 +202,7 @@ export function parseMetaWebhook(body: unknown): MetaInboundEvent[] {
         kind: msg?.text || postback ? "text" : attachments.some((a) => a.type === "image") ? "image" : "other",
         attachments,
         at: new Date(m.timestamp ?? entry.time ?? Date.now()),
+        ...(postback?.payload ? { postbackPayload: String(postback.payload).slice(0, 200) } : {}),
       });
     }
   }
@@ -211,6 +214,12 @@ export function parseMetaWebhook(body: unknown): MetaInboundEvent[] {
 export type MetaOutgoing =
   | { type: "text"; text: string }
   | {
+      /** AI suite Phase 3: text with up to 3 buttons (open a link, or send a postback payload). */
+      type: "buttons";
+      text: string;
+      buttons: Array<{ kind: "url"; title: string; url: string } | { kind: "postback"; title: string; payload: string }>;
+    }
+  | {
       type: "product";
       title: string;
       subtitle: string;
@@ -221,6 +230,20 @@ export type MetaOutgoing =
 
 export function metaMessagePayload(message: MetaOutgoing): Record<string, unknown> {
   if (message.type === "text") return { text: message.text.slice(0, 2000) };
+  if (message.type === "buttons") {
+    return {
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "button",
+          text: message.text.slice(0, 640),
+          buttons: message.buttons.slice(0, 3).map((b) =>
+            b.kind === "url" ? { type: "web_url", url: b.url, title: b.title.slice(0, 20) } : { type: "postback", payload: b.payload.slice(0, 1000), title: b.title.slice(0, 20) }
+          ),
+        },
+      },
+    };
+  }
   return {
     attachment: {
       type: "template",
@@ -267,4 +290,202 @@ export async function sendMetaMessage(input: {
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message.slice(0, 280) : "Send failed" };
   }
+}
+
+// ─── AI suite Phase 3: comments → public reply + private reply ──────────────
+
+export interface MetaCommentEvent {
+  platform: "messenger" | "instagram";
+  /** Page id (Facebook) or Instagram account id. */
+  accountExternalId: string;
+  commentId: string;
+  /** Facebook "<pageId>_<postId>" or Instagram media id. */
+  postId: string | null;
+  parentId: string | null;
+  fromId: string | null;
+  fromName: string | null;
+  text: string;
+  at: Date;
+  /** Written by the Page / IG account itself (our own replies) — never act on these. */
+  isOwn: boolean;
+}
+
+/** Facebook Page `feed` (item=comment, verb=add) and Instagram `comments` webhook changes. */
+export function parseMetaCommentEvents(body: unknown): MetaCommentEvent[] {
+  const b = body as { object?: string; entry?: Array<{ id?: string; time?: number; changes?: Array<{ field?: string; value?: Record<string, unknown> }> }> };
+  if (b?.object !== "page" && b?.object !== "instagram") return [];
+  const out: MetaCommentEvent[] = [];
+  for (const entry of b.entry ?? []) {
+    const accountId = String(entry.id ?? "");
+    for (const change of entry.changes ?? []) {
+      const v = change.value ?? {};
+      if (b.object === "page" && change.field === "feed") {
+        if (v.item !== "comment" || v.verb !== "add") continue;
+        const from = (v.from ?? {}) as { id?: string; name?: string };
+        const commentId = String(v.comment_id ?? "");
+        if (!commentId || !accountId) continue;
+        out.push({
+          platform: "messenger",
+          accountExternalId: accountId,
+          commentId,
+          postId: v.post_id ? String(v.post_id) : null,
+          parentId: v.parent_id ? String(v.parent_id) : null,
+          fromId: from.id ? String(from.id) : null,
+          fromName: from.name ? String(from.name).slice(0, 160) : null,
+          text: String(v.message ?? "").slice(0, 1000),
+          at: typeof v.created_time === "number" ? new Date(v.created_time * 1000) : new Date(entry.time ?? Date.now()),
+          isOwn: from.id === accountId,
+        });
+      }
+      if (b.object === "instagram" && change.field === "comments") {
+        const from = (v.from ?? {}) as { id?: string; username?: string };
+        const media = (v.media ?? {}) as { id?: string };
+        const commentId = String(v.id ?? "");
+        if (!commentId || !accountId) continue;
+        out.push({
+          platform: "instagram",
+          accountExternalId: accountId,
+          commentId,
+          postId: media.id ? String(media.id) : null,
+          parentId: v.parent_id ? String(v.parent_id) : null,
+          fromId: from.id ? String(from.id) : null,
+          fromName: from.username ? `@${String(from.username).slice(0, 150)}` : null,
+          text: String(v.text ?? "").slice(0, 1000),
+          at: new Date(typeof entry.time === "number" ? (entry.time < 1e12 ? entry.time * 1000 : entry.time) : Date.now()),
+          isOwn: from.id === accountId,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Public reply under the buyer's comment. */
+export async function replyToComment(input: { platform: "messenger" | "instagram"; commentId: string; message: string; token: string | null }): Promise<MetaSendResult> {
+  if (!input.token) {
+    if (allowIntegrationMocks()) return { success: true, mock: true, messageId: `mock_reply_${Date.now()}` };
+    return { success: false, error: "Not connected." };
+  }
+  try {
+    const path = input.platform === "instagram" ? `/${input.commentId}/replies` : `/${input.commentId}/comments`;
+    const data = await graph<{ id?: string }>(path, { method: "POST", params: { access_token: input.token }, body: { message: input.message.slice(0, 1000) } });
+    return { success: true, messageId: data.id };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message.slice(0, 280) : "Reply failed" };
+  }
+}
+
+export interface PrivateReplyResult extends MetaSendResult {
+  /** The buyer's page-scoped id, so the DM lands in their chat thread. */
+  recipientId?: string;
+}
+
+/**
+ * Meta Private Reply: one DM to the commenter, addressed by comment id (allowed once per comment,
+ * within 7 days). Works for Facebook and Instagram comments through the Page.
+ */
+export async function sendPrivateReply(input: { pageId: string; token: string | null; commentId: string; message: MetaOutgoing }): Promise<PrivateReplyResult> {
+  if (!input.token) {
+    if (allowIntegrationMocks()) return { success: true, mock: true, messageId: `mock_pr_${Date.now()}`, recipientId: `mock_psid_${input.commentId}` };
+    return { success: false, error: "This Page isn't connected." };
+  }
+  try {
+    const data = await graph<{ message_id?: string; recipient_id?: string }>(`/${input.pageId}/messages`, {
+      method: "POST",
+      params: { access_token: input.token },
+      body: { recipient: { comment_id: input.commentId }, message: metaMessagePayload(input.message) },
+    });
+    return { success: true, messageId: data.message_id, recipientId: data.recipient_id };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message.slice(0, 280) : "Private reply failed" };
+  }
+}
+
+// ─── AI suite Phase 3: post link → Graph post id (pfbid / IG shortcode) ──────
+
+export interface ResolvedPostId {
+  postId: string;
+  platform: "facebook" | "instagram";
+  permalink: string | null;
+}
+
+/** "pfbid02AbC…" from a Facebook share URL, if any. */
+export function extractPfbid(input: string): string | null {
+  const m = /(pfbid[0-9A-Za-z]{20,})/.exec(input);
+  return m ? m[1]! : null;
+}
+
+/** Instagram shortcode from /p/…, /reel/…, /tv/… URLs. */
+export function extractInstagramShortcode(input: string): string | null {
+  const m = /instagram\.com\/(?:[\w.]+\/)?(?:p|reel|reels|tv)\/([\w-]{5,40})/i.exec(input);
+  return m ? m[1]! : null;
+}
+
+/**
+ * Newer Facebook share links (…/posts/pfbid0…, permalink.php?story_fbid=pfbid…) don't contain
+ * the numeric id the webhook reports. Look the post up among the Page's recent posts (and reels /
+ * videos) by permalink and return its Graph id "<pageId>_<postId>".
+ */
+export async function resolveFacebookPostId(input: { pageId: string; pageToken: string; reference: string; maxPages?: number }): Promise<ResolvedPostId | null> {
+  const pfbid = extractPfbid(input.reference);
+  const wanted = normalizeFbUrl(input.reference);
+  const numericId = /\/(?:reel|videos|posts|permalink)\/(?:[\w.-]+\/)?(\d{5,25})/.exec(input.reference)?.[1] ?? null;
+  for (const edge of ["published_posts", "videos"]) {
+    let after: string | undefined;
+    for (let page = 0; page < (input.maxPages ?? 4); page += 1) {
+      const params: Record<string, string> = { access_token: input.pageToken, fields: edge === "videos" ? "id,permalink_url" : "id,permalink_url", limit: "100" };
+      if (after) params.after = after;
+      let data: { data?: Array<{ id: string; permalink_url?: string }>; paging?: { cursors?: { after?: string }; next?: string } };
+      try {
+        data = await graph(`/${input.pageId}/${edge}`, { params });
+      } catch {
+        break;
+      }
+      for (const p of data.data ?? []) {
+        const link = p.permalink_url ?? "";
+        const idTail = p.id.includes("_") ? p.id.slice(p.id.indexOf("_") + 1) : p.id;
+        if ((pfbid && link.includes(pfbid)) || (wanted && normalizeFbUrl(link) === wanted) || (numericId && idTail === numericId)) {
+          const id = edge === "videos" && !p.id.includes("_") ? `${input.pageId}_${p.id}` : p.id;
+          return { postId: id, platform: "facebook", permalink: link || null };
+        }
+      }
+      after = data.paging?.cursors?.after;
+      if (!after || !data.paging?.next) break;
+    }
+  }
+  return null;
+}
+
+function normalizeFbUrl(u: string): string | null {
+  // Graph returns video/reel permalinks as site-relative paths ("/reel/123/").
+  if (u.startsWith("/")) return u.replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
+  try {
+    const url = new URL(u.startsWith("http") ? u : `https://${u}`);
+    if (!/facebook\.com$|fb\.com$/.test(url.hostname.replace(/^(www|m|web)\./, ""))) return null;
+    return `${url.pathname.replace(/\/+$/, "")}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** Instagram URL shortcode → media id the comments webhook reports. */
+export async function resolveInstagramMediaId(input: { igUserId: string; token: string; reference: string; maxPages?: number }): Promise<ResolvedPostId | null> {
+  const shortcode = extractInstagramShortcode(input.reference) ?? (/^[\w-]{5,40}$/.test(input.reference.trim()) ? input.reference.trim() : null);
+  if (!shortcode) return null;
+  let after: string | undefined;
+  for (let page = 0; page < (input.maxPages ?? 4); page += 1) {
+    const params: Record<string, string> = { access_token: input.token, fields: "id,shortcode,permalink", limit: "100" };
+    if (after) params.after = after;
+    let data: { data?: Array<{ id: string; shortcode?: string; permalink?: string }>; paging?: { cursors?: { after?: string }; next?: string } };
+    try {
+      data = await graph(`/${input.igUserId}/media`, { params });
+    } catch {
+      return null;
+    }
+    const hit = (data.data ?? []).find((m) => m.shortcode === shortcode || (m.permalink ?? "").includes(`/${shortcode}`));
+    if (hit) return { postId: hit.id, platform: "instagram", permalink: hit.permalink ?? null };
+    after = data.paging?.cursors?.after;
+    if (!after || !data.paging?.next) break;
+  }
+  return null;
 }

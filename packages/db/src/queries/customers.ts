@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, ilike, or, sql } from "drizzle-orm";
 import { getDb } from "../client";
-import { customers, orders } from "../schema/index";
+import { customers, orders, socialThreads } from "../schema/index";
 
 /** Statuses that don't count toward a customer's spend. */
 // Cancelled (incl. refunded) orders don't count as spend.
@@ -20,6 +20,8 @@ export interface CustomerSummary {
 
 export interface CustomerDetail extends CustomerSummary {
   notes: string | null;
+  /** Messenger / Instagram conversations tied to this buyer (set when they order from a chat link). */
+  chats: Array<{ threadId: string; platform: string; buyerName: string | null; lastMessageAt: Date }>;
   orders: Array<{
     id: string;
     orderNumber: string;
@@ -123,6 +125,18 @@ export async function getCustomerForTenant(
     .orderBy(desc(orders.createdAt))
     .limit(100);
 
+  const chatRows = await db
+    .select({
+      threadId: socialThreads.id,
+      platform: socialThreads.platform,
+      buyerName: socialThreads.buyerName,
+      lastMessageAt: socialThreads.lastMessageAt,
+    })
+    .from(socialThreads)
+    .where(and(eq(socialThreads.tenantId, tenantId), eq(socialThreads.customerId, customerId)))
+    .orderBy(desc(socialThreads.lastMessageAt))
+    .limit(10);
+
   const totalSpent = orderRows
     .filter((o) => o.orderState !== "cancelled")
     .reduce((sum, o) => sum + Number(o.total), 0);
@@ -138,6 +152,7 @@ export async function getCustomerForTenant(
     totalSpent,
     isRepeat: orderRows.length > 1,
     notes: c.notes,
+    chats: chatRows.map((r) => ({ ...r, platform: String(r.platform) })),
     orders: orderRows,
   };
 }

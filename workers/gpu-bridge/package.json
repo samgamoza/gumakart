@@ -1,0 +1,33 @@
+{
+  "name": "@gumakart/gpu-bridge",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "BullMQ bridge between kart.guma.one and the home GPU node (vLLM + ComfyUI) \u2014 AI Marketing Suite Phase 1",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/circuit-breaker.test.ts src/comfy-client.test.ts src/config.test.ts src/storage.test.ts src/source-media.test.ts src/graphs.test.ts src/subtitles.test.ts src/ffmpeg.test.ts src/video-script.test.ts src/http-server.test.ts src/printair-design.test.ts",
+    "test:e2e": "tsx --test --test-force-exit src/e2e.test.ts",
+    "doctor": "tsx src/doctor.ts",
+    "export-workflows": "tsx src/workflow-exports.ts"
+  },
+  "dependencies": {
+    "@gumakart/ai": "workspace:*",
+    "@gumakart/db": "workspace:*",
+    "@gumakart/plans": "workspace:*",
+    "aws4fetch": "^1.0.20",
+    "bullmq": "^6.7.8",
+    "ioredis": "^5.8.2",
+    "qrcode": "^1.5.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

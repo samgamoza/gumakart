@@ -9,6 +9,7 @@ import {
   listRecoveryCandidates,
   listUnpaidReminderCandidates,
   listReviewRequestCandidates,
+  listThankYouCandidates,
   sendWithLog,
   type OrderMessagingContext,
   type OutboxRow,
@@ -35,10 +36,12 @@ import {
   sendPushNotifications,
   unpaidReminderSms,
   reviewRequestSms,
+  thankYouSms,
   withOptOutFooter,
   type BuyerRecipe,
   type OrderSmsContext,
 } from "@gumakart/services";
+import { planHasFunnel, recipeAllowedOnPlan } from "@/lib/funnel-plan";
 import { storefrontBaseUrl } from "@/lib/utils";
 import { sendBackInStockAlerts } from "@/lib/stock-alerts";
 
@@ -93,6 +96,7 @@ async function textBuyer(
 ): Promise<Outcome> {
   if (!ctx.phone || ctx.phone.replace(/\D/g, "").length < 10) return { recipe, status: "no_phone" };
   if (!isRecipeEnabled(ctx.settings.automations, recipe)) return { recipe, status: "off" };
+  if (!recipeAllowedOnPlan(recipe, ctx.subscriptionPlan)) return { recipe, status: "off" };
   const phone = ctx.phone;
   const sms = createSemaphoreClient();
   const result = await sendWithLog(
@@ -300,6 +304,8 @@ export interface TimedRunResult {
   unpaid: { considered: number; sent: number; skipped: number };
   /** Phase 23: "rate your order" texts. */
   reviews: { considered: number; sent: number; skipped: number };
+  /** Pro funnel: thank-you notes 1 day after delivery. */
+  thanks: { considered: number; sent: number; skipped: number };
   /** Phase 22: back-in-stock alerts. */
   backInStock: { considered: number; sent: number; waiting: number };
 }
@@ -311,6 +317,7 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
     recovery: { considered: 0, sent: 0, skipped: 0 },
     unpaid: { considered: 0, sent: 0, skipped: 0 },
     reviews: { considered: 0, sent: 0, skipped: 0 },
+    thanks: { considered: 0, sent: 0, skipped: 0 },
     backInStock: { considered: 0, sent: 0, waiting: 0 },
   };
   if (result.quietHours) return result;
@@ -318,7 +325,8 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
   // Recipe 6 — unfinished checkout.
   for (const candidate of await listRecoveryCandidates({ now, limit: 50 })) {
     result.recovery.considered += 1;
-    if (!isRecipeEnabled(candidate.settings.automations, "abandoned_checkout")) {
+    // Pro funnel: below Pro the reminder never sends, whatever the switch says.
+    if (!planHasFunnel(candidate.subscriptionPlan) || !isRecipeEnabled(candidate.settings.automations, "abandoned_checkout")) {
       result.recovery.skipped += 1;
       continue;
     }
@@ -374,7 +382,7 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
   for (const { orderId } of await listUnpaidReminderCandidates({ now, limit: 50 })) {
     result.unpaid.considered += 1;
     const ctx = await getOrderMessagingContext(orderId);
-    if (!ctx || !ctx.phone) {
+    if (!ctx || !ctx.phone || !planHasFunnel(ctx.subscriptionPlan)) {
       result.unpaid.skipped += 1;
       continue;
     }
@@ -401,7 +409,7 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
   for (const orderId of await listReviewRequestCandidates(now, 50)) {
     result.reviews.considered += 1;
     const ctx = await getOrderMessagingContext(orderId);
-    if (!ctx || !ctx.phone || !isRecipeEnabled(ctx.settings.automations, "review_request")) {
+    if (!ctx || !ctx.phone || !planHasFunnel(ctx.subscriptionPlan) || !isRecipeEnabled(ctx.settings.automations, "review_request")) {
       result.reviews.skipped += 1;
       continue;
     }
@@ -416,6 +424,31 @@ export async function runTimedAutomations(now = new Date()): Promise<TimedRunRes
     const outcome = await textBuyer(ctx, "review_request", body, "marketing", 1);
     if (outcome?.status === "sent") result.reviews.sent += 1;
     else result.reviews.skipped += 1;
+  }
+
+  // Pro funnel — thank-you note 1 day after delivery (opt-in recipe; consent; once per order).
+  for (const orderId of await listThankYouCandidates(now, 50)) {
+    result.thanks.considered += 1;
+    const ctx = await getOrderMessagingContext(orderId);
+    if (!ctx || !ctx.phone || !planHasFunnel(ctx.subscriptionPlan) || !isRecipeEnabled(ctx.settings.automations, "thank_you")) {
+      result.thanks.skipped += 1;
+      continue;
+    }
+    let body: string;
+    try {
+      body = withOptOutFooter(
+        thankYouSms({ ...smsContext(ctx), buyerName: ctx.buyerName, shopUrl: `${webBase()}/${ctx.tenantSlug}` }),
+        ctx.phone,
+        webBase()
+      );
+    } catch (error) {
+      console.error("[automations] opt-out link unavailable — thank-you notes off", error);
+      result.thanks.skipped += 1;
+      continue;
+    }
+    const outcome = await textBuyer(ctx, "thank_you", body, "marketing", 1);
+    if (outcome?.status === "sent") result.thanks.sent += 1;
+    else result.thanks.skipped += 1;
   }
 
   return result;

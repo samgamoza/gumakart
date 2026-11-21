@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createPlanPayment, PLAN_PRICES_PHP } from "@gumakart/db";
+import { createPlanPayment, getTenantSettings } from "@gumakart/db";
+import { canPurchasePlan, PAID_PLAN_PRICES_PHP, tierDisplayName } from "@gumakart/plans";
 import {
   createLogger,
   createPayMongoClient,
@@ -12,7 +13,8 @@ import { adminBaseUrl } from "@/lib/kyc-url";
 const log = createLogger("billing:upgrade");
 
 const upgradeSchema = z.object({
-  plan: z.enum(["growth", "pro"]),
+  // AI suite Phase 5.3 (D2): the new tiers are sold; growth / pro only renew for grandfathered shops.
+  plan: z.enum(["starter", "pro_live", "enterprise_vibe", "growth", "pro"]),
   method: z.enum(["gcash", "paymaya", "card"]).default("gcash"),
 });
 
@@ -31,17 +33,25 @@ export async function POST(request: Request) {
     }
     const body = upgradeSchema.parse(await request.json());
 
-    const amountPhp = PLAN_PRICES_PHP[body.plan];
+    const settings = await getTenantSettings(session.tenantId);
+    if (!canPurchasePlan(settings?.subscriptionPlan, body.plan)) {
+      return NextResponse.json(
+        { ok: false, error: `${tierDisplayName(body.plan)} is no longer sold. Pick Starter, Pro Live or Enterprise Vibe.` },
+        { status: 400 }
+      );
+    }
+    const amountPhp = PAID_PLAN_PRICES_PHP[body.plan];
     if (!amountPhp) {
       return NextResponse.json({ ok: false, error: "Unknown plan." }, { status: 400 });
     }
+    const planName = tierDisplayName(body.plan);
 
     // PayMongo hosted checkout; the webhook applies the plan once it's paid.
     const returnUrl = `${adminBaseUrl()}/settings/subscription`;
     const checkout = await createPayMongoClient().createCheckoutSession({
       amountCentavos: amountPhp * 100,
-      lineItemName: `Guma Kart ${body.plan} plan (30 days)`,
-      description: `Guma Kart ${body.plan} plan (30 days) — ${session.tenantName}`,
+      lineItemName: `Guma Kart ${planName} plan (30 days)`,
+      description: `Guma Kart ${planName} plan (30 days) — ${session.tenantName}`,
       methods: [body.method as PayMongoMethod],
       referenceNumber: `plan-${session.tenantSlug}-${Date.now()}`,
       successUrl: `${returnUrl}?payment=success`,

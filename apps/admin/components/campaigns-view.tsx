@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Loader2, Megaphone, Plus, Send, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, Loader2, Megaphone, Plus, Send, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Button, Card, formatPrice } from "@gumakart/ui";
 
 /**
@@ -237,6 +237,20 @@ function Composer({ smsReady, onClose, onDone }: { smsReady: boolean; onClose: (
   const [preview, setPreview] = useState<{ count: number; consented: number; preview: string | null; segments: number | null; sample: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Pro funnel: AI-written options (the seller picks one, edits, sends).
+  const [offer, setOffer] = useState("");
+  const [writing, setWriting] = useState(false);
+  const [ideas, setIdeas] = useState<string[]>([]);
+  const [ideaErr, setIdeaErr] = useState<string | null>(null);
+
+  async function writeForMe() {
+    setWriting(true);
+    setIdeaErr(null);
+    const r = await call<{ options: string[] }>("/api/campaigns/write", { method: "POST", body: JSON.stringify({ segment, offer: offer.trim() || undefined }) });
+    setWriting(false);
+    if (r.ok) setIdeas(r.options);
+    else setIdeaErr(r.error ?? "Could not write a text just now.");
+  }
 
   useEffect(() => {
     const t = window.setTimeout(async () => {
@@ -347,6 +361,40 @@ function Composer({ smsReady, onClose, onDone }: { smsReady: boolean; onClose: (
               )}
             </span>
           </div>
+        </div>
+        <div className="rounded-xl border border-violet-500/30 bg-violet-600/[0.06] p-3" data-testid="campaign-ai-writer">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="guma-field h-9 min-w-[200px] flex-1"
+              placeholder="Your offer (optional), e.g. 10% off this weekend, code SALE10"
+              value={offer}
+              maxLength={200}
+              onChange={(e) => setOffer(e.target.value)}
+              aria-label="Your offer for the AI"
+            />
+            <Button type="button" variant="secondary" disabled={writing} onClick={() => void writeForMe()}>
+              {writing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Write it for me
+            </Button>
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            AI drafts three texts for the buyers you picked, using your real products. It never adds a discount you didn&apos;t type. Pro plan.
+          </p>
+          {ideaErr && <p className="mt-1.5 text-sm text-amber-300">{ideaErr}</p>}
+          {ideas.length > 0 && (
+            <div className="mt-2 grid gap-2">
+              {ideas.map((idea) => (
+                <button
+                  key={idea}
+                  type="button"
+                  onClick={() => setBody(idea)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm ${body === idea ? "border-violet-500 bg-violet-600/15" : "border-white/10 hover:border-white/20"}`}
+                  aria-pressed={body === idea}
+                >
+                  {idea}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">

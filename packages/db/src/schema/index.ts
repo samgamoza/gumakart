@@ -839,7 +839,8 @@ export const stockMovements = pgTable(
 // A shareable one-page checkout for chosen products: kart.guma.one/c/<code>.
 // Prices are always read from the variant at order time; the link only says what and how many.
 
-export type CheckoutLinkOrigin = "seller" | "ai_draft" | "ai_auto";
+/** "reorder": made by the storefront's /{shop}/reorder/{orderId} link (AI suite Phase 4 broadcasts). */
+export type CheckoutLinkOrigin = "seller" | "ai_draft" | "ai_auto" | "reorder";
 
 export const checkoutLinks = pgTable(
   "checkout_links",
@@ -869,6 +870,8 @@ export const checkoutLinks = pgTable(
     /** The shop-chat session / Messenger-Instagram thread an AI-made link was created for. */
     chatSessionId: varchar("chat_session_id", { length: 64 }),
     socialThreadId: uuid("social_thread_id").references((): AnyPgColumn => socialThreads.id, { onDelete: "set null" }),
+    /** AI suite (0049): buyer details collected in chat, pre-filled on this link's checkout page. */
+    prefillJson: jsonb("prefill_json").$type<CheckoutPrefill | null>(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -2003,7 +2006,10 @@ export const posSyncIssues = pgTable(
 
 // ─── Phase 13: channels ──────────────────────────────────────────────────────
 
-export type SocialPlatform = "messenger" | "instagram";
+export type SocialPlatform = "messenger" | "instagram" | "whatsapp";
+/** AI suite (0047): channels the comment-to-DM / closer / broadcast features address. */
+export type AiSuiteChannel = "messenger" | "instagram" | "whatsapp" | "tiktok";
+export type ConversionStatus = "open" | "cart" | "checkout_started" | "converted" | "lost" | "escalated";
 export type ChannelAccountStatus = "connected" | "mock" | "error" | "disconnected";
 
 /** A connected Facebook Page (Messenger) or Instagram professional account. */
@@ -2022,6 +2028,15 @@ export const socialAccounts = pgTable(
     pageId: varchar("page_id", { length: 64 }),
     /** Page access token, sealed (AES-GCM). Null for mock accounts. */
     accessTokenSealed: text("access_token_sealed"),
+    /** AI suite (0047): Instagram Business account id behind this Page. */
+    igBusinessId: varchar("ig_business_id", { length: 64 }),
+    /** AI suite (0047): WhatsApp Cloud API phone number id + business account id. */
+    phoneNumberId: varchar("phone_number_id", { length: 64 }),
+    wabaId: varchar("waba_id", { length: 64 }),
+    /** AI suite (0047): per-account webhook verify token (WhatsApp / TikTok bridge), sealed. */
+    webhookTokenSealed: text("webhook_token_sealed"),
+    /** AI suite (0049): 'auto' = the AI closer answers DMs (Pro Live+), 'off' = seller only. */
+    aiCloserMode: varchar("ai_closer_mode", { length: 8 }).$type<"auto" | "off">().default("auto").notNull(),
     status: varchar("status", { length: 16 }).$type<ChannelAccountStatus>().default("connected").notNull(),
     lastError: varchar("last_error", { length: 300 }),
     connectedAt: timestamp("connected_at", { withTimezone: true }).defaultNow().notNull(),
@@ -2051,6 +2066,17 @@ export const socialThreads = pgTable(
     lastPreview: varchar("last_preview", { length: 200 }),
     unread: integer("unread").default(0).notNull(),
     status: varchar("status", { length: 12 }).$type<"open" | "done">().default("open").notNull(),
+    /** AI suite (0047): the checkout link the AI closer is steering this buyer to. */
+    activeCheckoutLinkId: uuid("active_checkout_link_id").references(() => checkoutLinks.id, { onDelete: "set null" }),
+    /** AI suite (0047): closer state (rolling summary, collected buyer details). Messages stay in social_messages. */
+    aiContextJson: jsonb("ai_context_json").$type<Record<string, unknown>>().default({}).notNull(),
+    nudgeSentAt: timestamp("nudge_sent_at", { withTimezone: true }),
+    conversionStatus: varchar("conversion_status", { length: 20 }).$type<ConversionStatus>().default("open").notNull(),
+    /** AI suite (0047): set by escalate_to_human_seller — the AI stops replying in this thread. */
+    aiPaused: boolean("ai_paused").default(false).notNull(),
+    escalationReason: varchar("escalation_reason", { length: 300 }),
+    /** AI suite (0049): when the active checkout link was sent (30-minute recovery keys on it). */
+    checkoutLinkSentAt: timestamp("checkout_link_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -2398,6 +2424,8 @@ export const giftCards = pgTable(
     recipientName: varchar("recipient_name", { length: 120 }),
     note: varchar("note", { length: 200 }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /** AI suite Phase 4: used up by its first order (review thank-you vouchers). */
+    singleUse: boolean("single_use").default(false).notNull(),
     createdByName: varchar("created_by_name", { length: 80 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -2706,3 +2734,351 @@ export const consumedTokens = pgTable("consumed_tokens", {
   consumedAt: timestamp("consumed_at", { withTimezone: true }).defaultNow().notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+// ─── AI Social Marketing & Commerce Suite — Phase 1 (migration 0047) ────────
+// Tier catalog mirrors AI_SUITE_TIERS in @gumakart/plans. merchant_entitlements is kept in sync
+// with tenants.subscription_plan by a DB trigger — never write tier_id/limits from app code unless
+// you also set limits_overridden.
+
+export const subscriptionTiers = pgTable("subscription_tiers", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  displayName: varchar("display_name", { length: 64 }).notNull(),
+  priceMonthlyPhp: decimal("price_monthly_php", { precision: 12, scale: 2 }).notNull(),
+  isLegacy: boolean("is_legacy").default(false).notNull(),
+  isGrandfathered: boolean("is_grandfathered").default(false).notNull(),
+  legacyFeaturePlan: varchar("legacy_feature_plan", { length: 16 }).$type<"free" | "growth" | "pro">().notNull(),
+  photoCreditsLimit: integer("photo_credits_limit").notNull(),
+  videoCreditsLimit: integer("video_credits_limit").notNull(),
+  aiCloserEnabled: boolean("ai_closer_enabled").default(false).notNull(),
+  broadcastEnabled: boolean("broadcast_enabled").default(false).notNull(),
+  voiceCloneEnabled: boolean("voice_clone_enabled").default(false).notNull(),
+  vibeCodingEnabled: boolean("vibe_coding_enabled").default(false).notNull(),
+  queuePriority: smallint("queue_priority").notNull(),
+  sortOrder: smallint("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const merchantEntitlements = pgTable(
+  "merchant_entitlements",
+  {
+    tenantId: uuid("tenant_id")
+      .primaryKey()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    tierId: varchar("tier_id", { length: 32 })
+      .references(() => subscriptionTiers.id)
+      .notNull(),
+    isGrandfathered: boolean("is_grandfathered").default(false).notNull(),
+    /** -1 = unlimited, 0 = not included. */
+    photoCreditsLimit: integer("photo_credits_limit").notNull(),
+    videoCreditsLimit: integer("video_credits_limit").notNull(),
+    aiCloserEnabled: boolean("ai_closer_enabled").default(false).notNull(),
+    broadcastEnabled: boolean("broadcast_enabled").default(false).notNull(),
+    voiceCloneEnabled: boolean("voice_clone_enabled").default(false).notNull(),
+    vibeCodingEnabled: boolean("vibe_coding_enabled").default(false).notNull(),
+    queuePriority: smallint("queue_priority").notNull(),
+    limitsOverridden: boolean("limits_overridden").default(false).notNull(),
+    periodStart: date("period_start").notNull(),
+    photoCreditsUsed: integer("photo_credits_used").default(0).notNull(),
+    videoCreditsUsed: integer("video_credits_used").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("merchant_entitlements_tier_idx").on(table.tierId)]
+);
+
+export type AiMediaJobTypeColumn = "product_photo" | "video_ad" | "voice_clone" | "printair_mockup";
+export type AiMediaJobStatusColumn = "queued" | "processing" | "completed" | "failed";
+export type AiMediaCreditStatus = "none" | "reserved" | "consumed" | "refunded";
+export interface AiMediaOutput {
+  url: string;
+  kind: "image" | "video" | "audio" | "other";
+  contentType: string;
+  /** e.g. "1080x1080" — set by the workflow when known. */
+  variant?: string;
+  bytes?: number;
+}
+
+export const aiMediaJobs = pgTable(
+  "ai_media_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    jobType: varchar("job_type", { length: 24 }).$type<AiMediaJobTypeColumn>().notNull(),
+    status: varchar("status", { length: 12 }).$type<AiMediaJobStatusColumn>().default("queued").notNull(),
+    priority: smallint("priority").default(3).notNull(),
+    inputPayload: jsonb("input_payload").$type<Record<string, unknown>>().default({}).notNull(),
+    outputUrls: jsonb("output_urls").$type<AiMediaOutput[]>().default([]).notNull(),
+    gpuNodeId: text("gpu_node_id"),
+    errorMessage: text("error_message"),
+    creditKind: varchar("credit_kind", { length: 8 }).$type<"photo" | "video">(),
+    creditStatus: varchar("credit_status", { length: 10 }).$type<AiMediaCreditStatus>().default("none").notNull(),
+    creditPeriod: date("credit_period"),
+    idempotencyKey: varchar("idempotency_key", { length: 120 }),
+    attempts: integer("attempts").default(0).notNull(),
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("ai_media_jobs_idem_idx").on(table.tenantId, table.idempotencyKey).where(sql`${table.idempotencyKey} is not null`),
+    index("ai_media_jobs_tenant_idx").on(table.tenantId, table.createdAt),
+  ]
+);
+
+export const socialAutomationRules = pgTable(
+  "social_automation_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    /** Null = every connected account of the shop. */
+    accountId: uuid("account_id").references(() => socialAccounts.id, { onDelete: "cascade" }),
+    /** Null = global rule for all posts. */
+    postId: varchar("post_id", { length: 128 }),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    triggerKeywords: text("trigger_keywords").array().notNull(),
+    publicReplyTemplates: text("public_reply_templates").array().notNull(),
+    dmFlowConfig: jsonb("dm_flow_config").$type<Record<string, unknown>>().default({}).notNull(),
+    /** Phase 2 (0048): the Marketing Studio post this rule belongs to; pending while postId is null. */
+    contentQueueId: uuid("content_queue_id").references(() => contentQueue.id, { onDelete: "cascade" }),
+    postUrl: text("post_url"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  }
+);
+
+export const abandonedCartNudges = pgTable(
+  "abandoned_cart_nudges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    threadId: uuid("thread_id").references(() => socialThreads.id, { onDelete: "cascade" }),
+    checkoutLinkId: uuid("checkout_link_id").references(() => checkoutLinks.id, { onDelete: "cascade" }),
+    checkoutSessionId: uuid("checkout_session_id").references(() => checkoutSessions.id, { onDelete: "cascade" }),
+    channel: varchar("channel", { length: 12 }).$type<AiSuiteChannel | "sms">().notNull(),
+    status: varchar("status", { length: 10 }).$type<"scheduled" | "sent" | "skipped" | "failed">().default("scheduled").notNull(),
+    messageBody: text("message_body"),
+    error: varchar("error", { length: 300 }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("abandoned_cart_nudges_tenant_idx").on(table.tenantId, table.createdAt),
+    uniqueIndex("abandoned_cart_nudges_thread_link_idx")
+      .on(table.threadId, table.checkoutLinkId)
+      .where(sql`${table.threadId} is not null and ${table.checkoutLinkId} is not null`),
+  ]
+);
+
+export type BuyerSegmentTag = "VIP_REPEAT" | "PAYDAY_SHOPPER" | "INACTIVE_60D";
+
+/** Rebuilt per shop by the SQL function refresh_buyer_crm_segments(tenant_id). */
+export const buyerCrmSegments = pgTable(
+  "buyer_crm_segments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    buyerKey: varchar("buyer_key", { length: 80 }).notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    phone: varchar("phone", { length: 20 }),
+    psid: varchar("psid", { length: 64 }),
+    totalOrders: integer("total_orders").default(0).notNull(),
+    totalSpent: decimal("total_spent", { precision: 12, scale: 2 }).default("0").notNull(),
+    lastOrderAt: timestamp("last_order_at", { withTimezone: true }),
+    paydayOrders: integer("payday_orders").default(0).notNull(),
+    paydayShopperScore: decimal("payday_shopper_score", { precision: 5, scale: 4 }).default("0").notNull(),
+    tags: text("tags").array().$type<BuyerSegmentTag[]>().notNull(),
+    refreshedAt: timestamp("refreshed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("buyer_crm_segments_buyer_idx").on(table.tenantId, table.buyerKey)]
+);
+
+export const broadcastCampaigns = pgTable(
+  "broadcast_campaigns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    channel: varchar("channel", { length: 12 }).$type<"messenger" | "instagram" | "whatsapp">().notNull(),
+    segmentTags: text("segment_tags").array().$type<BuyerSegmentTag[]>().notNull(),
+    kind: varchar("kind", { length: 12 }).$type<"payday" | "restock" | "custom">().default("custom").notNull(),
+    messageTemplate: text("message_template").notNull(),
+    waTemplateName: varchar("wa_template_name", { length: 120 }),
+    status: varchar("status", { length: 12 }).$type<CampaignStatus>().default("draft").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    rateLimitPerSec: smallint("rate_limit_per_sec").default(10).notNull(),
+    recipients: integer("recipients").default(0).notNull(),
+    sent: integer("sent").default(0).notNull(),
+    failed: integer("failed").default(0).notNull(),
+    createdByName: varchar("created_by_name", { length: 80 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // AI suite Phase 4 (migration 0050)
+    productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
+    waTemplateLanguage: varchar("wa_template_language", { length: 10 }).default("en").notNull(),
+    skipped: integer("skipped").default(0).notNull(),
+    aiPolished: boolean("ai_polished").default(false).notNull(),
+  },
+  (table) => [index("broadcast_campaigns_tenant_idx").on(table.tenantId, table.createdAt)]
+);
+
+export type BroadcastSendMode = "session" | "template" | "none";
+
+/** Who a broadcast goes to (frozen at queue time) and how each buyer can be reached. */
+export const broadcastRecipients = pgTable(
+  "broadcast_recipients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .references(() => broadcastCampaigns.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    buyerKey: varchar("buyer_key", { length: 80 }).notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    name: varchar("name", { length: 160 }),
+    threadId: uuid("thread_id").references(() => socialThreads.id, { onDelete: "set null" }),
+    recipientId: varchar("recipient_id", { length: 64 }),
+    mode: varchar("mode", { length: 10 }).$type<BroadcastSendMode>().notNull(),
+    lastOrderId: uuid("last_order_id").references(() => orders.id, { onDelete: "set null" }),
+    lastItem: varchar("last_item", { length: 160 }),
+    status: varchar("status", { length: 10 }).$type<"queued" | "sent" | "failed" | "skipped">().default("queued").notNull(),
+    skipReason: varchar("skip_reason", { length: 40 }),
+    body: text("body"),
+    error: varchar("error", { length: 300 }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("broadcast_recipients_buyer_idx").on(table.campaignId, table.buyerKey),
+    index("broadcast_recipients_queue_idx").on(table.campaignId, table.status),
+  ]
+);
+
+export type ReviewPromptStatus = "scheduled" | "sent" | "reviewed" | "skipped" | "failed" | "expired";
+
+/** BayanGo review loop: asked 2 h after delivery, answered in chat, rewarded with a voucher. */
+export const reviewPrompts = pgTable(
+  "review_prompts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: uuid("order_id")
+      .references(() => orders.id, { onDelete: "cascade" })
+      .notNull(),
+    deliveryId: uuid("delivery_id").references(() => deliveries.id, { onDelete: "set null" }),
+    threadId: uuid("thread_id").references(() => socialThreads.id, { onDelete: "set null" }),
+    channel: varchar("channel", { length: 12 }).$type<SocialPlatform>(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    status: varchar("status", { length: 12 }).$type<ReviewPromptStatus>().default("scheduled").notNull(),
+    skipReason: varchar("skip_reason", { length: 40 }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    rating: smallint("rating"),
+    body: text("body"),
+    photosJson: jsonb("photos_json").$type<string[]>().default([]).notNull(),
+    reviewIds: uuid("review_ids").array().default(sql`ARRAY[]::uuid[]`).notNull(),
+    voucherCardId: uuid("voucher_card_id").references(() => giftCards.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    error: varchar("error", { length: 300 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("review_prompts_order_idx").on(table.orderId), index("review_prompts_due_idx").on(table.dueAt)]
+);
+
+/** Per-shop AI suite switches (review loop, WhatsApp templates). Missing row = defaults. */
+export const aiSuiteSettings = pgTable("ai_suite_settings", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  reviewLoopEnabled: boolean("review_loop_enabled").default(true).notNull(),
+  reviewVoucherAmount: decimal("review_voucher_amount", { precision: 10, scale: 2 }).default("50").notNull(),
+  reviewVoucherDays: smallint("review_voucher_days").default(30).notNull(),
+  waReviewTemplate: varchar("wa_review_template", { length: 120 }),
+  waTemplateLanguage: varchar("wa_template_language", { length: 10 }).default("en").notNull(),
+  paydayAlertDismissedFor: varchar("payday_alert_dismissed_for", { length: 10 }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type PrintairMilestone = "first_campaign" | "orders_10" | "orders_50" | "orders_100" | "orders_500";
+
+/** Phase 5: one branded-packaging mockup offer per shop + milestone. */
+export const printairUpsells = pgTable(
+  "printair_upsells",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    milestone: varchar("milestone", { length: 20 }).$type<PrintairMilestone>().notNull(),
+    aiMediaJobId: uuid("ai_media_job_id").references(() => aiMediaJobs.id, { onDelete: "set null" }),
+    status: varchar("status", { length: 10 }).$type<"rendering" | "ready" | "failed" | "dismissed" | "ordered">().default("rendering").notNull(),
+    handoffs: integer("handoffs").default(0).notNull(),
+    lastHandoffAt: timestamp("last_handoff_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("printair_upsells_milestone_idx").on(table.tenantId, table.milestone)]
+);
+
+// ─── AI Marketing Suite Phase 3 (migration 0049) ─────────────────────────────
+
+/** Buyer details the AI closer collected in chat (shown pre-filled on that checkout link only). */
+export interface CheckoutPrefill {
+  name?: string;
+  phone?: string;
+  addressLine?: string;
+  barangay?: string;
+  city?: string;
+  landmark?: string;
+  paymentMethod?: "gcash" | "paymaya" | "cod" | "qrph";
+}
+
+export const socialCommentActions = pgTable(
+  "social_comment_actions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: uuid("account_id")
+      .references(() => socialAccounts.id, { onDelete: "cascade" })
+      .notNull(),
+    platform: varchar("platform", { length: 16 }).$type<SocialPlatform>().notNull(),
+    commentId: varchar("comment_id", { length: 128 }).notNull(),
+    postId: varchar("post_id", { length: 128 }),
+    commenterId: varchar("commenter_id", { length: 64 }),
+    commenterName: varchar("commenter_name", { length: 160 }),
+    commentText: varchar("comment_text", { length: 1000 }),
+    ruleId: uuid("rule_id").references(() => socialAutomationRules.id, { onDelete: "set null" }),
+    matchedKeyword: varchar("matched_keyword", { length: 60 }),
+    status: varchar("status", { length: 12 }).$type<"pending" | "replied" | "skipped" | "failed">().default("pending").notNull(),
+    skipReason: varchar("skip_reason", { length: 60 }),
+    publicReplyId: varchar("public_reply_id", { length: 128 }),
+    privateReplyId: varchar("private_reply_id", { length: 160 }),
+    threadId: uuid("thread_id").references(() => socialThreads.id, { onDelete: "set null" }),
+    error: varchar("error", { length: 300 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("social_comment_actions_comment_idx").on(table.accountId, table.commentId),
+    index("social_comment_actions_tenant_idx").on(table.tenantId, table.createdAt),
+  ]
+);
